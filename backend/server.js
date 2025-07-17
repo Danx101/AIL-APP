@@ -35,6 +35,10 @@ app.get('/api/v1/status', (req, res) => {
   });
 });
 
+// Authentication routes
+const authRoutes = require('./src/routes/auth');
+app.use('/api/v1/auth', authRoutes);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
