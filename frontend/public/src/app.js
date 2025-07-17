@@ -1,6 +1,4 @@
 // Main application initialization
-const API_BASE_URL = 'http://localhost:3001';
-
 class App {
     constructor() {
         this.currentUser = null;
@@ -76,6 +74,7 @@ class App {
     }
 
     showWelcomePage() {
+        console.log('showWelcomePage called');
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="row">
@@ -100,13 +99,25 @@ class App {
             </div>
         `;
 
-        document.getElementById('customerLoginBtn').addEventListener('click', () => {
-            this.showCustomerLogin();
-        });
+        const customerBtn = document.getElementById('customerLoginBtn');
+        const studioBtn = document.getElementById('studioLoginBtn');
+        
+        console.log('customerLoginBtn element:', customerBtn);
+        console.log('studioLoginBtn element:', studioBtn);
 
-        document.getElementById('studioLoginBtn').addEventListener('click', () => {
-            this.showStudioLogin();
-        });
+        if (customerBtn) {
+            customerBtn.addEventListener('click', () => {
+                console.log('Customer login button clicked');
+                this.showCustomerLogin();
+            });
+        }
+
+        if (studioBtn) {
+            studioBtn.addEventListener('click', () => {
+                console.log('Studio login button clicked');
+                this.showStudioLogin();
+            });
+        }
     }
 
     setupEventListeners() {
@@ -118,7 +129,7 @@ class App {
         const statusElement = document.getElementById('apiStatus');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/status`);
+            const response = await fetch('http://localhost:3001/api/v1/status');
             const data = await response.json();
             
             if (response.ok) {
@@ -504,5 +515,12 @@ class App {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new App();
+    console.log('DOM loaded, initializing app...');
+    console.log('authService available:', typeof window.authService);
+    try {
+        new App();
+        console.log('App initialized successfully');
+    } catch (error) {
+        console.error('Error initializing app:', error);
+    }
 });

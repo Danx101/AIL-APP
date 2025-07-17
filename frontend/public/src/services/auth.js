@@ -226,4 +226,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = authService;
 } else {
   window.authService = authService;
+  console.log('AuthService loaded and attached to window');
 }
