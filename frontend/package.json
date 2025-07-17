@@ -4,8 +4,8 @@
   "description": "Frontend for Abnehmen im Liegen appointment system",
   "main": "src/app.js",
   "scripts": {
-    "dev": "live-server --port=3000 --host=localhost",
-    "start": "live-server --port=3000 --host=localhost",
+    "dev": "live-server --port=3000 --host=localhost public/",
+    "start": "live-server --port=3000 --host=localhost public/",
     "build": "echo 'Build process not implemented yet'",
     "test": "jest",
     "lint": "eslint src/",

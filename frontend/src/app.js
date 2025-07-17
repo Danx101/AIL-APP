@@ -110,22 +110,8 @@ class App {
     }
 
     setupEventListeners() {
-        // Navigation event listeners
-        document.getElementById('customerLoginBtn')?.addEventListener('click', () => {
-            this.showCustomerLogin();
-        });
-
-        document.getElementById('studioLoginBtn')?.addEventListener('click', () => {
-            this.showStudioLogin();
-        });
-
-        document.getElementById('loginBtn')?.addEventListener('click', () => {
-            this.showLoginModal();
-        });
-
-        document.getElementById('registerBtn')?.addEventListener('click', () => {
-            this.showRegisterModal();
-        });
+        // Navigation event listeners - These will be set up after DOM elements are created
+        // Initial event listeners will be set up in the respective show methods
     }
 
     async checkAPIStatus() {
