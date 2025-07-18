@@ -12,7 +12,12 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:53288', 'http://127.0.0.1:3000', 'http://127.0.0.1:53288'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -46,6 +51,10 @@ app.use('/api/v1/studios', studioRoutes);
 // Manager routes
 const managerRoutes = require('./src/routes/manager');
 app.use('/api/v1/manager', managerRoutes);
+
+// Appointment routes
+const appointmentRoutes = require('./src/routes/appointments');
+app.use('/api/v1/appointments', appointmentRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

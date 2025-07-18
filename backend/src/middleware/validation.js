@@ -165,6 +165,89 @@ const validatePagination = [
     .withMessage('Sort order must be either asc or desc')
 ];
 
+// Appointment validation
+const validateAppointmentCreate = [
+  body('studio_id')
+    .isInt({ min: 1 })
+    .withMessage('Studio ID must be a positive integer'),
+  
+  body('customer_id')
+    .isInt({ min: 1 })
+    .withMessage('Customer ID must be a positive integer'),
+  
+  body('appointment_type_id')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Appointment type ID must be a positive integer'),
+  
+  body('appointment_date')
+    .isISO8601()
+    .withMessage('Appointment date must be a valid date (YYYY-MM-DD)'),
+  
+  body('start_time')
+    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('Start time must be in HH:MM format'),
+  
+  body('end_time')
+    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('End time must be in HH:MM format'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .withMessage('Notes must be a string')
+];
+
+const validateAppointmentUpdate = [
+  body('appointment_type_id')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Appointment type ID must be a positive integer'),
+  
+  body('appointment_date')
+    .optional()
+    .isISO8601()
+    .withMessage('Appointment date must be a valid date (YYYY-MM-DD)'),
+  
+  body('start_time')
+    .optional()
+    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('Start time must be in HH:MM format'),
+  
+  body('end_time')
+    .optional()
+    .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
+    .withMessage('End time must be in HH:MM format'),
+  
+  body('status')
+    .optional()
+    .isIn(['pending', 'confirmed', 'cancelled', 'completed', 'no_show'])
+    .withMessage('Status must be one of: pending, confirmed, cancelled, completed, no_show'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .withMessage('Notes must be a string')
+];
+
+const validateAppointmentStatus = [
+  body('status')
+    .isIn(['pending', 'confirmed', 'cancelled', 'completed', 'no_show'])
+    .withMessage('Status must be one of: pending, confirmed, cancelled, completed, no_show')
+];
+
+const validateAppointmentId = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Appointment ID must be a positive integer')
+];
+
+const validateCustomerId = [
+  param('customerId')
+    .isInt({ min: 1 })
+    .withMessage('Customer ID must be a positive integer')
+];
+
 module.exports = {
   validateRegister,
   validateLogin,
@@ -174,5 +257,10 @@ module.exports = {
   validateUserId,
   validateStudioId,
   validateActivationCode,
-  validatePagination
+  validatePagination,
+  validateAppointmentCreate,
+  validateAppointmentUpdate,
+  validateAppointmentStatus,
+  validateAppointmentId,
+  validateCustomerId
 };

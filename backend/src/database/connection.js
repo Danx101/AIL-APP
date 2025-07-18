@@ -18,6 +18,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
     // Run manager codes migration
     const { runMigration } = require('./migrations/add_manager_codes_table');
     runMigration().catch(console.error);
+    
+    // Run appointment tables migration
+    const { runMigration: runAppointmentMigration } = require('./migrations/add_appointment_tables');
+    runAppointmentMigration().catch(console.error);
   }
 });
 
