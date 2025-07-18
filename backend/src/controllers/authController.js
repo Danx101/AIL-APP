@@ -7,12 +7,14 @@ class AuthController {
   // Register new user
   async register(req, res) {
     try {
+      console.log('Registration request body:', req.body);
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.error('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, password, firstName, lastName, phone, activationCode, role = 'customer' } = req.body;
+      const { email, password, firstName, lastName, phone, activationCode, managerCode, role = 'customer' } = req.body;
 
       // Check if user already exists
       const existingUser = await new Promise((resolve, reject) => {
@@ -48,15 +50,47 @@ class AuthController {
         }
       }
 
+      // Validate manager code for studio owners
+      let managerCodeData = null;
+      if (role === 'studio_owner') {
+        if (!managerCode) {
+          return res.status(400).json({ message: 'Manager code is required for studio owners' });
+        }
+
+        managerCodeData = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT * FROM manager_codes WHERE code = ? AND is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now"))',
+            [managerCode],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!managerCodeData) {
+          return res.status(400).json({ message: 'Invalid or expired manager code' });
+        }
+      }
+
       // Hash password
       const saltRounds = 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      // Create user
+      // Create user - for studio owners, use intended name from manager code if provided
+      let finalFirstName = firstName;
+      let finalLastName = lastName;
+      
+      if (role === 'studio_owner' && managerCodeData && managerCodeData.intended_owner_name) {
+        const nameParts = managerCodeData.intended_owner_name.split(' ');
+        finalFirstName = finalFirstName || nameParts[0] || '';
+        finalLastName = finalLastName || nameParts.slice(1).join(' ') || '';
+      }
+
       const userId = await new Promise((resolve, reject) => {
         db.run(
           'INSERT INTO users (email, password_hash, role, first_name, last_name, phone) VALUES (?, ?, ?, ?, ?, ?)',
-          [email, hashedPassword, role, firstName, lastName, phone],
+          [email, hashedPassword, role, finalFirstName, finalLastName, phone],
           function(err) {
             if (err) reject(err);
             else resolve(this.lastID);
@@ -78,6 +112,20 @@ class AuthController {
         });
       }
 
+      // Mark manager code as used for studio owners
+      if (role === 'studio_owner' && managerCode) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'UPDATE manager_codes SET is_used = 1, used_by_user_id = ? WHERE code = ?',
+            [userId, managerCode],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+      }
+
       // Generate JWT token
       const token = jwt.sign(
         { userId, email, role },
@@ -85,18 +133,28 @@ class AuthController {
         { expiresIn: '24h' }
       );
 
-      res.status(201).json({
+      const responseData = {
         message: 'User registered successfully',
         user: {
           id: userId,
           email,
           role,
-          firstName,
-          lastName,
+          firstName: finalFirstName,
+          lastName: finalLastName,
           phone
         },
         token
-      });
+      };
+
+      // Add manager code information for studio owners
+      if (role === 'studio_owner' && managerCodeData) {
+        responseData.studioInfo = {
+          intendedCity: managerCodeData.intended_city,
+          intendedStudioName: managerCodeData.intended_studio_name
+        };
+      }
+
+      res.status(201).json(responseData);
 
     } catch (error) {
       console.error('Registration error:', error);

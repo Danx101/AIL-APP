@@ -6,16 +6,26 @@ class App {
     }
 
     async init() {
+        console.log('App.init() called');
         this.setupEventListeners();
+        console.log('About to check API status...');
         this.checkAPIStatus();
+        console.log('About to check auth status...');
         await this.checkAuthStatus();
+        console.log('App initialization complete');
     }
 
     async checkAuthStatus() {
+        console.log('checkAuthStatus called');
+        console.log('window.authService:', window.authService);
+        console.log('isAuthenticated:', window.authService?.isAuthenticated());
+        
         if (window.authService && window.authService.isAuthenticated()) {
             try {
+                console.log('Validating token...');
                 await window.authService.validateToken();
                 this.currentUser = window.authService.getCurrentUser();
+                console.log('User authenticated:', this.currentUser);
                 this.updateUIForAuthenticatedUser();
             } catch (error) {
                 console.error('Token validation failed:', error);
@@ -23,6 +33,7 @@ class App {
                 this.updateUIForGuestUser();
             }
         } else {
+            console.log('No auth or not authenticated, showing guest UI');
             this.updateUIForGuestUser();
         }
     }
@@ -45,7 +56,9 @@ class App {
         }
 
         // Show appropriate dashboard based on role
-        if (this.currentUser.role === 'studio_owner') {
+        if (this.currentUser.role === 'manager') {
+            this.showManagerDashboard();
+        } else if (this.currentUser.role === 'studio_owner') {
             this.showStudioDashboard();
         } else {
             this.showCustomerDashboard();
@@ -76,6 +89,7 @@ class App {
     showWelcomePage() {
         console.log('showWelcomePage called');
         const content = document.getElementById('content');
+        console.log('content element:', content);
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-8 mx-auto">
@@ -92,6 +106,9 @@ class App {
                                 <button class="btn btn-outline-primary" type="button" id="studioLoginBtn">
                                     Studio Login
                                 </button>
+                                <button class="btn btn-outline-secondary" type="button" id="managerLoginBtn">
+                                    Manager Login
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -99,25 +116,17 @@ class App {
             </div>
         `;
 
-        const customerBtn = document.getElementById('customerLoginBtn');
-        const studioBtn = document.getElementById('studioLoginBtn');
-        
-        console.log('customerLoginBtn element:', customerBtn);
-        console.log('studioLoginBtn element:', studioBtn);
+        document.getElementById('customerLoginBtn').addEventListener('click', () => {
+            this.showCustomerLogin();
+        });
 
-        if (customerBtn) {
-            customerBtn.addEventListener('click', () => {
-                console.log('Customer login button clicked');
-                this.showCustomerLogin();
-            });
-        }
+        document.getElementById('studioLoginBtn').addEventListener('click', () => {
+            this.showStudioLogin();
+        });
 
-        if (studioBtn) {
-            studioBtn.addEventListener('click', () => {
-                console.log('Studio login button clicked');
-                this.showStudioLogin();
-            });
-        }
+        document.getElementById('managerLoginBtn').addEventListener('click', () => {
+            this.showManagerLogin();
+        });
     }
 
     setupEventListeners() {
@@ -157,6 +166,9 @@ class App {
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-6 mx-auto">
+                    <div class="text-center mb-3">
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkCustomer">Abnehmen im Liegen</a></h2>
+                    </div>
                     <div class="card">
                         <div class="card-header">
                             <h4>Kunde Login</h4>
@@ -186,6 +198,10 @@ class App {
 
         document.getElementById('customerLoginForm').addEventListener('submit', (e) => {
             this.handleLogin(e);
+        });
+        document.getElementById('brandLinkCustomer')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showMainPage();
         });
 
         document.getElementById('showRegisterLink')?.addEventListener('click', () => {
@@ -224,6 +240,7 @@ class App {
             await window.authService.logout();
             this.currentUser = null;
             this.updateUIForGuestUser();
+            this.showMainPage();
         } catch (error) {
             console.error('Logout failed:', error);
         }
@@ -234,11 +251,15 @@ class App {
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-6 mx-auto">
+                    <div class="text-center mb-3">
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkStudio">Abnehmen im Liegen</a></h2>
+                    </div>
                     <div class="card">
                         <div class="card-header">
                             <h4>Studio Login</h4>
                         </div>
                         <div class="card-body">
+                            <div id="studioLoginError" class="alert alert-danger d-none"></div>
                             <form id="studioLoginForm">
                                 <div class="mb-3">
                                     <label for="studioEmail" class="form-label">Studio E-Mail</label>
@@ -248,7 +269,7 @@ class App {
                                     <label for="studioPassword" class="form-label">Passwort</label>
                                     <input type="password" class="form-control" id="studioPassword" required>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Login</button>
+                                <button type="submit" class="btn btn-primary w-100" id="studioLoginSubmitBtn">Login</button>
                             </form>
                             <hr>
                             <div class="text-center">
@@ -260,9 +281,43 @@ class App {
             </div>
         `;
 
+        document.getElementById('studioLoginForm').addEventListener('submit', (e) => {
+            this.handleStudioLogin(e);
+        });
+        document.getElementById('brandLinkStudio')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showMainPage();
+        });
+
         document.getElementById('showStudioRegisterLink')?.addEventListener('click', () => {
             this.showStudioRegister();
         });
+    }
+
+    async handleStudioLogin(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('studioEmail').value;
+        const password = document.getElementById('studioPassword').value;
+        const submitBtn = document.getElementById('studioLoginSubmitBtn');
+        const errorDiv = document.getElementById('studioLoginError');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+            errorDiv.classList.add('d-none');
+            
+            const result = await window.authService.login(email, password);
+            this.currentUser = result.user;
+            this.updateUIForAuthenticatedUser();
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Login';
+        }
     }
 
     showCustomerRegister() {
@@ -413,8 +468,9 @@ class App {
             <div class="row">
                 <div class="col-md-10 mx-auto">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h4>Studio Dashboard</h4>
+                            <button class="btn btn-outline-primary" id="setupStudioBtn">Studio Setup</button>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -425,16 +481,12 @@ class App {
                                     <p><strong>Name:</strong> ${this.currentUser.firstName} ${this.currentUser.lastName}</p>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <h6>Nächste Schritte:</h6>
-                                            <ul>
-                                                <li>Studio-Profil erstellen</li>
-                                                <li>Aktivierungscodes generieren</li>
-                                                <li>Termine verwalten</li>
-                                                <li>Kunden verwalten</li>
-                                            </ul>
-                                            <p class="text-muted">Diese Funktionen werden in Phase 2 implementiert.</p>
+                                    <div id="studioStatus">
+                                        <div class="text-center">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p class="mt-2">Lade Studio-Status...</p>
                                         </div>
                                     </div>
                                 </div>
@@ -444,6 +496,298 @@ class App {
                 </div>
             </div>
         `;
+
+        document.getElementById('setupStudioBtn').addEventListener('click', () => {
+            this.showStudioSetup();
+        });
+
+        // Check if user has a studio
+        this.checkStudioStatus();
+    }
+
+    async checkStudioStatus() {
+        const statusDiv = document.getElementById('studioStatus');
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const studio = data.studio;
+                
+                statusDiv.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>Ihr Studio: ${studio.name}</h6>
+                            <p><strong>Stadt:</strong> ${studio.city}</p>
+                            <p><strong>Adresse:</strong> ${studio.address}</p>
+                            <p><strong>Telefon:</strong> ${studio.phone}</p>
+                            <div class="mt-3">
+                                <button class="btn btn-primary btn-sm" id="generateActivationCodesBtn">
+                                    Aktivierungscodes generieren
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('generateActivationCodesBtn').addEventListener('click', () => {
+                    this.showActivationCodeGeneration(studio.id);
+                });
+                
+            } else if (response.status === 404) {
+                statusDiv.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>Studio Setup erforderlich</h6>
+                            <p>Sie müssen zuerst Ihr Studio einrichten.</p>
+                            <button class="btn btn-primary" id="startStudioSetupBtn">
+                                Studio einrichten
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('startStudioSetupBtn').addEventListener('click', () => {
+                    this.showStudioSetup();
+                });
+            }
+            
+        } catch (error) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    Fehler beim Laden des Studio-Status: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    showActivationCodeGeneration(studioId) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4>Aktivierungscodes generieren</h4>
+                        </div>
+                        <div class="card-body">
+                            <div id="activationCodeError" class="alert alert-danger d-none"></div>
+                            <div id="activationCodeSuccess" class="alert alert-success d-none"></div>
+                            <form id="activationCodeForm">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="codeCountActivation" class="form-label">Anzahl Codes</label>
+                                            <input type="number" class="form-control" id="codeCountActivation" value="10" min="1" max="100">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="expiresInDaysActivation" class="form-label">Gültig für (Tage)</label>
+                                            <input type="number" class="form-control" id="expiresInDaysActivation" value="365" min="1" max="365">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="generateActivationSubmitBtn">
+                                    Aktivierungscodes generieren
+                                </button>
+                            </form>
+                            <hr>
+                            <div class="d-flex justify-content-between">
+                                <button class="btn btn-outline-secondary" id="backToDashboardBtn">
+                                    Zurück zum Dashboard
+                                </button>
+                                <button class="btn btn-outline-info" id="viewExistingCodesBtn">
+                                    Vorhandene Codes anzeigen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('activationCodeForm').addEventListener('submit', (e) => {
+            this.handleActivationCodeGeneration(e, studioId);
+        });
+
+        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        document.getElementById('viewExistingCodesBtn').addEventListener('click', () => {
+            this.showExistingActivationCodes(studioId);
+        });
+    }
+
+    async handleActivationCodeGeneration(e, studioId) {
+        e.preventDefault();
+        
+        const formData = {
+            count: parseInt(document.getElementById('codeCountActivation').value),
+            expiresInDays: parseInt(document.getElementById('expiresInDaysActivation').value)
+        };
+        
+        const submitBtn = document.getElementById('generateActivationSubmitBtn');
+        const errorDiv = document.getElementById('activationCodeError');
+        const successDiv = document.getElementById('activationCodeSuccess');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generiere Codes...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/activation-codes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Generieren der Codes');
+            }
+            
+            const data = await response.json();
+            
+            successDiv.innerHTML = `
+                <strong>${data.message}</strong><br>
+                <small>Die Codes können Sie nun an Ihre Kunden weitergeben.</small>
+            `;
+            successDiv.classList.remove('d-none');
+            
+            // Reset form
+            document.getElementById('activationCodeForm').reset();
+            document.getElementById('codeCountActivation').value = 10;
+            document.getElementById('expiresInDaysActivation').value = 365;
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Aktivierungscodes generieren';
+        }
+    }
+
+    showExistingActivationCodes(studioId) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-10 mx-auto">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Vorhandene Aktivierungscodes</h4>
+                            <button class="btn btn-outline-secondary" id="backFromCodesBtn">
+                                Zurück zum Dashboard
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="activationCodesList">
+                                <div class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Lade Aktivierungscodes...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('backFromCodesBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        this.loadExistingActivationCodes(studioId);
+    }
+
+    async loadExistingActivationCodes(studioId) {
+        const codesDiv = document.getElementById('activationCodesList');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/activation-codes`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load activation codes');
+            }
+            
+            const data = await response.json();
+            const codes = data.codes.codes || [];
+            
+            if (codes.length === 0) {
+                codesDiv.innerHTML = `
+                    <div class="text-center">
+                        <p>Keine Aktivierungscodes vorhanden.</p>
+                        <button class="btn btn-primary" id="generateFirstCodesBtn">
+                            Erste Codes generieren
+                        </button>
+                    </div>
+                `;
+                
+                document.getElementById('generateFirstCodesBtn').addEventListener('click', () => {
+                    this.showActivationCodeGeneration(studioId);
+                });
+            } else {
+                codesDiv.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Status</th>
+                                    <th>Verwendung</th>
+                                    <th>Erstellt</th>
+                                    <th>Ablauf</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${codes.map(code => `
+                                    <tr>
+                                        <td><strong>${code.code}</strong></td>
+                                        <td>
+                                            <span class="badge ${code.is_used ? 'bg-success' : 'bg-primary'}">
+                                                ${code.is_used ? 'Verwendet' : 'Aktiv'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            ${code.is_used ? 
+                                                `${code.first_name} ${code.last_name} (${code.used_by_email})` : 
+                                                'Nicht verwendet'
+                                            }
+                                        </td>
+                                        <td>${new Date(code.created_at).toLocaleDateString()}</td>
+                                        <td>${code.expires_at ? new Date(code.expires_at).toLocaleDateString() : 'Kein Ablauf'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            codesDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    Fehler beim Laden der Aktivierungscodes: ${error.message}
+                </div>
+            `;
+        }
     }
 
     showStudioRegister() {
@@ -456,50 +800,108 @@ class App {
                             <h4>Studio Registrierung</h4>
                         </div>
                         <div class="card-body">
+                            <div id="studioRegisterError" class="alert alert-danger d-none"></div>
+                            <div id="studioRegisterSuccess" class="alert alert-success d-none"></div>
                             <form id="studioRegisterForm">
+                                <div class="mb-3">
+                                    <label for="managerCode" class="form-label">Manager Code</label>
+                                    <input type="text" class="form-control" id="managerCode" required 
+                                           placeholder="Code vom Manager erhalten">
+                                    <div class="form-text">
+                                        Dieser Code wird von einem Manager bereitgestellt
+                                    </div>
+                                </div>
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
-                                            <label for="studioName" class="form-label">Studio Name</label>
-                                            <input type="text" class="form-control" id="studioName" required>
+                                            <label for="studioFirstName" class="form-label">Vorname</label>
+                                            <input type="text" class="form-control" id="studioFirstName" required>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="mb-3">
-                                            <label for="ownerName" class="form-label">Inhaber Name</label>
-                                            <input type="text" class="form-control" id="ownerName" required>
+                                            <label for="studioLastName" class="form-label">Nachname</label>
+                                            <input type="text" class="form-control" id="studioLastName" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioAddress" class="form-label">Adresse</label>
-                                    <input type="text" class="form-control" id="studioAddress" required>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="studioPhone" class="form-label">Telefon</label>
-                                            <input type="tel" class="form-control" id="studioPhone" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="studioRegisterEmail" class="form-label">E-Mail</label>
-                                            <input type="email" class="form-control" id="studioRegisterEmail" required>
-                                        </div>
-                                    </div>
+                                    <label for="studioRegisterEmail" class="form-label">E-Mail</label>
+                                    <input type="email" class="form-control" id="studioRegisterEmail" required>
                                 </div>
                                 <div class="mb-3">
                                     <label for="studioRegisterPassword" class="form-label">Passwort</label>
                                     <input type="password" class="form-control" id="studioRegisterPassword" required>
+                                    <div class="form-text">
+                                        Mindestens 8 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe und eine Zahl
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Studio Registrieren</button>
+                                <div class="mb-3">
+                                    <label for="studioPhone" class="form-label">Telefon (optional)</label>
+                                    <input type="tel" class="form-control" id="studioPhone">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="studioRegisterSubmitBtn">Studio Registrieren</button>
                             </form>
+                            <hr>
+                            <div class="text-center">
+                                <small>Bereits registriert? <a href="#" id="showStudioLoginLink">Anmelden</a></small>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+
+        document.getElementById('studioRegisterForm').addEventListener('submit', (e) => {
+            this.handleStudioRegister(e);
+        });
+
+        document.getElementById('showStudioLoginLink')?.addEventListener('click', () => {
+            this.showStudioLogin();
+        });
+    }
+
+    async handleStudioRegister(e) {
+        e.preventDefault();
+        
+        const formData = {
+            managerCode: document.getElementById('managerCode').value,
+            firstName: document.getElementById('studioFirstName').value,
+            lastName: document.getElementById('studioLastName').value,
+            email: document.getElementById('studioRegisterEmail').value,
+            password: document.getElementById('studioRegisterPassword').value,
+            phone: document.getElementById('studioPhone').value || '',
+            role: 'studio_owner'
+        };
+        
+        const submitBtn = document.getElementById('studioRegisterSubmitBtn');
+        const errorDiv = document.getElementById('studioRegisterError');
+        const successDiv = document.getElementById('studioRegisterSuccess');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registriere Studio...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            console.log('Registration data:', formData);
+            const result = await window.authService.register(formData);
+            this.currentUser = result.user;
+            
+            successDiv.textContent = 'Studio-Registrierung erfolgreich! Sie werden zum Studio-Setup weitergeleitet...';
+            successDiv.classList.remove('d-none');
+            
+            setTimeout(() => {
+                this.showStudioSetup();
+            }, 2000);
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Studio Registrieren';
+        }
     }
 
     showLoginModal() {
@@ -511,16 +913,506 @@ class App {
         // Generic register modal for header link
         this.showCustomerRegister();
     }
+
+    showManagerLogin() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6 mx-auto">
+                    <div class="text-center mb-3">
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkManager">Abnehmen im Liegen</a></h2>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h4>Manager Login</h4>
+                        </div>
+                        <div class="card-body">
+                            <div id="managerLoginError" class="alert alert-danger d-none"></div>
+                            <form id="managerLoginForm">
+                                <div class="mb-3">
+                                    <label for="managerEmail" class="form-label">Manager E-Mail</label>
+                                    <input type="email" class="form-control" id="managerEmail" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="managerPassword" class="form-label">Passwort</label>
+                                    <input type="password" class="form-control" id="managerPassword" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="managerLoginSubmitBtn">Login</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('managerLoginForm').addEventListener('submit', (e) => {
+            this.handleManagerLogin(e);
+        });
+        document.getElementById('brandLinkManager')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showMainPage();
+        });
+    }
+
+    async handleManagerLogin(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('managerEmail').value;
+        const password = document.getElementById('managerPassword').value;
+        const submitBtn = document.getElementById('managerLoginSubmitBtn');
+        const errorDiv = document.getElementById('managerLoginError');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+            errorDiv.classList.add('d-none');
+            
+            const result = await window.authService.login(email, password);
+            this.currentUser = result.user;
+            this.updateUIForAuthenticatedUser();
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Login';
+        }
+    }
+
+    showManagerDashboard() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Manager Dashboard</h4>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="generateCodesBtn">Codes generieren</button>
+                                <button class="btn btn-outline-secondary" id="viewStatsBtn">Statistiken</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="managerContent">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="card bg-primary text-white">
+                                            <div class="card-body">
+                                                <h5>Willkommen, ${this.currentUser.firstName}!</h5>
+                                                <p>Sie sind als Manager angemeldet.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div id="managerStats">
+                                            <div class="text-center">
+                                                <div class="spinner-border" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                                <p class="mt-2">Lade Statistiken...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('generateCodesBtn').addEventListener('click', () => {
+            this.showCodeGenerationForm();
+        });
+
+        document.getElementById('viewStatsBtn').addEventListener('click', () => {
+            this.loadManagerStats();
+        });
+
+        // Load initial stats
+        this.loadManagerStats();
+    }
+
+    async loadManagerStats() {
+        const statsDiv = document.getElementById('managerStats');
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/manager/stats', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load stats');
+            }
+            
+            const data = await response.json();
+            const stats = data.statistics;
+            
+            statsDiv.innerHTML = `
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">${stats.codes.total}</h5>
+                                <p class="card-text">Codes Gesamt</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">${stats.codes.used}</h5>
+                                <p class="card-text">Codes Verwendet</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">${stats.studios.total}</h5>
+                                <p class="card-text">Studios</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5 class="card-title">${stats.cities.count}</h5>
+                                <p class="card-text">Städte</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+        } catch (error) {
+            statsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    Fehler beim Laden der Statistiken: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    showCodeGenerationForm() {
+        const content = document.getElementById('managerContent');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Manager Code generieren</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="codeGenerationError" class="alert alert-danger d-none"></div>
+                            <div id="codeGenerationSuccess" class="alert alert-success d-none"></div>
+                            <form id="codeGenerationForm">
+                                <div class="mb-3">
+                                    <label for="intendedOwnerName" class="form-label">Inhaber Name</label>
+                                    <input type="text" class="form-control" id="intendedOwnerName" required
+                                           placeholder="Vor- und Nachname des zukünftigen Studio-Inhabers">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="intendedCity" class="form-label">Stadt</label>
+                                    <input type="text" class="form-control" id="intendedCity" required
+                                           placeholder="Stadt des Studios">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="intendedStudioName" class="form-label">Studio Name (Optional)</label>
+                                    <input type="text" class="form-control" id="intendedStudioName"
+                                           placeholder="Gewünschter Studio-Name">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="codeCount" class="form-label">Anzahl Codes</label>
+                                            <input type="number" class="form-control" id="codeCount" value="1" min="1" max="10">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="expiresInDays" class="form-label">Gültig für (Tage)</label>
+                                            <input type="number" class="form-control" id="expiresInDays" value="30" min="1" max="365">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="generateCodeSubmitBtn">Codes generieren</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div id="generatedCodes">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Generierte Codes</h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted">Hier erscheinen die generierten Codes</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('codeGenerationForm').addEventListener('submit', (e) => {
+            this.handleCodeGeneration(e);
+        });
+    }
+
+    async handleCodeGeneration(e) {
+        e.preventDefault();
+        
+        const formData = {
+            intendedOwnerName: document.getElementById('intendedOwnerName').value,
+            intendedCity: document.getElementById('intendedCity').value,
+            intendedStudioName: document.getElementById('intendedStudioName').value,
+            count: parseInt(document.getElementById('codeCount').value),
+            expiresInDays: parseInt(document.getElementById('expiresInDays').value)
+        };
+        
+        const submitBtn = document.getElementById('generateCodeSubmitBtn');
+        const errorDiv = document.getElementById('codeGenerationError');
+        const successDiv = document.getElementById('codeGenerationSuccess');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generiere Codes...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch('http://localhost:3001/api/v1/manager/studio-owner-codes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Generieren der Codes');
+            }
+            
+            const data = await response.json();
+            
+            successDiv.textContent = data.message;
+            successDiv.classList.remove('d-none');
+            
+            // Show generated codes
+            this.displayGeneratedCodes(data.codes);
+            
+            // Reset form
+            document.getElementById('codeGenerationForm').reset();
+            document.getElementById('codeCount').value = 1;
+            document.getElementById('expiresInDays').value = 30;
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Codes generieren';
+        }
+    }
+
+    displayGeneratedCodes(codes) {
+        const codesDiv = document.getElementById('generatedCodes');
+        
+        codesDiv.innerHTML = `
+            <div class="card">
+                <div class="card-header">
+                    <h5>Generierte Codes (${codes.length})</h5>
+                </div>
+                <div class="card-body">
+                    ${codes.map(code => `
+                        <div class="border p-3 mb-2 rounded">
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <strong class="text-primary">${code.code}</strong>
+                                </div>
+                                <div class="col-md-8">
+                                    <small class="text-muted">
+                                        ${code.intended_owner_name} - ${code.intended_city}
+                                        ${code.intended_studio_name ? `(${code.intended_studio_name})` : ''}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    showStudioSetup() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Studio Setup</h4>
+                            <button class="btn btn-outline-secondary" id="backToDashboardFromSetupBtn">
+                                Zurück zum Dashboard
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="studioSetupError" class="alert alert-danger d-none"></div>
+                            <div id="studioSetupSuccess" class="alert alert-success d-none"></div>
+                            <div id="preFillInfo" class="alert alert-info">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                Lade Vorab-Informationen...
+                            </div>
+                            <form id="studioSetupForm">
+                                <div class="mb-3">
+                                    <label for="studioName" class="form-label">Studio Name</label>
+                                    <input type="text" class="form-control" id="studioName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioCity" class="form-label">Stadt</label>
+                                    <input type="text" class="form-control" id="studioCity" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioAddress" class="form-label">Adresse</label>
+                                    <input type="text" class="form-control" id="studioAddress" required>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="studioSetupPhone" class="form-label">Telefon</label>
+                                            <input type="tel" class="form-control" id="studioSetupPhone" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="studioSetupEmail" class="form-label">Studio E-Mail</label>
+                                            <input type="email" class="form-control" id="studioSetupEmail" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="businessHours" class="form-label">Öffnungszeiten</label>
+                                    <textarea class="form-control" id="businessHours" rows="3" 
+                                              placeholder="Mo-Fr: 9:00-18:00, Sa: 10:00-16:00"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="studioSetupSubmitBtn">Studio erstellen</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('studioSetupForm').addEventListener('submit', (e) => {
+            this.handleStudioSetup(e);
+        });
+        document.getElementById('backToDashboardFromSetupBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        // Load pre-fill information
+        this.loadStudioPreFillInfo();
+    }
+
+    async loadStudioPreFillInfo() {
+        const preFillDiv = document.getElementById('preFillInfo');
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/studios/prefill-info', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load pre-fill info');
+            }
+            
+            const data = await response.json();
+            const info = data.preFillInfo;
+            
+            // Pre-fill form fields
+            document.getElementById('studioName').value = info.studioName || '';
+            document.getElementById('studioCity').value = info.city || '';
+            
+            preFillDiv.innerHTML = `
+                <strong>Vorab-Informationen geladen:</strong><br>
+                Inhaber: ${info.ownerName}<br>
+                Stadt: ${info.city}<br>
+                ${info.studioName ? `Studio Name: ${info.studioName}` : ''}
+            `;
+            
+        } catch (error) {
+            preFillDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    Vorab-Informationen konnten nicht geladen werden: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    async handleStudioSetup(e) {
+        e.preventDefault();
+        
+        const formData = {
+            name: document.getElementById('studioName').value,
+            city: document.getElementById('studioCity').value,
+            address: document.getElementById('studioAddress').value,
+            phone: document.getElementById('studioSetupPhone').value,
+            email: document.getElementById('studioSetupEmail').value,
+            business_hours: document.getElementById('businessHours').value
+        };
+        
+        const submitBtn = document.getElementById('studioSetupSubmitBtn');
+        const errorDiv = document.getElementById('studioSetupError');
+        const successDiv = document.getElementById('studioSetupSuccess');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Erstelle Studio...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch('http://localhost:3001/api/v1/studios', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Erstellen des Studios');
+            }
+            
+            const data = await response.json();
+            
+            successDiv.textContent = 'Studio erfolgreich erstellt! Sie werden zum Dashboard weitergeleitet...';
+            successDiv.classList.remove('d-none');
+            
+            setTimeout(() => {
+                this.showStudioDashboard();
+            }, 2000);
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Studio erstellen';
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing app...');
-    console.log('authService available:', typeof window.authService);
-    try {
-        new App();
-        console.log('App initialized successfully');
-    } catch (error) {
-        console.error('Error initializing app:', error);
-    }
+    new App();
 });

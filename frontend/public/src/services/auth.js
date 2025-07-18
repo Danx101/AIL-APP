@@ -2,7 +2,7 @@ const API_BASE_URL = 'http://localhost:3001';
 
 class AuthService {
   constructor() {
-    this.token = localStorage.getItem('token');
+    this.token = localStorage.getItem('authToken') || localStorage.getItem('token');
     this.user = JSON.parse(localStorage.getItem('user') || 'null');
   }
 
@@ -26,6 +26,7 @@ class AuthService {
       // Store token and user data
       this.token = data.token;
       this.user = data.user;
+      localStorage.setItem('authToken', this.token);
       localStorage.setItem('token', this.token);
       localStorage.setItem('user', JSON.stringify(this.user));
 
@@ -55,6 +56,7 @@ class AuthService {
       // Store token and user data
       this.token = data.token;
       this.user = data.user;
+      localStorage.setItem('authToken', this.token);
       localStorage.setItem('token', this.token);
       localStorage.setItem('user', JSON.stringify(this.user));
 
@@ -81,6 +83,7 @@ class AuthService {
       // Clear local storage regardless of server response
       this.token = null;
       this.user = null;
+      localStorage.removeItem('authToken');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
     }

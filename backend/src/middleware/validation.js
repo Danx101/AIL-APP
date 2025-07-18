@@ -24,7 +24,7 @@ const validateRegister = [
     .withMessage('Last name must be between 2 and 50 characters'),
   
   body('phone')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isMobilePhone('de-DE')
     .withMessage('Please provide a valid German phone number'),
   
@@ -32,6 +32,11 @@ const validateRegister = [
     .optional()
     .isLength({ min: 6, max: 20 })
     .withMessage('Activation code must be between 6 and 20 characters'),
+  
+  body('managerCode')
+    .optional()
+    .isLength({ min: 6, max: 20 })
+    .withMessage('Manager code must be between 6 and 20 characters'),
   
   body('role')
     .optional()

@@ -39,6 +39,14 @@ app.get('/api/v1/status', (req, res) => {
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
 
+// Studio routes
+const studioRoutes = require('./src/routes/studios');
+app.use('/api/v1/studios', studioRoutes);
+
+// Manager routes
+const managerRoutes = require('./src/routes/manager');
+app.use('/api/v1/manager', managerRoutes);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

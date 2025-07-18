@@ -95,18 +95,26 @@ class ActivationCodeService {
   }
 
   // Get codes for a studio
-  async getStudioCodes(studioId, page = 1, limit = 50) {
+  async getStudioCodes(studioId, options = {}) {
+    const { page = 1, limit = 50, showUsed = false } = options;
     const offset = (page - 1) * limit;
     
-    const codes = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT ac.*, u.email as used_by_email, u.first_name, u.last_name 
+    let query = `SELECT ac.*, u.email as used_by_email, u.first_name, u.last_name 
          FROM activation_codes ac 
          LEFT JOIN users u ON ac.used_by_user_id = u.id 
-         WHERE ac.studio_id = ? 
-         ORDER BY ac.created_at DESC 
-         LIMIT ? OFFSET ?`,
-        [studioId, limit, offset],
+         WHERE ac.studio_id = ?`;
+    
+    const params = [studioId];
+    
+    if (!showUsed) {
+      query += ' AND ac.is_used = 0';
+    }
+    
+    query += ' ORDER BY ac.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+    
+    const codes = await new Promise((resolve, reject) => {
+      db.all(query, params,
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
@@ -172,6 +180,20 @@ class ActivationCodeService {
     });
     
     return result;
+  }
+
+  // Generate activation codes (alias for createCodes for controller compatibility)
+  // Studio owners can only generate one code at a time with 3-day validity
+  async generateCodes(studioId, count = 1, expiresInDays = 3) {
+    // Override count to 1 for studio owners (business rule)
+    const actualCount = 1;
+    // Override expiry to 3 days (business rule)
+    const actualExpiryDays = 3;
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + actualExpiryDays);
+    
+    return await this.createCodes(studioId, actualCount, expiresAt.toISOString());
   }
 }
 

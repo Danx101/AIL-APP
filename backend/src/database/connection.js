@@ -14,6 +14,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
     
     // Create basic tables for Phase 0
     createBasicTables();
+    
+    // Run manager codes migration
+    const { runMigration } = require('./migrations/add_manager_codes_table');
+    runMigration().catch(console.error);
   }
 });
 
@@ -24,7 +28,7 @@ function createBasicTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('studio_owner', 'customer')),
+      role TEXT NOT NULL CHECK (role IN ('manager', 'studio_owner', 'customer')),
       first_name TEXT,
       last_name TEXT,
       phone TEXT,
@@ -58,6 +62,7 @@ function createBasicTables() {
       phone TEXT,
       email TEXT,
       business_hours TEXT,
+      city TEXT,
       is_active BOOLEAN DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -74,7 +79,7 @@ process.on('SIGINT', () => {
     if (err) {
       console.error('Error closing database:', err.message);
     } else {
-      console.log('=ñ Database connection closed');
+      console.log('=ï¿½ Database connection closed');
     }
     process.exit(0);
   });
