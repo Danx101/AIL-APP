@@ -167,14 +167,32 @@
 - Input validation and security measures
 - Default appointment types automatically created for existing studios
 
-#### Sprint 3.2: Studio Appointment Management 🔄 NEXT
-- [ ] Appointment calendar view
-- [ ] Create appointments for customers
-- [ ] Edit/cancel appointments
-- [ ] Appointment request approval system
-- [ ] Bulk operations (mass cancel, reschedule)
+#### Sprint 3.2: Studio Appointment Management ✅ COMPLETED (WITH ISSUES)
+- [x] Appointment calendar view (clickable monthly calendar)
+- [x] Create appointments for customers
+- [x] Edit/cancel appointments (status management)
+- [x] Appointment request approval system
+- [x] Customer list view with appointment history
+- [x] Dashboard appointment overview (today's appointments)
+- [x] Simplified appointment system (single type: "Abnehmen Behandlung")
+- [x] Removed "End Zeit" field (auto-calculated 60 minutes)
 
-#### Sprint 3.3: Customer Appointment Interface
+**✅ Sprint 3.2 Completed Features:**
+- Interactive clickable calendar with monthly navigation
+- Appointment indicators showing count per day
+- Date-specific appointment views
+- Customer overview with appointment history filtering
+- Today's appointments on studio dashboard
+- Simplified appointment creation (only "Abnehmen Behandlung", 60 min duration)
+- Automatic end time calculation
+- Calendar-based appointment creation
+
+**🐛 Known Issues:**
+- Calendar initialization error: "Cannot access uninitialized variable" when loading appointments
+- Error occurs on appointment management page load
+- Functionality works but displays error message to users
+
+#### Sprint 3.3: Customer Appointment Interface 🔄 NEXT
 - [ ] Customer calendar view
 - [ ] Request new appointments
 - [ ] Reschedule existing appointments
@@ -183,8 +201,9 @@
 
 **Deliverables:**
 - ✅ Complete appointment system backend
-- [ ] Calendar interfaces for both user types
+- ✅ Calendar interfaces for studio owners (with initialization bug)
 - ✅ Conflict-free booking system
+- [ ] Bug-free calendar implementation
 
 ---
 

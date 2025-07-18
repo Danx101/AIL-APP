@@ -2,6 +2,9 @@
 class App {
     constructor() {
         this.currentUser = null;
+        this.currentDate = new Date();
+        this.selectedDate = new Date();
+        this.currentStudioId = null;
         this.init();
     }
 
@@ -86,6 +89,17 @@ class App {
         this.showWelcomePage();
     }
 
+    showMainPage() {
+        // Navigate to appropriate page based on authentication status
+        if (this.currentUser) {
+            // User is authenticated - show their dashboard
+            this.updateUIForAuthenticatedUser();
+        } else {
+            // User is not authenticated - show welcome page
+            this.showWelcomePage();
+        }
+    }
+
     showWelcomePage() {
         console.log('showWelcomePage called');
         const content = document.getElementById('content');
@@ -130,8 +144,11 @@ class App {
     }
 
     setupEventListeners() {
-        // Navigation event listeners - These will be set up after DOM elements are created
-        // Initial event listeners will be set up in the respective show methods
+        // Main navbar brand link
+        document.querySelector('.navbar-brand')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showMainPage();
+        });
     }
 
     async checkAPIStatus() {
@@ -527,9 +544,28 @@ class App {
                             <p><strong>Adresse:</strong> ${studio.address}</p>
                             <p><strong>Telefon:</strong> ${studio.phone}</p>
                             <div class="mt-3">
-                                <button class="btn btn-primary btn-sm" id="generateActivationCodesBtn">
+                                <button class="btn btn-primary btn-sm me-2" id="generateActivationCodesBtn">
                                     Aktivierungscodes generieren
                                 </button>
+                                <button class="btn btn-success btn-sm me-2" id="manageAppointmentsBtn">
+                                    Termine verwalten
+                                </button>
+                                <button class="btn btn-info btn-sm" id="viewCustomersBtn">
+                                    Kunden anzeigen
+                                </button>
+                            </div>
+                            
+                            <!-- Today's appointments overview -->
+                            <div class="mt-4">
+                                <h6>Heutige Termine</h6>
+                                <div id="todaysAppointments">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-2 small">Lade heutige Termine...</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -538,6 +574,17 @@ class App {
                 document.getElementById('generateActivationCodesBtn').addEventListener('click', () => {
                     this.showActivationCodeGeneration(studio.id);
                 });
+                
+                document.getElementById('manageAppointmentsBtn').addEventListener('click', () => {
+                    this.showAppointmentManagement(studio.id);
+                });
+                
+                document.getElementById('viewCustomersBtn').addEventListener('click', () => {
+                    this.showCustomerList(studio.id);
+                });
+                
+                // Load today's appointments
+                this.loadTodaysAppointments(studio.id);
                 
             } else if (response.status === 404) {
                 statusDiv.innerHTML = `
@@ -1015,6 +1062,29 @@ class App {
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <div class="row mt-4">
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-header d-flex justify-content-between align-items-center">
+                                                <h5>Registrierte Studios</h5>
+                                                <button class="btn btn-sm btn-outline-primary" id="refreshStudiosBtn">
+                                                    Aktualisieren
+                                                </button>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="studiosList">
+                                                    <div class="text-center">
+                                                        <div class="spinner-border spinner-border-sm" role="status">
+                                                            <span class="visually-hidden">Loading...</span>
+                                                        </div>
+                                                        <p class="mt-2">Lade Studios...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1030,8 +1100,13 @@ class App {
             this.loadManagerStats();
         });
 
-        // Load initial stats
+        document.getElementById('refreshStudiosBtn').addEventListener('click', () => {
+            this.loadManagerStudios();
+        });
+
+        // Load initial stats and studios
         this.loadManagerStats();
+        this.loadManagerStudios();
     }
 
     async loadManagerStats() {
@@ -1097,14 +1172,82 @@ class App {
         }
     }
 
+    async loadManagerStudios() {
+        const studiosDiv = document.getElementById('studiosList');
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/manager/studios', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load studios');
+            }
+            
+            const data = await response.json();
+            const studios = data.studios;
+            
+            if (studios.length === 0) {
+                studiosDiv.innerHTML = `
+                    <div class="text-center text-muted">
+                        <p>Noch keine Studios registriert.</p>
+                        <small>Studios werden angezeigt, sobald Studio-Inhaber sich mit Manager-Codes registriert haben.</small>
+                    </div>
+                `;
+            } else {
+                studiosDiv.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Studio Name</th>
+                                    <th>Inhaber</th>
+                                    <th>Stadt</th>
+                                    <th>Adresse</th>
+                                    <th>Telefon</th>
+                                    <th>Registriert</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${studios.map(studio => `
+                                    <tr>
+                                        <td><strong>${studio.name}</strong></td>
+                                        <td>${studio.owner_first_name} ${studio.owner_last_name}<br>
+                                            <small class="text-muted">${studio.owner_email}</small></td>
+                                        <td>${studio.city || studio.intended_city}</td>
+                                        <td>${studio.address}</td>
+                                        <td>${studio.phone || '-'}</td>
+                                        <td>${new Date(studio.created_at).toLocaleDateString('de-DE')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            studiosDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    Fehler beim Laden der Studios: ${error.message}
+                </div>
+            `;
+        }
+    }
+
     showCodeGenerationForm() {
         const content = document.getElementById('managerContent');
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-6">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5>Manager Code generieren</h5>
+                            <button class="btn btn-sm btn-outline-secondary" id="backToDashboardBtn">
+                                ← Zurück zum Dashboard
+                            </button>
                         </div>
                         <div class="card-body">
                             <div id="codeGenerationError" class="alert alert-danger d-none"></div>
@@ -1161,6 +1304,10 @@ class App {
 
         document.getElementById('codeGenerationForm').addEventListener('submit', (e) => {
             this.handleCodeGeneration(e);
+        });
+
+        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
+            this.showManagerDashboard();
         });
     }
 
@@ -1410,9 +1557,932 @@ class App {
             submitBtn.textContent = 'Studio erstellen';
         }
     }
+
+    showAppointmentManagement(studioId) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Termine verwalten</h4>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="createAppointmentBtn">
+                                    Neuer Termin
+                                </button>
+                                <button class="btn btn-outline-secondary" id="backToStudioDashboardBtn">
+                                    Zurück zum Dashboard
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6>Kalender</h6>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" id="prevMonthBtn">‹</button>
+                                                <button class="btn btn-outline-primary" id="nextMonthBtn">›</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="monthYearDisplay" class="text-center mb-3">
+                                                <strong>Januar 2025</strong>
+                                            </div>
+                                            <div id="calendarGrid">
+                                                <!-- Calendar will be generated here -->
+                                            </div>
+                                            <div class="mt-3">
+                                                <div class="mb-2">
+                                                    <label class="form-label">Status Filter</label>
+                                                    <select class="form-select form-select-sm" id="appointmentStatusFilter">
+                                                        <option value="">Alle</option>
+                                                        <option value="pending">Ausstehend</option>
+                                                        <option value="confirmed">Bestätigt</option>
+                                                        <option value="cancelled">Abgesagt</option>
+                                                        <option value="completed">Abgeschlossen</option>
+                                                        <option value="no_show">Nicht erschienen</option>
+                                                    </select>
+                                                </div>
+                                                <button class="btn btn-outline-primary btn-sm w-100" id="filterAppointmentsBtn">
+                                                    Filter anwenden
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 id="selectedDateHeader">Termine für heute</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="appointmentsList">
+                                                <div class="text-center">
+                                                    <div class="spinner-border" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2">Lade Termine...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Set current studio ID and reset dates
+        this.currentStudioId = studioId;
+        this.selectedDate = new Date(); // Reset to today when opening appointment management
+
+        // Event listeners
+        document.getElementById('createAppointmentBtn').addEventListener('click', () => {
+            this.showCreateAppointmentForm(studioId);
+        });
+
+        document.getElementById('backToStudioDashboardBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        document.getElementById('filterAppointmentsBtn').addEventListener('click', () => {
+            this.loadAppointments(studioId);
+        });
+
+        document.getElementById('prevMonthBtn').addEventListener('click', () => {
+            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+            this.renderCalendar();
+        });
+
+        document.getElementById('nextMonthBtn').addEventListener('click', () => {
+            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+            this.renderCalendar();
+        });
+
+        // Initialize calendar and load appointments after DOM is ready
+        setTimeout(() => {
+            this.renderCalendar();
+            this.loadAppointments(studioId);
+        }, 100);
+    }
+
+    async loadAppointments(studioId) {
+        const appointmentsDiv = document.getElementById('appointmentsList');
+        const statusFilter = document.getElementById('appointmentStatusFilter')?.value || '';
+        
+        // Use selectedDate if available, otherwise use today's date
+        const selectedDate = this.selectedDate || new Date();
+        const selectedDateStr = selectedDate.toISOString().split('T')[0];
+        
+        try {
+            let url = `http://localhost:3001/api/v1/appointments/studio/${studioId}`;
+            const params = new URLSearchParams();
+            params.append('date', selectedDateStr);
+            if (statusFilter) params.append('status', statusFilter);
+            if (params.toString()) url += '?' + params.toString();
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load appointments');
+            }
+            
+            const data = await response.json();
+            const appointments = data.appointments || [];
+            
+            // Update the header with selected date
+            const selectedDateStr = selectedDate.toLocaleDateString('de-DE', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            const headerElement = document.getElementById('selectedDateHeader');
+            if (headerElement) {
+                headerElement.textContent = `Termine für ${selectedDateStr}`;
+            }
+            
+            if (appointments.length === 0) {
+                appointmentsDiv.innerHTML = `
+                    <div class="text-center text-muted">
+                        <p>Keine Termine für diesen Tag.</p>
+                        <button class="btn btn-primary" id="createAppointmentForDateBtn">
+                            Termin für ${selectedDate.toLocaleDateString('de-DE')} erstellen
+                        </button>
+                    </div>
+                `;
+                
+                document.getElementById('createAppointmentForDateBtn').addEventListener('click', () => {
+                    this.showCreateAppointmentForm(studioId, selectedDate);
+                });
+            } else {
+                appointmentsDiv.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Zeit</th>
+                                    <th>Kunde</th>
+                                    <th>Typ</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${appointments.map(appointment => `
+                                    <tr>
+                                        <td>${new Date(appointment.appointment_date).toLocaleDateString('de-DE')}</td>
+                                        <td>${appointment.start_time} - ${appointment.end_time}</td>
+                                        <td>
+                                            ${appointment.customer_first_name} ${appointment.customer_last_name}
+                                            <br><small class="text-muted">${appointment.customer_email}</small>
+                                        </td>
+                                        <td>${appointment.appointment_type_name || 'Abnehmen Behandlung'}</td>
+                                        <td>
+                                            <span class="badge ${this.getStatusBadgeClass(appointment.status)}">
+                                                ${this.getStatusText(appointment.status)}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" onclick="window.app.editAppointment(${appointment.id})">
+                                                    Bearbeiten
+                                                </button>
+                                                <button class="btn btn-outline-success" onclick="window.app.confirmAppointment(${appointment.id})">
+                                                    Bestätigen
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="window.app.cancelAppointment(${appointment.id})">
+                                                    Absagen
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            appointmentsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    Fehler beim Laden der Termine: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    getStatusBadgeClass(status) {
+        const classes = {
+            'pending': 'bg-warning',
+            'confirmed': 'bg-success',
+            'cancelled': 'bg-danger',
+            'completed': 'bg-info',
+            'no_show': 'bg-secondary'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    getStatusText(status) {
+        const texts = {
+            'pending': 'Ausstehend',
+            'confirmed': 'Bestätigt',
+            'cancelled': 'Abgesagt',
+            'completed': 'Abgeschlossen',
+            'no_show': 'Nicht erschienen'
+        };
+        return texts[status] || status;
+    }
+
+    showCreateAppointmentForm(studioId, preselectedDate = null) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Neuen Termin erstellen</h4>
+                            <button class="btn btn-outline-secondary" id="backToAppointmentsBtn">
+                                Zurück zu Terminen
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="createAppointmentError" class="alert alert-danger d-none"></div>
+                            <div id="createAppointmentSuccess" class="alert alert-success d-none"></div>
+                            <form id="createAppointmentForm">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="appointmentDate" class="form-label">Datum *</label>
+                                            <input type="date" class="form-control" id="appointmentDate" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="appointmentStartTime" class="form-label">Start Zeit *</label>
+                                            <input type="time" class="form-control" id="appointmentStartTime" required>
+                                            <div class="form-text">Dauer: 60 Minuten (automatisch berechnet)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="customerId" class="form-label">Kunde *</label>
+                                    <select class="form-select" id="customerId" required>
+                                        <option value="">Kunde auswählen...</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="appointmentTypeId" class="form-label">Termin Typ</label>
+                                    <select class="form-select" id="appointmentTypeId" required>
+                                        <option value="">Typ auswählen...</option>
+                                    </select>
+                                    <div class="form-text">Standard: Abnehmen Behandlung (60 Min)</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="appointmentNotes" class="form-label">Notizen</label>
+                                    <textarea class="form-control" id="appointmentNotes" rows="3"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="createAppointmentSubmitBtn">
+                                    Termin erstellen
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Set default date to preselected date or today
+        const defaultDate = preselectedDate ? preselectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        document.getElementById('appointmentDate').value = defaultDate;
+
+        // Event listeners
+        document.getElementById('backToAppointmentsBtn').addEventListener('click', () => {
+            this.showAppointmentManagement(studioId);
+        });
+
+        document.getElementById('createAppointmentForm').addEventListener('submit', (e) => {
+            this.handleCreateAppointment(e, studioId);
+        });
+
+        // Load customers and appointment types
+        this.loadCustomers(studioId);
+        this.loadAppointmentTypes(studioId);
+    }
+
+    async loadCustomers(studioId) {
+        const customerSelect = document.getElementById('customerId');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customers');
+            }
+            
+            const data = await response.json();
+            const customers = data.customers || [];
+            
+            customerSelect.innerHTML = '<option value="">Kunde auswählen...</option>';
+            customers.forEach(customer => {
+                customerSelect.innerHTML += `
+                    <option value="${customer.id}">
+                        ${customer.first_name} ${customer.last_name} (${customer.email})
+                    </option>
+                `;
+            });
+            
+        } catch (error) {
+            customerSelect.innerHTML = '<option value="">Fehler beim Laden der Kunden</option>';
+        }
+    }
+
+    async loadAppointmentTypes(studioId) {
+        const typeSelect = document.getElementById('appointmentTypeId');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${studioId}/appointment-types`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load appointment types');
+            }
+            
+            const data = await response.json();
+            const types = data.appointmentTypes || [];
+            
+            typeSelect.innerHTML = '<option value="">Typ auswählen...</option>';
+            let abnehmenType = null;
+            
+            types.forEach(type => {
+                const selected = type.name === 'Abnehmen Behandlung' ? 'selected' : '';
+                typeSelect.innerHTML += `
+                    <option value="${type.id}" ${selected}>
+                        ${type.name} (${type.duration} Min)
+                    </option>
+                `;
+                
+                if (type.name === 'Abnehmen Behandlung') {
+                    abnehmenType = type;
+                }
+            });
+            
+            // Auto-select the first "Abnehmen Behandlung" type if found
+            if (abnehmenType) {
+                typeSelect.value = abnehmenType.id;
+            }
+            
+        } catch (error) {
+            typeSelect.innerHTML = '<option value="">Fehler beim Laden der Typen</option>';
+        }
+    }
+
+    async handleCreateAppointment(e, studioId) {
+        e.preventDefault();
+        
+        // Calculate end time (start time + 60 minutes)
+        const startTime = document.getElementById('appointmentStartTime').value;
+        const endTime = this.calculateEndTime(startTime, 60);
+        
+        const formData = {
+            studio_id: studioId,
+            customer_id: parseInt(document.getElementById('customerId').value),
+            appointment_type_id: parseInt(document.getElementById('appointmentTypeId').value),
+            appointment_date: document.getElementById('appointmentDate').value,
+            start_time: startTime,
+            end_time: endTime,
+            notes: document.getElementById('appointmentNotes').value
+        };
+        
+        const submitBtn = document.getElementById('createAppointmentSubmitBtn');
+        const errorDiv = document.getElementById('createAppointmentError');
+        const successDiv = document.getElementById('createAppointmentSuccess');
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Erstelle Termin...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch('http://localhost:3001/api/v1/appointments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Erstellen des Termins');
+            }
+            
+            const data = await response.json();
+            
+            successDiv.textContent = 'Termin erfolgreich erstellt!';
+            successDiv.classList.remove('d-none');
+            
+            // Reset form
+            document.getElementById('createAppointmentForm').reset();
+            document.getElementById('appointmentDate').value = new Date().toISOString().split('T')[0];
+            
+            // Redirect after success
+            setTimeout(() => {
+                this.showAppointmentManagement(studioId);
+            }, 2000);
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Termin erstellen';
+        }
+    }
+
+    async confirmAppointment(appointmentId) {
+        await this.updateAppointmentStatus(appointmentId, 'confirmed');
+    }
+
+    async cancelAppointment(appointmentId) {
+        await this.updateAppointmentStatus(appointmentId, 'cancelled');
+    }
+
+    async updateAppointmentStatus(appointmentId, status) {
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ status })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Aktualisieren des Status');
+            }
+            
+            // Reload the current appointments view
+            const appointmentsList = document.getElementById('appointmentsList');
+            if (appointmentsList) {
+                // Find the studio ID from the current context
+                const studioResponse = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+                
+                if (studioResponse.ok) {
+                    const studioData = await studioResponse.json();
+                    this.loadAppointments(studioData.studio.id);
+                }
+            }
+            
+        } catch (error) {
+            alert('Fehler beim Aktualisieren des Termins: ' + error.message);
+        }
+    }
+
+    editAppointment(appointmentId) {
+        // TODO: Implement edit functionality
+        alert('Edit functionality coming soon!');
+    }
+
+    calculateEndTime(startTime, durationMinutes) {
+        if (!startTime) return '';
+        
+        const [hours, minutes] = startTime.split(':').map(Number);
+        const startDate = new Date();
+        startDate.setHours(hours, minutes, 0, 0);
+        
+        const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
+        
+        return endDate.toTimeString().slice(0, 5); // Return in HH:MM format
+    }
+
+    async loadTodaysAppointments(studioId) {
+        const todaysDiv = document.getElementById('todaysAppointments');
+        
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${studioId}?date=${today}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load today\'s appointments');
+            }
+            
+            const data = await response.json();
+            const appointments = data.appointments || [];
+            
+            if (appointments.length === 0) {
+                todaysDiv.innerHTML = `
+                    <div class="text-muted">
+                        <small>Keine Termine für heute</small>
+                    </div>
+                `;
+            } else {
+                todaysDiv.innerHTML = `
+                    <div class="list-group">
+                        ${appointments.map(appointment => `
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${appointment.start_time} - ${appointment.end_time}</strong><br>
+                                    <small>${appointment.customer_first_name} ${appointment.customer_last_name}</small>
+                                </div>
+                                <span class="badge ${this.getStatusBadgeClass(appointment.status)}">
+                                    ${this.getStatusText(appointment.status)}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            todaysDiv.innerHTML = `
+                <div class="alert alert-warning alert-sm">
+                    <small>Fehler beim Laden der Termine: ${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    showCustomerList(studioId) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Kunden Übersicht</h4>
+                            <button class="btn btn-outline-secondary" id="backToStudioDashboardFromCustomersBtn">
+                                Zurück zum Dashboard
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>Kundenliste</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="customersList">
+                                                <div class="text-center">
+                                                    <div class="spinner-border spinner-border-sm" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2 small">Lade Kunden...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>Kunden Termine</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="customerAppointments">
+                                                <div class="text-muted text-center">
+                                                    <p>Wählen Sie einen Kunden aus der Liste</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Event listener
+        document.getElementById('backToStudioDashboardFromCustomersBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        // Load customers
+        this.loadCustomersList(studioId);
+    }
+
+    async loadCustomersList(studioId) {
+        const customersDiv = document.getElementById('customersList');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customers');
+            }
+            
+            const data = await response.json();
+            const customers = data.customers || [];
+            
+            if (customers.length === 0) {
+                customersDiv.innerHTML = `
+                    <div class="text-muted">
+                        <small>Keine Kunden vorhanden</small>
+                    </div>
+                `;
+            } else {
+                customersDiv.innerHTML = `
+                    <div class="list-group">
+                        ${customers.map(customer => `
+                            <a href="#" class="list-group-item list-group-item-action customer-item" data-customer-id="${customer.id}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">${customer.first_name} ${customer.last_name}</h6>
+                                    <small>${new Date(customer.created_at).toLocaleDateString('de-DE')}</small>
+                                </div>
+                                <p class="mb-1">${customer.email}</p>
+                                <small>${customer.phone || 'Kein Telefon'}</small>
+                            </a>
+                        `).join('')}
+                    </div>
+                `;
+                
+                // Add click event listeners to customer items
+                document.querySelectorAll('.customer-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const customerId = item.dataset.customerId;
+                        const customerName = item.querySelector('h6').textContent;
+                        this.loadCustomerAppointments(customerId, customerName);
+                        
+                        // Remove active class from all items and add to clicked item
+                        document.querySelectorAll('.customer-item').forEach(i => i.classList.remove('active'));
+                        item.classList.add('active');
+                    });
+                });
+            }
+            
+        } catch (error) {
+            customersDiv.innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <small>Fehler beim Laden der Kunden: ${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    async loadCustomerAppointments(customerId, customerName) {
+        const appointmentsDiv = document.getElementById('customerAppointments');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/customer/${customerId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customer appointments');
+            }
+            
+            const data = await response.json();
+            const appointments = data.appointments || [];
+            
+            // Separate past and upcoming appointments
+            const today = new Date();
+            const pastAppointments = appointments.filter(apt => new Date(apt.appointment_date) < today);
+            const upcomingAppointments = appointments.filter(apt => new Date(apt.appointment_date) >= today);
+            
+            appointmentsDiv.innerHTML = `
+                <div class="mb-3">
+                    <h6>Termine für ${customerName}</h6>
+                    <div class="btn-group btn-group-sm mb-3" role="group">
+                        <button type="button" class="btn btn-outline-primary" id="showUpcomingBtn">
+                            Kommende (${upcomingAppointments.length})
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="showPastBtn">
+                            Vergangene (${pastAppointments.length})
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="upcomingAppointments" class="appointment-section">
+                    ${upcomingAppointments.length === 0 ? 
+                        '<div class="text-muted"><small>Keine kommenden Termine</small></div>' :
+                        `<div class="list-group">
+                            ${upcomingAppointments.map(appointment => `
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">${new Date(appointment.appointment_date).toLocaleDateString('de-DE')}</h6>
+                                        <span class="badge ${this.getStatusBadgeClass(appointment.status)}">
+                                            ${this.getStatusText(appointment.status)}
+                                        </span>
+                                    </div>
+                                    <p class="mb-1">${appointment.start_time} - ${appointment.end_time}</p>
+                                    <small>Abnehmen Behandlung</small>
+                                    ${appointment.notes ? `<div class="mt-2"><small class="text-muted">Notizen: ${appointment.notes}</small></div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>`
+                    }
+                </div>
+                
+                <div id="pastAppointments" class="appointment-section" style="display: none;">
+                    ${pastAppointments.length === 0 ? 
+                        '<div class="text-muted"><small>Keine vergangenen Termine</small></div>' :
+                        `<div class="list-group">
+                            ${pastAppointments.map(appointment => `
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">${new Date(appointment.appointment_date).toLocaleDateString('de-DE')}</h6>
+                                        <span class="badge ${this.getStatusBadgeClass(appointment.status)}">
+                                            ${this.getStatusText(appointment.status)}
+                                        </span>
+                                    </div>
+                                    <p class="mb-1">${appointment.start_time} - ${appointment.end_time}</p>
+                                    <small>Abnehmen Behandlung</small>
+                                    ${appointment.notes ? `<div class="mt-2"><small class="text-muted">Notizen: ${appointment.notes}</small></div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>`
+                    }
+                </div>
+            `;
+            
+            // Add event listeners for the buttons
+            document.getElementById('showUpcomingBtn').addEventListener('click', () => {
+                document.getElementById('upcomingAppointments').style.display = 'block';
+                document.getElementById('pastAppointments').style.display = 'none';
+                document.getElementById('showUpcomingBtn').classList.replace('btn-outline-primary', 'btn-primary');
+                document.getElementById('showPastBtn').classList.replace('btn-secondary', 'btn-outline-secondary');
+            });
+            
+            document.getElementById('showPastBtn').addEventListener('click', () => {
+                document.getElementById('upcomingAppointments').style.display = 'none';
+                document.getElementById('pastAppointments').style.display = 'block';
+                document.getElementById('showPastBtn').classList.replace('btn-outline-secondary', 'btn-secondary');
+                document.getElementById('showUpcomingBtn').classList.replace('btn-primary', 'btn-outline-primary');
+            });
+            
+        } catch (error) {
+            appointmentsDiv.innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <small>Fehler beim Laden der Termine: ${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    renderCalendar() {
+        const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                           'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+        const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        
+        const monthYearDisplay = document.getElementById('monthYearDisplay');
+        const calendarGrid = document.getElementById('calendarGrid');
+        
+        if (!monthYearDisplay || !calendarGrid) return;
+        
+        // Update month/year display
+        monthYearDisplay.innerHTML = `<strong>${monthNames[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}</strong>`;
+        
+        // Calculate first day of month and number of days
+        const firstDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
+        const lastDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
+        const startDate = new Date(firstDay);
+        startDate.setDate(startDate.getDate() - firstDay.getDay()); // Start from Sunday
+        
+        // Generate calendar HTML
+        let calendarHTML = `
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        ${dayNames.map(day => `<th class="text-center">${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        const today = new Date();
+        const currentMonth = this.currentDate.getMonth();
+        const currentYear = this.currentDate.getFullYear();
+        
+        // Generate 6 weeks (42 days) to cover all possible month layouts
+        for (let week = 0; week < 6; week++) {
+            calendarHTML += '<tr>';
+            
+            for (let day = 0; day < 7; day++) {
+                const currentDate = new Date(startDate);
+                currentDate.setDate(startDate.getDate() + (week * 7) + day);
+                
+                const isCurrentMonth = currentDate.getMonth() === currentMonth;
+                const isToday = currentDate.toDateString() === today.toDateString();
+                const isSelected = this.selectedDate && currentDate.toDateString() === this.selectedDate.toDateString();
+                
+                let cellClass = 'calendar-day text-center';
+                if (!isCurrentMonth) cellClass += ' text-muted';
+                if (isToday) cellClass += ' bg-primary text-white';
+                if (isSelected) cellClass += ' bg-success text-white';
+                
+                calendarHTML += `
+                    <td class="${cellClass}" 
+                        style="cursor: pointer; padding: 8px; border: 1px solid #dee2e6;"
+                        data-date="${currentDate.toISOString().split('T')[0]}"
+                        onclick="window.app.selectDate('${currentDate.toISOString().split('T')[0]}')">
+                        <div class="d-flex flex-column align-items-center">
+                            <span>${currentDate.getDate()}</span>
+                            <div id="day-${currentDate.toISOString().split('T')[0]}" class="appointment-indicator mt-1">
+                                <!-- Appointment indicators will be loaded here -->
+                            </div>
+                        </div>
+                    </td>
+                `;
+            }
+            
+            calendarHTML += '</tr>';
+        }
+        
+        calendarHTML += '</tbody></table>';
+        calendarGrid.innerHTML = calendarHTML;
+        
+        // Load appointment indicators for the month
+        this.loadMonthlyAppointmentIndicators();
+    }
+
+    selectDate(dateString) {
+        this.selectedDate = new Date(dateString);
+        this.renderCalendar();
+        this.loadAppointments(this.currentStudioId);
+    }
+
+    async loadMonthlyAppointmentIndicators() {
+        if (!this.currentStudioId || !this.currentDate) return;
+        
+        try {
+            const startDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
+            const endDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
+            
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDate.toISOString().split('T')[0]}&to_date=${endDate.toISOString().split('T')[0]}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const appointments = data.appointments || [];
+            
+            // Group appointments by date
+            const appointmentsByDate = {};
+            appointments.forEach(appointment => {
+                const date = appointment.appointment_date;
+                if (!appointmentsByDate[date]) {
+                    appointmentsByDate[date] = [];
+                }
+                appointmentsByDate[date].push(appointment);
+            });
+            
+            // Update calendar indicators
+            Object.keys(appointmentsByDate).forEach(date => {
+                const dayElement = document.getElementById(`day-${date}`);
+                if (dayElement) {
+                    const count = appointmentsByDate[date].length;
+                    dayElement.innerHTML = `<small class="badge bg-info">${count}</small>`;
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error loading monthly appointments:', error);
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new App();
+    window.app = new App();
 });

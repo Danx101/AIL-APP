@@ -328,6 +328,47 @@ class StudioController {
       res.status(500).json({ message: 'Internal server error' });
     }
   }
+
+  /**
+   * Get customers for a studio
+   * GET /api/v1/studios/:id/customers
+   */
+  async getCustomers(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Check if studio exists and user owns it
+      const studio = await Studio.findById(id);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (studio.owner_id !== req.user.userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Get customers who have used activation codes from this studio
+      const customers = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
+           FROM users u
+           JOIN activation_codes ac ON u.id = ac.used_by_user_id
+           WHERE ac.studio_id = ? AND u.role = 'customer'
+           ORDER BY u.created_at DESC`,
+          [id],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
+
+      res.json({ customers });
+    } catch (error) {
+      console.error('Error fetching studio customers:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
 }
 
 module.exports = new StudioController();

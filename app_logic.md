@@ -68,4 +68,54 @@ The three-tier authorization system is now fully functional with:
 - Business rules enforced
 - All user flows tested and working
 
-Ready for Phase 3: Appointment System Core       
+## Phase 3: Appointment System Core - Sprint 3.2 COMPLETED ✅ (WITH ISSUES)
+
+> appointment booking works, but the customer and appointment type undefined after booking. i want better overview of all appointments for studio owners. i want to see customers list and be able to chose customer and see previos and upcoming appontments & be able to modify. also i want different calender. overview of appointments for today and for the whole month (in the table nearby) at the dashboaard and being able to click on the date in the table and see more details of the appointments for this date. 
+
+**✅ IMPLEMENTED:**
+- ✅ Fixed customer and appointment type display issues
+- ✅ Added comprehensive appointment overview for studio owners
+- ✅ Customer list view with clickable selection
+- ✅ Previous and upcoming appointments filtering per customer
+- ✅ Interactive clickable calendar with monthly view
+- ✅ Today's appointments overview on dashboard
+- ✅ Click on calendar dates to see appointment details for that date
+
+> delete "end zeit" by making the appointment booking.
+
+**✅ IMPLEMENTED:**
+- ✅ Removed "End Zeit" field from appointment booking form
+- ✅ Automatic calculation: Start Zeit + 60 minutes
+- ✅ User-friendly indication of 60-minute duration
+
+>delete all appointment types but "Abnehmen Behandlung"
+
+**✅ IMPLEMENTED:**
+- ✅ Cleaned up database: only "Abnehmen Behandlung" remains
+- ✅ Auto-selection of appointment type in forms
+- ✅ Simplified user interface
+
+>after opening date in the upcoming clickable calender option to create appointment
+
+**✅ IMPLEMENTED:**
+- ✅ Clickable calendar dates show appointments for selected date
+- ✅ "Termin erstellen" button appears when no appointments exist for selected date
+- ✅ Pre-filled date when creating appointments from calendar
+
+## 🐛 KNOWN ISSUES - Sprint 3.2.1 NEEDED
+
+**Current Bug:** Calendar initialization error
+- **Error Message:** "Fehler beim Laden der Termine: Cannot access uninitialized variable"
+- **Impact:** Error appears when loading appointment management page
+- **Status:** Functionality works despite error, but user experience is affected
+- **Priority:** High - needs immediate fix in Sprint 3.2.1
+
+**Technical Details:**
+- Variable initialization timing issues in calendar component
+- DOM element access before proper initialization
+- Async loading conflicts between calendar rendering and appointment loading
+
+**Next Steps:**
+- Sprint 3.2.1: Fix calendar initialization bug
+- Ensure proper variable initialization order
+- Add better error handling and loading states

@@ -98,6 +98,14 @@ router.get('/:id/activation-codes',
   studioController.getActivationCodes
 );
 
+// Studio customers
+router.get('/:id/customers', 
+  authenticate, 
+  authorize(['studio_owner']), 
+  param('id').isInt().withMessage('Studio ID must be an integer'),
+  studioController.getCustomers
+);
+
 // Admin routes (if needed in future)
 router.get('/', 
   authenticate, 
