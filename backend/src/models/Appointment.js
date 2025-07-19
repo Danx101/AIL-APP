@@ -47,8 +47,11 @@ class Appointment {
       errors.push('Invalid end time format. Expected HH:MM');
     }
 
-    // Validate status
-    const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'];
+    // Validate status (supporting both English and German terms)
+    const validStatuses = [
+      'pending', 'confirmed', 'cancelled', 'completed', 'no_show',
+      'bestätigt', 'abgesagt', 'abgeschlossen', 'nicht erschienen'
+    ];
     if (this.status && !validStatuses.includes(this.status)) {
       errors.push(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
@@ -242,7 +245,8 @@ class Appointment {
         if (err) {
           reject(err);
         } else {
-          resolve(rows.map(row => new Appointment(row)));
+          // Return raw rows to preserve joined fields like customer_first_name, etc.
+          resolve(rows);
         }
       });
     });
@@ -284,7 +288,8 @@ class Appointment {
         if (err) {
           reject(err);
         } else {
-          resolve(rows.map(row => new Appointment(row)));
+          // Return raw rows to preserve joined fields like customer_first_name, etc.
+          resolve(rows);
         }
       });
     });
@@ -322,6 +327,76 @@ class Appointment {
           resolve(row.count > 0);
         }
       });
+    });
+  }
+
+  /**
+   * Auto-update appointment statuses based on date and current status
+   * Changes past 'bestätigt' appointments to 'abgeschlossen' and deducts sessions
+   */
+  static async updatePastAppointmentStatuses() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        // First, get all past confirmed appointments that need to be completed
+        const appointmentsToComplete = await new Promise((resolveQuery, rejectQuery) => {
+          const query = `
+            SELECT * FROM appointments 
+            WHERE appointment_date < ? 
+              AND status = 'bestätigt'
+          `;
+
+          db.all(query, [today], (err, rows) => {
+            if (err) rejectQuery(err);
+            else resolveQuery(rows);
+          });
+        });
+
+        if (appointmentsToComplete.length === 0) {
+          return resolve(0);
+        }
+
+        // Update appointment statuses
+        const updateQuery = `
+          UPDATE appointments 
+          SET status = 'abgeschlossen', updated_at = CURRENT_TIMESTAMP
+          WHERE appointment_date < ? 
+            AND status = 'bestätigt'
+        `;
+
+        db.run(updateQuery, [today], async (err) => {
+          if (err) {
+            return reject(err);
+          }
+
+          // Deduct sessions for each completed appointment
+          const CustomerSession = require('./CustomerSession');
+          let sessionDeductions = 0;
+
+          for (const appointment of appointmentsToComplete) {
+            try {
+              await CustomerSession.deductSession(
+                appointment.customer_id,
+                appointment.studio_id,
+                appointment.id,
+                appointment.created_by_user_id, // Use original creator as deductor
+                'Automatic session deduction for completed past appointment'
+              );
+              sessionDeductions++;
+            } catch (sessionError) {
+              console.error(`Failed to deduct session for appointment ${appointment.id}:`, sessionError.message);
+              // Continue with other appointments even if one fails
+            }
+          }
+
+          console.log(`✅ Auto-completed ${appointmentsToComplete.length} past appointments, deducted ${sessionDeductions} sessions`);
+          resolve(appointmentsToComplete.length);
+        });
+
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 

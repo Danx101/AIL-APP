@@ -31,7 +31,17 @@ router.get('/studio/:studioId/appointment-types',
   appointmentController.getAppointmentTypes
 );
 
-// Customer-specific appointment routes
+// Get customer's own appointments (must come before /customer/:customerId)
+router.get('/customer/me',
+  appointmentController.getMyAppointments
+);
+
+// Get customer's associated studio
+router.get('/customer/me/studio',
+  appointmentController.getCustomerStudio
+);
+
+// Customer-specific appointment routes (must come after specific /customer/me routes)
 router.get('/customer/:customerId',
   validateCustomerId,
   appointmentController.getCustomerAppointments

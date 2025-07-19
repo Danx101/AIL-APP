@@ -56,6 +56,10 @@ app.use('/api/v1/manager', managerRoutes);
 const appointmentRoutes = require('./src/routes/appointments');
 app.use('/api/v1/appointments', appointmentRoutes);
 
+// Session routes
+const sessionRoutes = require('./src/routes/sessions');
+app.use('/api/v1', sessionRoutes);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

@@ -119,3 +119,186 @@ The three-tier authorization system is now fully functional with:
 - Sprint 3.2.1: Fix calendar initialization bug
 - Ensure proper variable initialization order
 - Add better error handling and loading states
+
+## Phase 3: Sprint 3.3 - Customer Interface & Enhanced Features
+
+### Current Issues to Address (July 19, 2025)
+
+#### 🔥 HIGH PRIORITY BUGS
+1. **403 Forbidden Errors for Customer "Anna Kunde"**
+   - Customer authentication failing
+   - Cannot access appointment endpoints
+   - Timeline/calendar not loading for customers
+
+2. **Studio Timeline Display Issues**
+   - Customer names showing as "undefined undefined"
+   - Missing customer information in appointment blocks
+
+#### 📱 UI/UX Improvements
+3. **Customer Timeline Layout**
+   - Make timeline view broader than calendar for customers
+   - Improve visual balance and usability
+
+#### 🎯 Business Logic Enhancements
+4. **Automatic Appointment Status Management**
+   - Studio owner created appointments → automatically "bestätigt" (confirmed)
+   - Past "bestätigt" appointments → automatically "abgeschlossen" (completed)
+   - Allow studio owners to change status to "abgesagt" or "nicht erschienen"
+
+### 💳 NEW FEATURE: Session/Block Package System
+
+#### Concept Overview
+Customers purchase session packages (10x or 20x treatments) directly in studio. Both customer and studio owner need visibility into remaining sessions.
+
+#### Database Schema Design
+```sql
+-- Customer session packages
+CREATE TABLE customer_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    studio_id INTEGER NOT NULL,
+    total_sessions INTEGER NOT NULL, -- 10 or 20
+    remaining_sessions INTEGER NOT NULL,
+    purchase_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES users(id),
+    FOREIGN KEY (studio_id) REFERENCES studios(id)
+);
+
+-- Session transaction log
+CREATE TABLE session_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_session_id INTEGER NOT NULL,
+    transaction_type TEXT NOT NULL, -- 'purchase', 'deduction', 'topup', 'refund'
+    amount INTEGER NOT NULL, -- positive for add, negative for deduct
+    appointment_id INTEGER, -- if related to appointment
+    created_by_user_id INTEGER NOT NULL,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_session_id) REFERENCES customer_sessions(id),
+    FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+```
+
+#### Business Rules
+1. **Session Purchase/Top-up (Studio Owner Only)**
+   - Can add +10 or +20 sessions for any customer
+   - Creates audit trail in transactions table
+   - Updates customer's remaining session count
+
+2. **Session Consumption**
+   - Only "abgeschlossen" (completed) appointments consume sessions
+   - Automatic deduction when past appointments marked complete
+   - Cannot book if 0 sessions remaining
+
+3. **Session Display**
+   - **Customer View**: Prominent session counter, booking restrictions
+   - **Studio Owner View**: Session count per customer, top-up controls
+
+#### API Endpoints to Implement
+```
+GET /api/v1/customers/me/sessions - Customer's session info
+GET /api/v1/customers/:id/sessions - Studio owner view customer sessions
+POST /api/v1/customers/:id/sessions/topup - Add sessions (+10/+20)
+GET /api/v1/sessions/transactions/:sessionId - Transaction history
+PATCH /api/v1/appointments/:id/complete - Complete appointment (deduct session)
+```
+
+#### Frontend Components to Add
+1. **Customer Dashboard**
+   - Session counter widget (prominent display)
+   - Low session warning (< 3 remaining)
+   - Session history view
+
+2. **Studio Owner Interface**
+   - Customer list with session counts
+   - Session top-up buttons (+10, +20)
+   - Session transaction history per customer
+
+#### Session Logic Flow
+1. **Initial Setup**: Studio owner creates session package for new customer
+2. **Appointment Booking**: Check remaining sessions before allowing booking
+3. **Appointment Completion**: Auto-deduct session when appointment marked "abgeschlossen"
+4. **Session Top-up**: Studio owner can add more sessions anytime
+5. **Session Tracking**: Full audit trail of all session movements
+
+### Implementation Priority
+1. ✅ Fix 403 authentication errors
+2. ✅ Fix timeline customer name display
+3. ✅ Improve customer timeline layout
+4. ✅ Implement automatic appointment status logic
+5. ✅ Design and implement session/block system database
+6. ✅ Create session management API endpoints
+7. ⏳ Build session UI components for customer dashboard
+8. ⏳ Build session management UI for studio owners
+9. ✅ Implement session consumption logic with appointments
+10. ✅ Add session transaction history and reporting
+
+### Success Criteria
+- ✅ Anna Kunde can successfully access customer dashboard and timeline
+- ✅ Studio timeline shows proper customer names in appointment blocks
+- ✅ Timeline layout provides optimal viewing experience for customers
+- ✅ Appointment statuses update automatically based on business rules
+- ✅ Session system provides complete package management for studios
+- ⏳ Customers can see remaining sessions and booking restrictions
+- ⏳ Studio owners have full control over customer session packages
+
+## 🎉 PHASE 3: SPRINT 3.3 COMPLETED ✅ (July 19, 2025)
+
+**Major Achievements:**
+- ✅ **Session/Block Package System**: Complete backend implementation with database schema, models, controllers, and API endpoints
+- ✅ **Automatic Appointment Status Management**: Studio owner appointments auto-confirmed, past appointments auto-completed with session deduction
+- ✅ **Customer Dashboard Fixes**: Removed redundant "Verlauf" tab, "Meine Termine" now shows all appointments properly sorted
+- ✅ **Authentication Issues Resolved**: Customer "Anna Kunde" can access all endpoints successfully
+- ✅ **Timeline Display Fixed**: Customer names display correctly in studio timeline view
+
+**Session System Features Implemented:**
+- ✅ Customer session packages (10x/20x treatments)
+- ✅ Session top-up functionality for studio owners (+10/+20)
+- ✅ Automatic session deduction for completed appointments
+- ✅ Complete transaction audit trail
+- ✅ Session statistics and reporting
+- ✅ Role-based access control for all session operations
+
+**API Endpoints Completed:**
+```
+✅ GET /api/v1/customers/me/sessions - Customer's session info
+✅ GET /api/v1/customers/:id/sessions - Studio owner view customer sessions
+✅ POST /api/v1/customers/:id/sessions/topup - Add sessions (+10/+20)
+✅ GET /api/v1/sessions/transactions/:sessionId - Transaction history
+✅ PATCH /api/v1/appointments/:id/complete - Complete appointment (deduct session)
+✅ GET /api/v1/studios/:studioId/sessions/stats - Session statistics
+✅ GET /api/v1/studios/:studioId/customers/sessions - All customers with session counts
+```
+
+## 🔄 CURRENT PRIORITY TASKS (July 19, 2025)
+
+### 🔥 High Priority UI/UX Fixes
+> priority! currently there are "meine termine" and "verlauf" at the customer dashboard. "meine termine" isnt loading. "verlauf" is loading and actually shows all appointments what "meine termine" should show. however the past appointments are listed in the upcoming appointments
+- ⏳ **IN PROGRESS**: Fix customer dashboard - removed "Verlauf" tab, fixed "Meine Termine" to show all appointments with proper past/upcoming distinction
+
+> priority! the calender for customer currently dispalay "1 termin" when there is an apppointment for this date, instead i would like a full circle #7030a0
+- ⏳ **PENDING**: Change calendar appointment display from "1 termin" text to full circle with brand color #7030a0
+
+### 🎨 Brand & Design Updates
+> i added LOgo AIL.png - the logo of the firma, please place it instead branding name and make it clickable as well. also these are the brand colors, please use them insted of blue (currently) #7030a0 #a98dc1
+- ⏳ **PENDING**: Replace text branding with Logo AIL.png and make clickable
+- ⏳ **PENDING**: Update color scheme from blue to brand colors (#7030a0, #a98dc1)
+- ⏳ **PENDING**: Fix text readability issues (light blue on deep blue)
+
+### 🔧 Functional Improvements  
+> autofill when making appointment doesnt work
+- ⏳ **PENDING**: Fix appointment form autofill functionality
+
+> i am not quite satisfied with app interface, we will need to level up it, so that it is corresponds to todays best practices
+- ⏳ **PENDING**: Modernize UI/UX to meet current best practices
+
+### 🎯 Remaining Session System Integration
+- ⏳ **PENDING**: Build session counter widget for customer dashboard
+- ⏳ **PENDING**: Add session management interface for studio owners
+- ⏳ **PENDING**: Implement booking restrictions based on remaining sessions
+- ⏳ **PENDING**: Add low session warnings for customers (< 3 remaining)

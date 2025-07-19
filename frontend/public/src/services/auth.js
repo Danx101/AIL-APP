@@ -56,6 +56,9 @@ class AuthService {
       // Store token and user data
       this.token = data.token;
       this.user = data.user;
+      console.log('Login successful, user role:', this.user.role);
+      console.log('Full user data:', this.user);
+      
       localStorage.setItem('authToken', this.token);
       localStorage.setItem('token', this.token);
       localStorage.setItem('user', JSON.stringify(this.user));

@@ -441,33 +441,87 @@ class App {
         }
     }
 
-    showCustomerDashboard() {
+    async showCustomerDashboard() {
         const content = document.getElementById('content');
+        
+        // Verify that the current user is actually a customer
+        if (this.currentUser.role !== 'customer') {
+            console.error('Access denied: User is not a customer. User role:', this.currentUser.role);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>Zugriff verweigert</h4>
+                    <p>Sie haben keine Berechtigung, auf das Kundendashboard zuzugreifen.</p>
+                    <p>Ihre Rolle: ${this.currentUser.role}</p>
+                </div>
+            `;
+            return;
+        }
         content.innerHTML = `
             <div class="row">
-                <div class="col-md-10 mx-auto">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4>Kunden Dashboard</h4>
-                        </div>
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Meine Termine</h2>
+                        <button class="btn btn-primary" id="requestAppointmentBtn">
+                            <i class="fas fa-plus"></i> Termin anfragen
+                        </button>
+                    </div>
+                    
+                    <!-- Welcome Section -->
+                    <div class="card mb-4">
                         <div class="card-body">
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-8">
                                     <h5>Willkommen, ${this.currentUser.firstName}!</h5>
-                                    <p>Sie sind erfolgreich angemeldet als Kunde.</p>
-                                    <p><strong>Email:</strong> ${this.currentUser.email}</p>
-                                    <p><strong>Name:</strong> ${this.currentUser.firstName} ${this.currentUser.lastName}</p>
+                                    <p class="text-muted">Verwalten Sie Ihre Termine und buchen Sie neue Behandlungen.</p>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <h6>Nächste Schritte:</h6>
-                                            <ul>
-                                                <li>Termine buchen</li>
-                                                <li>Terminhistorie ansehen</li>
-                                                <li>Profil bearbeiten</li>
-                                            </ul>
-                                            <p class="text-muted">Diese Funktionen werden in Phase 2 implementiert.</p>
+                                <div class="col-md-4 text-end">
+                                    <div class="badge bg-success fs-6">Kunde</div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">${this.currentUser.email}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Content Tabs -->
+                    <div class="card">
+                        <div class="card-header">
+                            <ul class="nav nav-tabs card-header-tabs" id="customerTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="calendar-tab" data-bs-toggle="tab" data-bs-target="#calendar" type="button" role="tab">
+                                        <i class="fas fa-calendar"></i> Kalender
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments" type="button" role="tab">
+                                        <i class="fas fa-list"></i> Meine Termine
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body">
+                            <div class="tab-content" id="customerTabContent">
+                                <!-- Calendar Tab -->
+                                <div class="tab-pane fade show active" id="calendar" role="tabpanel">
+                                    <div id="customerCalendarContainer">
+                                        <div class="text-center">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Lade Kalender...</span>
+                                            </div>
+                                            <p class="mt-2">Lade Kalender...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Appointments Tab -->
+                                <div class="tab-pane fade" id="appointments" role="tabpanel">
+                                    <div id="customerAppointmentsContainer">
+                                        <div class="text-center">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Lade Termine...</span>
+                                            </div>
+                                            <p class="mt-2">Lade Termine...</p>
                                         </div>
                                     </div>
                                 </div>
@@ -477,6 +531,896 @@ class App {
                 </div>
             </div>
         `;
+
+        // Initialize customer dashboard components
+        this.initializeCustomerDashboard();
+    }
+
+    async initializeCustomerDashboard() {
+        // Initialize customer calendar
+        this.customerCurrentDate = new Date();
+        this.customerSelectedDate = new Date();
+        
+        // Set up event listeners
+        document.getElementById('requestAppointmentBtn').addEventListener('click', () => {
+            this.showAppointmentRequestForm();
+        });
+
+        // Set up tab change listeners to load content on demand
+        document.getElementById('calendar-tab').addEventListener('shown.bs.tab', () => {
+            this.loadCustomerCalendar();
+        });
+        
+        document.getElementById('appointments-tab').addEventListener('shown.bs.tab', () => {
+            this.loadCustomerAppointments();
+        });
+        
+
+        // Load initial calendar view
+        this.loadCustomerCalendar();
+    }
+
+    async loadCustomerCalendar() {
+        const container = document.getElementById('customerCalendarContainer');
+        
+        try {
+            // Render calendar with customer appointments
+            container.innerHTML = `
+                <div class="row">
+                    <div class="col-md-5">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <button class="btn btn-outline-secondary" id="customerPrevMonth">
+                                <i class="fas fa-chevron-left"></i> Zurück
+                            </button>
+                            <h5 id="customerMonthYearDisplay" class="mb-0"></h5>
+                            <button class="btn btn-outline-secondary" id="customerNextMonth">
+                                Weiter <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div id="customerCalendarGrid"></div>
+                        <div class="mt-3">
+                            <small class="text-muted">Klicken Sie auf ein Datum, um Termine für diesen Tag anzuzeigen oder zu buchen.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 id="selectedDateHeader">Termine für heute</h6>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" id="customerViewModeList" title="Listenansicht">
+                                        <i class="fas fa-list"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary active" id="customerViewModeTimeline" title="Timeline-Ansicht">
+                                        <i class="fas fa-clock"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body" id="customerDayAppointmentsContent" style="max-height: 600px; overflow-y: auto;">
+                                <div class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    <p class="mt-2">Lade Termine...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Set up navigation
+            document.getElementById('customerPrevMonth').addEventListener('click', () => {
+                this.customerCurrentDate.setMonth(this.customerCurrentDate.getMonth() - 1);
+                this.renderCustomerCalendar();
+            });
+
+            document.getElementById('customerNextMonth').addEventListener('click', () => {
+                this.customerCurrentDate.setMonth(this.customerCurrentDate.getMonth() + 1);
+                this.renderCustomerCalendar();
+            });
+
+            // Set up view mode toggle
+            this.customerTimelineView = true;
+            const updateCustomerViewMode = (timeline) => {
+                const listBtn = document.getElementById('customerViewModeList');
+                const timelineBtn = document.getElementById('customerViewModeTimeline');
+                
+                if (timeline) {
+                    listBtn.classList.remove('active');
+                    timelineBtn.classList.add('active');
+                    this.customerTimelineView = true;
+                } else {
+                    listBtn.classList.add('active');
+                    timelineBtn.classList.remove('active');
+                    this.customerTimelineView = false;
+                }
+                this.showCustomerDayAppointments(this.customerSelectedDate);
+            };
+            
+            document.getElementById('customerViewModeList').addEventListener('click', () => updateCustomerViewMode(false));
+            document.getElementById('customerViewModeTimeline').addEventListener('click', () => updateCustomerViewMode(true));
+
+            this.renderCustomerCalendar();
+            
+            // Load today's appointments by default
+            this.showCustomerDayAppointments(this.customerSelectedDate);
+        } catch (error) {
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden des Kalenders</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async renderCustomerCalendar() {
+        if (!this.customerCurrentDate) {
+            this.customerCurrentDate = new Date();
+        }
+        
+        const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                           'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+        const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        
+        const monthYearDisplay = document.getElementById('customerMonthYearDisplay');
+        const calendarGrid = document.getElementById('customerCalendarGrid');
+        
+        if (!monthYearDisplay || !calendarGrid) return;
+        
+        monthYearDisplay.innerHTML = `<strong>${monthNames[this.customerCurrentDate.getMonth()]} ${this.customerCurrentDate.getFullYear()}</strong>`;
+        
+        // Calculate first day of month and number of days
+        const firstDay = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1);
+        
+        let calendarHTML = `
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        ${dayNames.map(day => `<th class="text-center">${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        const today = new Date();
+        const currentMonth = this.customerCurrentDate.getMonth();
+        
+        // Generate 6 weeks (42 days) to cover all possible month layouts
+        for (let week = 0; week < 6; week++) {
+            calendarHTML += '<tr>';
+            
+            for (let day = 0; day < 7; day++) {
+                const daysFromStart = (week * 7) + day;
+                const currentDate = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1 - firstDay.getDay() + daysFromStart);
+                
+                const isCurrentMonth = currentDate.getMonth() === currentMonth;
+                const isToday = currentDate.toDateString() === today.toDateString();
+                const isSelected = this.customerSelectedDate && currentDate.toDateString() === this.customerSelectedDate.toDateString();
+                const isPast = currentDate < today && !isToday;
+                
+                let cellClass = 'calendar-day text-center';
+                if (!isCurrentMonth) cellClass += ' text-muted';
+                if (isToday) cellClass += ' bg-primary text-white';
+                if (isSelected) cellClass += ' bg-success text-white';
+                if (isPast) cellClass += ' text-muted';
+                
+                const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                
+                calendarHTML += `
+                    <td class="${cellClass}" 
+                        style="cursor: pointer; padding: 12px; border: 1px solid #dee2e6; height: 80px; vertical-align: top;"
+                        data-date="${dateString}"
+                        onclick="if(window.app && window.app.selectCustomerDate) window.app.selectCustomerDate('${dateString}')">
+                        <div>
+                            <strong>${currentDate.getDate()}</strong>
+                            <div id="customer-day-${dateString}" class="mt-1" style="font-size: 10px;">
+                                <!-- Appointment indicators will be loaded here -->
+                            </div>
+                        </div>
+                    </td>
+                `;
+            }
+            
+            calendarHTML += '</tr>';
+        }
+        
+        calendarHTML += '</tbody></table>';
+        calendarGrid.innerHTML = calendarHTML;
+        
+        // Load appointment indicators for the month
+        this.loadCustomerMonthlyAppointmentIndicators();
+    }
+
+    async loadCustomerMonthlyAppointmentIndicators() {
+        try {
+            const startDate = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1);
+            const endDate = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth() + 1, 0);
+            
+            const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+            const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+            
+            const data = await window.customerAPI.getMyAppointments({
+                from_date: startDateStr,
+                to_date: endDateStr
+            });
+            
+            const appointments = data.appointments || [];
+            
+            // Group appointments by date
+            const appointmentsByDate = {};
+            appointments.forEach(appointment => {
+                const date = appointment.appointment_date;
+                if (!appointmentsByDate[date]) {
+                    appointmentsByDate[date] = [];
+                }
+                appointmentsByDate[date].push(appointment);
+            });
+            
+            // Display indicators
+            Object.keys(appointmentsByDate).forEach(date => {
+                const dayElement = document.getElementById(`customer-day-${date}`);
+                if (dayElement) {
+                    const count = appointmentsByDate[date].length;
+                    const hasConfirmed = appointmentsByDate[date].some(apt => apt.status === 'confirmed');
+                    const hasPending = appointmentsByDate[date].some(apt => apt.status === 'pending');
+                    
+                    let badgeClass = 'badge-secondary';
+                    if (hasConfirmed) badgeClass = 'badge-success';
+                    else if (hasPending) badgeClass = 'badge-warning';
+                    
+                    dayElement.innerHTML = `
+                        <span class="badge ${badgeClass}" style="font-size: 8px;">
+                            ${count} Termin${count > 1 ? 'e' : ''}
+                        </span>
+                    `;
+                }
+            });
+        } catch (error) {
+            console.error('Error loading monthly appointment indicators:', error);
+        }
+    }
+
+    selectCustomerDate(dateString) {
+        try {
+            const [year, month, day] = dateString.split('-').map(Number);
+            this.customerSelectedDate = new Date(year, month - 1, day);
+            this.renderCustomerCalendar();
+            this.showCustomerDayAppointments(this.customerSelectedDate);
+        } catch (error) {
+            console.error('Error in selectCustomerDate:', error);
+        }
+    }
+
+    async showCustomerDayAppointments(selectedDate) {
+        const appointmentsDiv = document.getElementById('customerDayAppointmentsContent');
+        if (!appointmentsDiv) {
+            console.error('customerDayAppointmentsContent element not found');
+            return;
+        }
+
+        try {
+            // Update the header with selected date
+            const selectedDateDisplayStr = selectedDate.toLocaleDateString('de-DE', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            const headerElement = document.getElementById('selectedDateHeader');
+            if (headerElement) {
+                headerElement.textContent = `Termine für ${selectedDateDisplayStr}`;
+            }
+
+            // Show loading
+            appointmentsDiv.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <p class="mt-2">Lade Termine...</p>
+                </div>
+            `;
+
+            // Format date for API call
+            const dateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+            
+            const data = await window.customerAPI.getMyAppointments({
+                from_date: dateString,
+                to_date: dateString
+            });
+            
+            const appointments = data.appointments || [];
+            
+            if (appointments.length === 0) {
+                appointmentsDiv.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-calendar-times fa-2x mb-3"></i>
+                        <p>Keine Termine für diesen Tag.</p>
+                        <button class="btn btn-primary btn-sm" onclick="window.app.showAppointmentRequestForm('${dateString}')">
+                            Termin anfragen
+                        </button>
+                    </div>
+                `;
+            } else {
+                if (this.customerTimelineView) {
+                    appointmentsDiv.innerHTML = this.renderCustomerTimelineView(appointments, selectedDate);
+                } else {
+                    appointmentsDiv.innerHTML = appointments.map(appointment => `
+                        <div class="card mb-2">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                        <p class="mb-1 small"><strong>Zeit:</strong> ${appointment.start_time} - ${appointment.end_time}</p>
+                                        <p class="mb-0 small text-muted">${appointment.studio_name}</p>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge ${this.getCustomerStatusBadgeClass(appointment.status)} mb-1">
+                                            ${this.getStatusText(appointment.status)}
+                                        </span>
+                                        ${appointment.status === 'pending' || appointment.status === 'confirmed' ? `
+                                            <div class="btn-group-vertical btn-group-sm">
+                                                <button class="btn btn-outline-danger btn-sm" onclick="window.app.cancelCustomerAppointment(${appointment.id})">
+                                                    Absagen
+                                                </button>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error loading day appointments:', error);
+            appointmentsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Termine</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async showDayAppointments(dateString) {
+        // Show appointments for selected date in a modal or expanded view
+        const modalHTML = `
+            <div class="modal fade" id="dayAppointmentsModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Termine für ${new Date(dateString).toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h5>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" id="customerViewModeList" title="Listenansicht">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary active" id="customerViewModeTimeline" title="Timeline-Ansicht">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" id="dayAppointmentsContent" style="max-height: 600px; overflow-y: auto;">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status"></div>
+                                <p class="mt-2">Lade Termine...</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" onclick="window.app.showAppointmentRequestForm('${dateString}')">
+                                Neuen Termin anfragen
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('dayAppointmentsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set up view mode toggle
+        let isTimelineView = true;
+        const updateViewMode = (timeline) => {
+            const listBtn = document.getElementById('customerViewModeList');
+            const timelineBtn = document.getElementById('customerViewModeTimeline');
+            
+            if (timeline) {
+                listBtn.classList.remove('active');
+                timelineBtn.classList.add('active');
+                isTimelineView = true;
+            } else {
+                listBtn.classList.add('active');
+                timelineBtn.classList.remove('active');
+                isTimelineView = false;
+            }
+            renderAppointments();
+        };
+        
+        document.getElementById('customerViewModeList').addEventListener('click', () => updateViewMode(false));
+        document.getElementById('customerViewModeTimeline').addEventListener('click', () => updateViewMode(true));
+        
+        let appointments = [];
+        const selectedDate = new Date(dateString);
+        
+        const renderAppointments = () => {
+            const content = document.getElementById('dayAppointmentsContent');
+            
+            if (appointments.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                        <p>Keine Termine für diesen Tag.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (isTimelineView) {
+                content.innerHTML = this.renderCustomerTimelineView(appointments, selectedDate);
+            } else {
+                content.innerHTML = appointments.map(appointment => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6>${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                    <p class="mb-1"><strong>Zeit:</strong> ${appointment.start_time} - ${appointment.end_time}</p>
+                                    <p class="mb-1"><strong>Studio:</strong> ${appointment.studio_name}</p>
+                                    <p class="mb-0"><small class="text-muted">Erstellt: ${new Date(appointment.created_at).toLocaleDateString('de-DE')}</small></p>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge ${this.getCustomerStatusBadgeClass(appointment.status)} mb-2">
+                                        ${this.getStatusText(appointment.status)}
+                                    </span>
+                                    <div class="btn-group-vertical btn-group-sm">
+                                        ${appointment.status === 'pending' || appointment.status === 'confirmed' ? `
+                                            <button class="btn btn-outline-primary btn-sm" onclick="window.app.rescheduleAppointment(${appointment.id})">
+                                                Umbuchen
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm mt-1" onclick="window.app.cancelCustomerAppointment(${appointment.id})">
+                                                Absagen
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        };
+        
+        try {
+            const data = await window.customerAPI.getMyAppointments({
+                from_date: dateString,
+                to_date: dateString
+            });
+            
+            appointments = data.appointments || [];
+            renderAppointments();
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('dayAppointmentsModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Error loading day appointments:', error);
+            document.getElementById('dayAppointmentsContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Termine</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    getCustomerStatusBadgeClass(status) {
+        const classes = {
+            'pending': 'bg-warning text-dark',
+            'confirmed': 'bg-success',
+            'cancelled': 'bg-danger',
+            'completed': 'bg-info',
+            'no_show': 'bg-secondary'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    async loadCustomerAppointments() {
+        const container = document.getElementById('customerAppointmentsContainer');
+        
+        try {
+            container.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>Aktuelle Termine</h5>
+                    <div>
+                        <select class="form-select form-select-sm" id="customerStatusFilter">
+                            <option value="">Alle Status</option>
+                            <option value="pending">Ausstehend</option>
+                            <option value="confirmed">Bestätigt</option>
+                            <option value="cancelled">Abgesagt</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="customerAppointmentsList">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status"></div>
+                        <p class="mt-2">Lade Termine...</p>
+                    </div>
+                </div>
+            `;
+
+            // Set up filter
+            document.getElementById('customerStatusFilter').addEventListener('change', () => {
+                this.loadCustomerAppointmentsList();
+            });
+
+            this.loadCustomerAppointmentsList();
+        } catch (error) {
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Termine</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async loadCustomerAppointmentsList() {
+        const listContainer = document.getElementById('customerAppointmentsList');
+        const statusFilter = document.getElementById('customerStatusFilter')?.value || '';
+        
+        try {
+            const filters = {};
+            if (statusFilter) filters.status = statusFilter;
+            
+            // Get ALL appointments (both past and upcoming) for "Meine Termine"
+            const data = await window.customerAPI.getMyAppointments(filters);
+            let appointments = data.appointments || [];
+            
+            // Sort appointments by date and time (newest first)
+            appointments.sort((a, b) => {
+                const dateTimeA = new Date(`${a.appointment_date}T${a.start_time}`);
+                const dateTimeB = new Date(`${b.appointment_date}T${b.start_time}`);
+                return dateTimeB - dateTimeA; // Newest first
+            });
+            
+            if (appointments.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-calendar-plus fa-3x mb-3"></i>
+                        <h6>Keine ${statusFilter ? 'passenden ' : ''}Termine gefunden</h6>
+                        <p>Möchten Sie einen neuen Termin anfragen?</p>
+                        <button class="btn btn-primary" onclick="window.app.showAppointmentRequestForm()">
+                            Termin anfragen
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Separate past and upcoming appointments for better visual distinction
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            listContainer.innerHTML = appointments.map(appointment => {
+                const appointmentDate = new Date(appointment.appointment_date);
+                const isPast = appointmentDate < today;
+                
+                return `
+                <div class="card mb-3 ${isPast ? 'border-secondary' : ''}">
+                    <div class="card-body ${isPast ? 'bg-light' : ''}">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1 ${isPast ? 'text-muted' : ''}">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                <p class="mb-1 ${isPast ? 'text-muted' : ''}">
+                                    <i class="fas fa-calendar me-2"></i>
+                                    ${appointmentDate.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                    ${isPast ? '<span class="badge bg-secondary ms-2 small">Vergangen</span>' : '<span class="badge bg-primary ms-2 small">Kommend</span>'}
+                                </p>
+                                <p class="mb-1 ${isPast ? 'text-muted' : ''}">
+                                    <i class="fas fa-clock me-2"></i>
+                                    ${appointment.start_time} - ${appointment.end_time}
+                                </p>
+                                <p class="mb-0 ${isPast ? 'text-muted' : ''}">
+                                    <i class="fas fa-map-marker-alt me-2"></i>
+                                    ${appointment.studio_name}
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge ${this.getCustomerStatusBadgeClass(appointment.status)} mb-2 d-block">
+                                    ${this.getStatusText(appointment.status)}
+                                </span>
+                                ${appointment.status === 'pending' || appointment.status === 'confirmed' ? `
+                                    <div class="btn-group-vertical btn-group-sm">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="window.app.rescheduleAppointment(${appointment.id})">
+                                            <i class="fas fa-edit"></i> Umbuchen
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm mt-1" onclick="window.app.cancelCustomerAppointment(${appointment.id})">
+                                            <i class="fas fa-times"></i> Absagen
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        } catch (error) {
+            listContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Termine</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+
+    async showAppointmentRequestForm(preselectedDate = null) {
+        const modalHTML = `
+            <div class="modal fade" id="appointmentRequestModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Termin anfragen</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="studioInfoSection" class="mb-3">
+                                <div class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    <span class="ms-2">Lade Studio-Informationen...</span>
+                                </div>
+                            </div>
+                            <form id="appointmentRequestForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="appointmentDate" class="form-label">Wunschdatum</label>
+                                        <input type="date" class="form-control" id="appointmentDate" required 
+                                               min="${new Date().toISOString().split('T')[0]}">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="appointmentTime" class="form-label">Wunschzeit</label>
+                                        <select class="form-select" id="appointmentTime" required>
+                                            <option value="">Bitte wählen...</option>
+                                            <option value="08:00">08:00 Uhr</option>
+                                            <option value="09:00">09:00 Uhr</option>
+                                            <option value="10:00">10:00 Uhr</option>
+                                            <option value="11:00">11:00 Uhr</option>
+                                            <option value="12:00">12:00 Uhr</option>
+                                            <option value="13:00">13:00 Uhr</option>
+                                            <option value="14:00">14:00 Uhr</option>
+                                            <option value="15:00">15:00 Uhr</option>
+                                            <option value="16:00">16:00 Uhr</option>
+                                            <option value="17:00">17:00 Uhr</option>
+                                            <option value="18:00">18:00 Uhr</option>
+                                            <option value="19:00">19:00 Uhr</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="appointmentType" class="form-label">Behandlungsart</label>
+                                    <select class="form-select" id="appointmentType" required>
+                                        <option value="">Lade Behandlungsarten...</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="appointmentNotes" class="form-label">Anmerkungen (optional)</label>
+                                    <textarea class="form-control" id="appointmentNotes" rows="3" 
+                                              placeholder="Besondere Wünsche oder Anmerkungen..."></textarea>
+                                </div>
+                                <div class="alert alert-info">
+                                    <small>
+                                        <i class="fas fa-info-circle"></i>
+                                        Ihr Terminwunsch wird an Ihr Studio gesendet und muss noch bestätigt werden.
+                                    </small>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="submitAppointmentRequest">
+                                <i class="fas fa-paper-plane"></i> Anfrage senden
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('appointmentRequestModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set preselected date if provided
+        if (preselectedDate) {
+            document.getElementById('appointmentDate').value = preselectedDate;
+        }
+        
+        // Load customer's studio and appointment types
+        this.loadCustomerStudioForRequest();
+        
+        // Set up form submission
+        document.getElementById('submitAppointmentRequest').addEventListener('click', () => {
+            this.submitAppointmentRequest();
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('appointmentRequestModal'));
+        modal.show();
+    }
+
+    async loadCustomerStudioForRequest() {
+        try {
+            // Get customer's associated studio
+            const studioData = await window.customerAPI.getMyStudio();
+            const studio = studioData.studio;
+            
+            // Store studio ID for form submission
+            this.customerStudioId = studio.id;
+            
+            // Display studio information
+            const studioInfoSection = document.getElementById('studioInfoSection');
+            studioInfoSection.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1">Ihr Studio</h6>
+                                <p class="mb-1"><strong>${studio.name}</strong></p>
+                                <p class="mb-0 text-muted">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    ${studio.address}, ${studio.city}
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge bg-success">Zugeordnet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Load appointment types for this studio
+            this.loadAppointmentTypesForRequest(studio.id);
+            
+        } catch (error) {
+            console.error('Error loading customer studio:', error);
+            const studioInfoSection = document.getElementById('studioInfoSection');
+            studioInfoSection.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Studio-Informationen</h6>
+                    <p>${error.message}</p>
+                    <small>Bitte kontaktieren Sie den Support, wenn dieses Problem weiterhin auftritt.</small>
+                </div>
+            `;
+        }
+    }
+
+    async loadAppointmentTypesForRequest(studioId) {
+        if (!studioId) {
+            document.getElementById('appointmentType').innerHTML = `
+                <option value="">Studio wird geladen...</option>
+            `;
+            return;
+        }
+        
+        try {
+            const data = await window.customerAPI.getStudioAppointmentTypes(studioId);
+            const types = data.appointmentTypes || [];
+            
+            const typeSelect = document.getElementById('appointmentType');
+            typeSelect.innerHTML = `
+                <option value="">Bitte wählen...</option>
+                ${types.map(type => `
+                    <option value="${type.id}">${type.name}${type.duration ? ` (${type.duration} Min.)` : ''}</option>
+                `).join('')}
+            `;
+        } catch (error) {
+            console.error('Error loading appointment types:', error);
+            document.getElementById('appointmentType').innerHTML = `
+                <option value="">Fehler beim Laden der Behandlungsarten</option>
+            `;
+        }
+    }
+
+    async submitAppointmentRequest() {
+        const form = document.getElementById('appointmentRequestForm');
+        const submitBtn = document.getElementById('submitAppointmentRequest');
+        
+        // Validate form
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Ensure we have the customer's studio ID
+        if (!this.customerStudioId) {
+            this.showErrorMessage('Fehler', 'Studio-Informationen konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+            return;
+        }
+        
+        const appointmentData = {
+            appointment_date: document.getElementById('appointmentDate').value,
+            start_time: document.getElementById('appointmentTime').value,
+            studio_id: this.customerStudioId,
+            appointment_type_id: parseInt(document.getElementById('appointmentType').value),
+            notes: document.getElementById('appointmentNotes').value
+        };
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gesendet...';
+        
+        try {
+            await window.customerAPI.requestAppointment(appointmentData);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('appointmentRequestModal'));
+            modal.hide();
+            
+            // Show success message
+            this.showSuccessMessage('Terminanfrage erfolgreich gesendet!', 'Das Studio wird Ihre Anfrage prüfen und sich bei Ihnen melden.');
+            
+            // Refresh calendar and appointments
+            this.loadCustomerCalendar();
+            this.loadCustomerAppointments();
+        } catch (error) {
+            console.error('Error submitting appointment request:', error);
+            this.showErrorMessage('Fehler beim Senden der Anfrage', error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Anfrage senden';
+        }
+    }
+
+    async cancelCustomerAppointment(appointmentId) {
+        if (!confirm('Möchten Sie diesen Termin wirklich absagen?')) {
+            return;
+        }
+        
+        try {
+            await window.customerAPI.cancelAppointment(appointmentId);
+            this.showSuccessMessage('Termin abgesagt', 'Ihr Termin wurde erfolgreich abgesagt.');
+            
+            // Refresh views
+            this.loadCustomerCalendar();
+            this.loadCustomerAppointments();
+        } catch (error) {
+            console.error('Error cancelling appointment:', error);
+            this.showErrorMessage('Fehler beim Absagen', error.message);
+        }
+    }
+
+    async rescheduleAppointment(appointmentId) {
+        // For now, just show the request form with a note
+        this.showAppointmentRequestForm();
+        // TODO: Implement proper rescheduling logic
+        this.showInfoMessage('Umbuchen', 'Buchen Sie einen neuen Termin und sagen Sie den alten ab, oder kontaktieren Sie das Studio direkt.');
+    }
+
+    showSuccessMessage(title, message) {
+        // Simple success message - could be enhanced with a toast library
+        alert(`${title}: ${message}`);
+    }
+
+    showErrorMessage(title, message) {
+        // Simple error message - could be enhanced with a toast library
+        alert(`${title}: ${message}`);
+    }
+
+    showInfoMessage(title, message) {
+        // Simple info message - could be enhanced with a toast library
+        alert(`${title}: ${message}`);
     }
 
     showStudioDashboard() {
@@ -1665,18 +2609,31 @@ class App {
 
         // Initialize calendar and load appointments after DOM is ready
         setTimeout(() => {
+            // Ensure all required properties are initialized
+            if (!this.currentDate) {
+                this.currentDate = new Date();
+            }
+            if (!this.selectedDate) {
+                this.selectedDate = new Date();
+            }
             this.renderCalendar();
             this.loadAppointments(studioId);
         }, 100);
     }
 
     async loadAppointments(studioId) {
+        if (!studioId) {
+            console.warn('No studio ID provided to loadAppointments');
+            return;
+        }
+        
         const appointmentsDiv = document.getElementById('appointmentsList');
         const statusFilter = document.getElementById('appointmentStatusFilter')?.value || '';
         
         // Use selectedDate if available, otherwise use today's date
         const selectedDate = this.selectedDate || new Date();
-        const selectedDateStr = selectedDate.toISOString().split('T')[0];
+        // Fix: Use local date formatting for consistency
+        const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
         
         try {
             let url = `http://localhost:3001/api/v1/appointments/studio/${studioId}`;
@@ -1699,7 +2656,7 @@ class App {
             const appointments = data.appointments || [];
             
             // Update the header with selected date
-            const selectedDateStr = selectedDate.toLocaleDateString('de-DE', { 
+            const selectedDateDisplayStr = selectedDate.toLocaleDateString('de-DE', { 
                 weekday: 'long', 
                 year: 'numeric', 
                 month: 'long', 
@@ -1707,7 +2664,7 @@ class App {
             });
             const headerElement = document.getElementById('selectedDateHeader');
             if (headerElement) {
-                headerElement.textContent = `Termine für ${selectedDateStr}`;
+                headerElement.textContent = `Termine für ${selectedDateDisplayStr}`;
             }
             
             if (appointments.length === 0) {
@@ -1724,53 +2681,8 @@ class App {
                     this.showCreateAppointmentForm(studioId, selectedDate);
                 });
             } else {
-                appointmentsDiv.innerHTML = `
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Datum</th>
-                                    <th>Zeit</th>
-                                    <th>Kunde</th>
-                                    <th>Typ</th>
-                                    <th>Status</th>
-                                    <th>Aktionen</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${appointments.map(appointment => `
-                                    <tr>
-                                        <td>${new Date(appointment.appointment_date).toLocaleDateString('de-DE')}</td>
-                                        <td>${appointment.start_time} - ${appointment.end_time}</td>
-                                        <td>
-                                            ${appointment.customer_first_name} ${appointment.customer_last_name}
-                                            <br><small class="text-muted">${appointment.customer_email}</small>
-                                        </td>
-                                        <td>${appointment.appointment_type_name || 'Abnehmen Behandlung'}</td>
-                                        <td>
-                                            <span class="badge ${this.getStatusBadgeClass(appointment.status)}">
-                                                ${this.getStatusText(appointment.status)}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-primary" onclick="window.app.editAppointment(${appointment.id})">
-                                                    Bearbeiten
-                                                </button>
-                                                <button class="btn btn-outline-success" onclick="window.app.confirmAppointment(${appointment.id})">
-                                                    Bestätigen
-                                                </button>
-                                                <button class="btn btn-outline-danger" onclick="window.app.cancelAppointment(${appointment.id})">
-                                                    Absagen
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
+                // Create timeline view with colored appointment blocks
+                appointmentsDiv.innerHTML = this.renderTimelineView(appointments, selectedDate);
             }
             
         } catch (error) {
@@ -1802,6 +2714,243 @@ class App {
             'no_show': 'Nicht erschienen'
         };
         return texts[status] || status;
+    }
+
+    renderTimelineView(appointments, selectedDate) {
+        const today = new Date();
+        const isToday = selectedDate.toDateString() === today.toDateString();
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+        
+        // Business hours from 8 AM to 8 PM (12 hours)
+        const startHour = 8;
+        const endHour = 20;
+        const totalHours = endHour - startHour;
+        
+        let html = `
+            <div class="timeline-container" style="position: relative; height: ${totalHours * 80}px; border: 1px solid #dee2e6; background: #f8f9fa;">
+                <!-- Hour scale -->
+                <div class="hour-scale" style="position: absolute; left: 0; top: 0; width: 60px; height: 100%; background: #fff; border-right: 1px solid #dee2e6;">
+        `;
+        
+        // Generate hour markers
+        for (let hour = startHour; hour <= endHour; hour++) {
+            const y = (hour - startHour) * 80;
+            html += `
+                <div style="position: absolute; top: ${y}px; left: 0; width: 100%; height: 80px; border-bottom: 1px solid #eee; display: flex; align-items: center; padding: 0 5px; font-size: 12px; color: #666;">
+                    ${hour.toString().padStart(2, '0')}:00
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        // Current time red line (only show if viewing today)
+        if (isToday && currentHour >= startHour && currentHour <= endHour) {
+            const currentY = ((currentHour - startHour) * 80) + ((currentMinute / 60) * 80);
+            html += `
+                <div class="current-time-line" style="position: absolute; left: 60px; right: 0; top: ${currentY}px; height: 2px; background: #dc3545; z-index: 100;">
+                    <div style="position: absolute; right: 5px; top: -10px; background: #dc3545; color: white; padding: 1px 5px; font-size: 10px; border-radius: 2px;">
+                        ${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Appointment blocks
+        html += `<div class="appointments-area" style="position: absolute; left: 60px; right: 0; top: 0; height: 100%;">`;
+        
+        appointments.forEach((appointment, index) => {
+            const startTime = appointment.start_time; // e.g., "09:30"
+            const endTime = appointment.end_time; // e.g., "10:30"
+            
+            const [startHours, startMinutes] = startTime.split(':').map(Number);
+            const [endHours, endMinutes] = endTime.split(':').map(Number);
+            
+            // Calculate position and height
+            const startY = ((startHours - startHour) * 80) + ((startMinutes / 60) * 80);
+            const endY = ((endHours - startHour) * 80) + ((endMinutes / 60) * 80);
+            const height = endY - startY;
+            
+            // Skip if outside business hours
+            if (startHours < startHour || endHours > endHour) return;
+            
+            // Color based on status
+            const statusColors = {
+                'pending': '#ffc107',
+                'confirmed': '#28a745',
+                'cancelled': '#dc3545',
+                'completed': '#17a2b8',
+                'no_show': '#6c757d'
+            };
+            const color = statusColors[appointment.status] || '#6c757d';
+            
+            html += `
+                <div class="appointment-block" 
+                     style="position: absolute; 
+                            left: 5px; 
+                            right: 5px; 
+                            top: ${startY}px; 
+                            height: ${height}px; 
+                            background: ${color}; 
+                            border: 1px solid rgba(0,0,0,0.1); 
+                            border-radius: 4px; 
+                            padding: 5px; 
+                            color: white; 
+                            font-size: 12px; 
+                            cursor: pointer;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.2);"
+                     onclick="window.app.editAppointment(${appointment.id})"
+                     title="Klicken zum Bearbeiten">
+                    <div style="font-weight: bold; margin-bottom: 2px;">
+                        ${appointment.customer_first_name} ${appointment.customer_last_name}
+                    </div>
+                    <div style="font-size: 10px; opacity: 0.9;">
+                        ${startTime} - ${endTime}
+                    </div>
+                    <div style="font-size: 10px; opacity: 0.8;">
+                        ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        html += `</div>`;
+        
+        // Add legend
+        html += `
+            <div class="mt-3">
+                <h6>Status-Legende:</h6>
+                <div class="d-flex flex-wrap gap-3">
+                    <span class="badge" style="background: #ffc107; color: black;">Ausstehend</span>
+                    <span class="badge" style="background: #28a745;">Bestätigt</span>
+                    <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
+                    <span class="badge" style="background: #dc3545;">Abgesagt</span>
+                    <span class="badge" style="background: #6c757d;">Nicht erschienen</span>
+                </div>
+            </div>
+        `;
+        
+        return html;
+    }
+
+    renderCustomerTimelineView(appointments, selectedDate) {
+        const today = new Date();
+        const isToday = selectedDate.toDateString() === today.toDateString();
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+        
+        // Business hours from 8 AM to 8 PM (12 hours)
+        const startHour = 8;
+        const endHour = 20;
+        const totalHours = endHour - startHour;
+        
+        let html = `
+            <div class="timeline-container" style="position: relative; height: ${totalHours * 80}px; border: 1px solid #dee2e6; background: #f8f9fa;">
+                <!-- Hour scale -->
+                <div class="hour-scale" style="position: absolute; left: 0; top: 0; width: 60px; height: 100%; background: #fff; border-right: 1px solid #dee2e6;">
+        `;
+        
+        // Generate hour markers
+        for (let hour = startHour; hour <= endHour; hour++) {
+            const y = (hour - startHour) * 80;
+            html += `
+                <div style="position: absolute; top: ${y}px; left: 0; width: 100%; height: 80px; border-bottom: 1px solid #eee; display: flex; align-items: center; padding: 0 5px; font-size: 12px; color: #666;">
+                    ${hour.toString().padStart(2, '0')}:00
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        // Current time red line (only show if viewing today)
+        if (isToday && currentHour >= startHour && currentHour <= endHour) {
+            const currentY = ((currentHour - startHour) * 80) + ((currentMinute / 60) * 80);
+            html += `
+                <div class="current-time-line" style="position: absolute; left: 60px; right: 0; top: ${currentY}px; height: 2px; background: #dc3545; z-index: 100;">
+                    <div style="position: absolute; right: 5px; top: -10px; background: #dc3545; color: white; padding: 1px 5px; font-size: 10px; border-radius: 2px;">
+                        ${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Appointment blocks
+        html += `<div class="appointments-area" style="position: absolute; left: 60px; right: 0; top: 0; height: 100%;">`;
+        
+        appointments.forEach((appointment, index) => {
+            const startTime = appointment.start_time; // e.g., "09:30"
+            const endTime = appointment.end_time; // e.g., "10:30"
+            
+            const [startHours, startMinutes] = startTime.split(':').map(Number);
+            const [endHours, endMinutes] = endTime.split(':').map(Number);
+            
+            // Calculate position and height
+            const startY = ((startHours - startHour) * 80) + ((startMinutes / 60) * 80);
+            const endY = ((endHours - startHour) * 80) + ((endMinutes / 60) * 80);
+            const height = endY - startY;
+            
+            // Skip if outside business hours
+            if (startHours < startHour || endHours > endHour) return;
+            
+            // Color based on status
+            const statusColors = {
+                'pending': '#ffc107',
+                'confirmed': '#28a745',
+                'cancelled': '#dc3545',
+                'completed': '#17a2b8',
+                'no_show': '#6c757d'
+            };
+            const color = statusColors[appointment.status] || '#6c757d';
+            
+            html += `
+                <div class="appointment-block" 
+                     style="position: absolute; 
+                            left: 5px; 
+                            right: 5px; 
+                            top: ${startY}px; 
+                            height: ${height}px; 
+                            background: ${color}; 
+                            border: 1px solid rgba(0,0,0,0.1); 
+                            border-radius: 4px; 
+                            padding: 5px; 
+                            color: white; 
+                            font-size: 12px; 
+                            cursor: pointer;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.2);"
+                     title="Klicken für Details">
+                    <div style="font-weight: bold; margin-bottom: 2px;">
+                        ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                    </div>
+                    <div style="font-size: 10px; opacity: 0.9;">
+                        ${startTime} - ${endTime}
+                    </div>
+                    <div style="font-size: 10px; opacity: 0.8;">
+                        ${appointment.studio_name}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        html += `</div>`;
+        
+        // Add legend
+        html += `
+            <div class="mt-3">
+                <h6>Status-Legende:</h6>
+                <div class="d-flex flex-wrap gap-3">
+                    <span class="badge" style="background: #ffc107; color: black;">Ausstehend</span>
+                    <span class="badge" style="background: #28a745;">Bestätigt</span>
+                    <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
+                    <span class="badge" style="background: #dc3545;">Abgesagt</span>
+                    <span class="badge" style="background: #6c757d;">Nicht erschienen</span>
+                </div>
+            </div>
+        `;
+        
+        return html;
     }
 
     showCreateAppointmentForm(studioId, preselectedDate = null) {
@@ -2258,6 +3407,11 @@ class App {
     async loadCustomerAppointments(customerId, customerName) {
         const appointmentsDiv = document.getElementById('customerAppointments');
         
+        if (!appointmentsDiv) {
+            console.error('customerAppointments element not found - this function should only be called in studio view');
+            return;
+        }
+        
         try {
             const response = await fetch(`http://localhost:3001/api/v1/appointments/customer/${customerId}`, {
                 headers: {
@@ -2358,6 +3512,11 @@ class App {
     }
 
     renderCalendar() {
+        // Ensure currentDate is initialized
+        if (!this.currentDate) {
+            this.currentDate = new Date();
+        }
+        
         const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
                            'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
         const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -2396,8 +3555,9 @@ class App {
             calendarHTML += '<tr>';
             
             for (let day = 0; day < 7; day++) {
-                const currentDate = new Date(startDate);
-                currentDate.setDate(startDate.getDate() + (week * 7) + day);
+                // Fix: Calculate dates properly without mutation and timezone issues
+                const daysFromStart = (week * 7) + day;
+                const currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1 - firstDay.getDay() + daysFromStart);
                 
                 const isCurrentMonth = currentDate.getMonth() === currentMonth;
                 const isToday = currentDate.toDateString() === today.toDateString();
@@ -2408,14 +3568,17 @@ class App {
                 if (isToday) cellClass += ' bg-primary text-white';
                 if (isSelected) cellClass += ' bg-success text-white';
                 
+                // Fix: Create local date string without timezone conversion
+                const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                
                 calendarHTML += `
                     <td class="${cellClass}" 
                         style="cursor: pointer; padding: 8px; border: 1px solid #dee2e6;"
-                        data-date="${currentDate.toISOString().split('T')[0]}"
-                        onclick="window.app.selectDate('${currentDate.toISOString().split('T')[0]}')">
+                        data-date="${dateString}"
+                        onclick="if(window.app && window.app.isInitialized && window.app.selectDate) window.app.selectDate('${dateString}')">
                         <div class="d-flex flex-column align-items-center">
                             <span>${currentDate.getDate()}</span>
-                            <div id="day-${currentDate.toISOString().split('T')[0]}" class="appointment-indicator mt-1">
+                            <div id="day-${dateString}" class="appointment-indicator mt-1">
                                 <!-- Appointment indicators will be loaded here -->
                             </div>
                         </div>
@@ -2434,9 +3597,15 @@ class App {
     }
 
     selectDate(dateString) {
-        this.selectedDate = new Date(dateString);
-        this.renderCalendar();
-        this.loadAppointments(this.currentStudioId);
+        try {
+            // Fix: Parse date string properly to avoid timezone issues
+            const [year, month, day] = dateString.split('-').map(Number);
+            this.selectedDate = new Date(year, month - 1, day);
+            this.renderCalendar();
+            this.loadAppointments(this.currentStudioId);
+        } catch (error) {
+            console.error('Error in selectDate:', error);
+        }
     }
 
     async loadMonthlyAppointmentIndicators() {
@@ -2446,7 +3615,11 @@ class App {
             const startDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
             const endDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
             
-            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDate.toISOString().split('T')[0]}&to_date=${endDate.toISOString().split('T')[0]}`, {
+            // Fix: Use local date formatting for consistency
+            const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+            const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+            
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDateStr}&to_date=${endDateStr}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2485,4 +3658,5 @@ class App {
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new App();
+    window.app.isInitialized = true;
 });

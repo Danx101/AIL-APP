@@ -14,7 +14,7 @@ class AppointmentController {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const {
+      let {
         studio_id,
         customer_id,
         appointment_type_id,
@@ -25,6 +25,30 @@ class AppointmentController {
       } = req.body;
 
       const created_by_user_id = req.user.userId;
+
+      // For customers creating their own appointments, use their user ID
+      if (req.user.role === 'customer') {
+        customer_id = req.user.userId;
+        
+        // Get appointment type to calculate end_time if not provided
+        if (!end_time && appointment_type_id) {
+          const appointmentType = await new Promise((resolve, reject) => {
+            db.get('SELECT duration_minutes FROM appointment_types WHERE id = ?', [appointment_type_id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          
+          if (appointmentType) {
+            const [hours, minutes] = start_time.split(':').map(Number);
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0, 0);
+            
+            const endDate = new Date(startDate.getTime() + appointmentType.duration_minutes * 60000);
+            end_time = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+          }
+        }
+      }
 
       // Authorization check: Studio owners can only create appointments for their studios
       if (req.user.role === 'studio_owner') {
@@ -37,6 +61,24 @@ class AppointmentController {
 
         if (!studio) {
           return res.status(403).json({ message: 'You can only create appointments for your own studio' });
+        }
+      } else if (req.user.role === 'customer') {
+        // Customers can only create appointments for their associated studio
+        const customerStudio = await new Promise((resolve, reject) => {
+          db.get(`
+            SELECT s.id
+            FROM studios s
+            INNER JOIN activation_codes ac ON s.id = ac.studio_id
+            WHERE ac.used_by_user_id = ? AND ac.is_used = 1 AND s.id = ?
+            LIMIT 1
+          `, [req.user.userId, studio_id], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (!customerStudio) {
+          return res.status(403).json({ message: 'You can only create appointments for your associated studio' });
         }
       }
 
@@ -54,6 +96,12 @@ class AppointmentController {
         });
       }
 
+      // Auto-set status based on who creates the appointment
+      let status = 'pending';
+      if (req.user.role === 'studio_owner') {
+        status = 'bestätigt'; // Studio owner appointments are auto-confirmed
+      }
+
       // Create the appointment
       const appointment = new Appointment({
         studio_id,
@@ -64,7 +112,7 @@ class AppointmentController {
         end_time,
         notes,
         created_by_user_id,
-        status: 'pending'
+        status
       });
 
       const appointmentId = await appointment.create();
@@ -226,6 +274,9 @@ class AppointmentController {
    */
   async getStudioAppointments(req, res) {
     try {
+      // Auto-update past appointment statuses
+      await Appointment.updatePastAppointmentStatuses();
+
       const { studioId } = req.params;
       const { date, status, customer_id, from_date, to_date } = req.query;
 
@@ -345,7 +396,10 @@ class AppointmentController {
         return res.status(400).json({ message: 'Status is required' });
       }
 
-      const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'];
+      const validStatuses = [
+        'pending', 'confirmed', 'cancelled', 'completed', 'no_show',
+        'bestätigt', 'abgesagt', 'abgeschlossen', 'nicht erschienen'
+      ];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ 
           message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
@@ -399,8 +453,9 @@ class AppointmentController {
     try {
       const { studioId } = req.params;
 
-      // Authorization check: Studio owners can only view their own studio's appointment types
+      // Authorization check
       if (req.user.role === 'studio_owner') {
+        // Studio owners can only view their own studio's appointment types
         const studio = await new Promise((resolve, reject) => {
           db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [studioId, req.user.userId], (err, row) => {
             if (err) reject(err);
@@ -409,6 +464,24 @@ class AppointmentController {
         });
 
         if (!studio) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      } else if (req.user.role === 'customer') {
+        // Customers can only view appointment types for their associated studio
+        const customerStudio = await new Promise((resolve, reject) => {
+          db.get(`
+            SELECT s.id
+            FROM studios s
+            INNER JOIN activation_codes ac ON s.id = ac.studio_id
+            WHERE ac.used_by_user_id = ? AND ac.is_used = 1 AND s.id = ?
+            LIMIT 1
+          `, [req.user.userId, studioId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (!customerStudio) {
           return res.status(403).json({ message: 'Access denied' });
         }
       }
@@ -460,6 +533,82 @@ class AppointmentController {
     } catch (error) {
       console.error('Error checking appointment access:', error);
       return false;
+    }
+  }
+
+  /**
+   * Get customer's associated studio
+   * GET /api/v1/appointments/customer/me/studio
+   */
+  async getCustomerStudio(req, res) {
+    try {
+      // Only customers can access this endpoint
+      if (req.user.role !== 'customer') {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const customerId = req.user.userId;
+
+      // Find the studio through the activation code the customer used
+      const studio = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT s.*, ac.code as activation_code_used
+          FROM studios s
+          INNER JOIN activation_codes ac ON s.id = ac.studio_id
+          WHERE ac.used_by_user_id = ? AND ac.is_used = 1
+          LIMIT 1
+        `, [customerId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!studio) {
+        return res.status(404).json({ message: 'No associated studio found' });
+      }
+
+      // Remove sensitive information
+      const { activation_code_used, ...studioInfo } = studio;
+
+      res.json({ studio: studioInfo });
+
+    } catch (error) {
+      console.error('Error getting customer studio:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get customer's own appointments
+   * GET /api/v1/appointments/customer/me
+   */
+  async getMyAppointments(req, res) {
+    try {
+      // Auto-update past appointment statuses
+      await Appointment.updatePastAppointmentStatuses();
+
+      // Only customers can access this endpoint
+      if (req.user.role !== 'customer') {
+        return res.status(403).json({ message: 'Access denied - not a customer' });
+      }
+
+      const customerId = req.user.userId;
+      const { status, from_date, to_date } = req.query;
+
+      const filters = {};
+      if (status) filters.status = status;
+      if (from_date && to_date) {
+        filters.from_date = from_date;
+        filters.to_date = to_date;
+      }
+
+      const appointments = await Appointment.findByCustomer(customerId, filters);
+
+      res.json({ appointments });
+
+    } catch (error) {
+      console.error('Error getting customer appointments:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   }
 }

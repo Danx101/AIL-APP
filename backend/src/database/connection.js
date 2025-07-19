@@ -22,6 +22,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
     // Run appointment tables migration
     const { runMigration: runAppointmentMigration } = require('./migrations/add_appointment_tables');
     runAppointmentMigration().catch(console.error);
+    
+    // Run session system migration
+    const { runMigration: runSessionMigration } = require('./migrations/session_system');
+    runSessionMigration().catch(console.error);
   }
 });
 

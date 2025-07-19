@@ -172,6 +172,7 @@ const validateAppointmentCreate = [
     .withMessage('Studio ID must be a positive integer'),
   
   body('customer_id')
+    .optional()
     .isInt({ min: 1 })
     .withMessage('Customer ID must be a positive integer'),
   
@@ -189,6 +190,7 @@ const validateAppointmentCreate = [
     .withMessage('Start time must be in HH:MM format'),
   
   body('end_time')
+    .optional()
     .matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .withMessage('End time must be in HH:MM format'),
   
@@ -232,8 +234,11 @@ const validateAppointmentUpdate = [
 
 const validateAppointmentStatus = [
   body('status')
-    .isIn(['pending', 'confirmed', 'cancelled', 'completed', 'no_show'])
-    .withMessage('Status must be one of: pending, confirmed, cancelled, completed, no_show')
+    .isIn([
+      'pending', 'confirmed', 'cancelled', 'completed', 'no_show',
+      'bestätigt', 'abgesagt', 'abgeschlossen', 'nicht erschienen'
+    ])
+    .withMessage('Status must be one of: pending, confirmed, cancelled, completed, no_show, bestätigt, abgesagt, abgeschlossen, nicht erschienen')
 ];
 
 const validateAppointmentId = [
@@ -246,6 +251,25 @@ const validateCustomerId = [
   param('customerId')
     .isInt({ min: 1 })
     .withMessage('Customer ID must be a positive integer')
+];
+
+// Session validation
+const validateSessionTopup = [
+  body('sessionCount')
+    .isInt({ min: 1 })
+    .isIn([10, 20])
+    .withMessage('Session count must be 10 or 20'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .withMessage('Notes must be a string')
+];
+
+const validateSessionId = [
+  param('sessionId')
+    .isInt({ min: 1 })
+    .withMessage('Session ID must be a positive integer')
 ];
 
 module.exports = {
@@ -262,5 +286,7 @@ module.exports = {
   validateAppointmentUpdate,
   validateAppointmentStatus,
   validateAppointmentId,
-  validateCustomerId
+  validateCustomerId,
+  validateSessionTopup,
+  validateSessionId
 };

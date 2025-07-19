@@ -1,0 +1,55 @@
+
+> abnehmen-backend@1.0.0 start
+> node server.js
+
+=� Server running on port 3001
+=� Health check: http://localhost:3001/health
+=' API status: http://localhost:3001/api/v1/status
+ Connected to SQLite database
+ Basic database tables created/verified
+🚀 Starting appointment tables migration...
+🚀 Starting session system migration...
+✅ Manager codes table created successfully
+✅ appointment_types table created successfully
+✅ appointments table created successfully
+✅ recurring_appointments table created successfully
+✅ customer_sessions table created successfully
+✅ Created appointment type "Nachbehandlung" for studio "Johannesburg AIL"
+✅ Created appointment type "Beratungstermin" for studio "Test Studio"
+✅ Created appointment type "Nachbehandlung" for studio "Test Studio"
+✅ session_transactions table created successfully
+✅ Created appointment type "Abnehmen Behandlung" for studio "Johannesburg AIL"
+✅ Created appointment type "Beratungstermin" for studio "Johannesburg AIL"
+✅ Created appointment type "Abnehmen Behandlung" for studio "Test Studio"
+✅ All default appointment types created successfully
+🎉 Appointment tables migration completed successfully
+✅ All session system indexes created successfully
+🎉 Session system migration completed successfully
+::1 - - [19/Jul/2025:17:16:36 +0000] "GET /api/v1/appointments/customer/me HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:16:39 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:16:39 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-19&to_date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:21:54 +0000] "GET /api/v1/status HTTP/1.1" 200 104 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:21:54 +0000] "GET /api/v1/auth/profile HTTP/1.1" 200 144 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:21:54 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:21:54 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-19&to_date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:28:36 +0000] "GET /health HTTP/1.1" 200 83 "-" "curl/8.7.1"
+::1 - - [19/Jul/2025:17:28:41 +0000] "GET /api/v1/status HTTP/1.1" 200 104 "-" "curl/8.7.1"
+::1 - - [19/Jul/2025:17:30:37 +0000] "GET /health HTTP/1.1" 200 83 "-" "curl/8.7.1"
+::1 - - [19/Jul/2025:17:31:19 +0000] "GET /api/v1/status HTTP/1.1" 200 104 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:19 +0000] "GET /api/v1/auth/profile HTTP/1.1" 200 144 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:19 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:19 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-19&to_date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:49 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:49 +0000] "GET /api/v1/appointments/customer/me?from_date=2025-07-19&to_date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:31:56 +0000] "POST /api/v1/auth/logout HTTP/1.1" 200 37 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:10 +0000] "POST /api/v1/auth/login HTTP/1.1" 200 363 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:10 +0000] "GET /api/v1/studios/my-studio HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:10 +0000] "GET /api/v1/appointments/studio/1?date=2025-07-19 HTTP/1.1" 200 482 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:13 +0000] "GET /api/v1/appointments/studio/1?date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:13 +0000] "GET /api/v1/appointments/studio/1?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 200 1434 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:15 +0000] "GET /api/v1/appointments/studio/1?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:15 +0000] "GET /api/v1/appointments/studio/1?date=2025-07-20 HTTP/1.1" 200 495 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:18 +0000] "GET /api/v1/appointments/studio/1?from_date=2025-07-01&to_date=2025-07-31 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:18 +0000] "GET /api/v1/appointments/studio/1?date=2025-07-30 HTTP/1.1" 200 493 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:28 +0000] "GET /api/v1/studios/my-studio HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+::1 - - [19/Jul/2025:17:32:28 +0000] "GET /api/v1/appointments/studio/1?date=2025-07-19 HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
