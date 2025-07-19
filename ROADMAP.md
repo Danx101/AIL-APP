@@ -212,6 +212,16 @@
 - Session transaction audit trail with full reporting
 - Customer timeline fixes (removed redundant tabs, proper sorting)
 
+**✅ Sprint 3.4 Completed Features (July 19, 2025):**
+- Fixed critical session details API error and appointment creation issues
+- Resolved calendar date autofill timezone problems
+- Updated complete terminology from "Sitzungen" to "Behandlungen"
+- Implemented frontend edit functionality for treatment packages
+- Added package deactivation with reason tracking
+- Enhanced brand integration with Logo AIL.png replacement
+- Updated color scheme to brand colors (#7030a0, #a98dc1)
+- Improved appointment form autofill with type auto-selection
+
 **Deliverables:**
 - ✅ Complete appointment system backend
 - ✅ Calendar interfaces for studio owners
@@ -223,43 +233,46 @@
 
 ## 🔄 CURRENT TODO LIST & PRIORITIES (July 19, 2025)
 
-### 🔥 High Priority Issues
+### 🔥 High Priority Backend Tasks
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 13 | Fix 'meine termine' not loading - currently shows in 'verlauf' incorrectly | ✅ IN PROGRESS | High |
-| 14 | Fix past appointments showing in upcoming appointments | ⏳ PENDING | High |
+| 10 | Add backend API endpoints for session edit/deactivate functionality | ⏳ PENDING | High |
 
-### 🎨 UI/UX Improvements  
+### 🎨 Medium Priority UI/UX Improvements
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 15 | Change calendar appointment display from '1 termin' text to full circle #7030a0 | ⏳ PENDING | Medium |
-| 16 | Fix autofill when making appointments | ⏳ PENDING | Medium |
+| 8 | Studio calendar: Replace dots with filled rectangles based on appointment density | ⏳ PENDING | Medium |
+| 9 | Enforce single activation code generation with 3-day expiry (remove options) | ⏳ PENDING | Medium |
 
-### 🎯 Session System Frontend Integration
+### 🎨 Low Priority Design Updates
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 9 | Implement session display for customers (remaining sessions) | ⏳ PENDING | Medium |
-| 10 | Implement session display for studio owners (customer session counts) | ⏳ PENDING | Medium |
+| 6 | Add logo to top-left corner instead of branding name | ⏳ PENDING | Low |
 
-### 🎨 Brand & Design Updates
+### ✅ Recently Completed Tasks (Sprint 3.4 - July 19, 2025)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 17 | Replace branding name with Logo AIL.png and make clickable | ⏳ PENDING | Low |
-| 18 | Update colors from blue to brand colors #7030a0 and #a98dc1 | ⏳ PENDING | Low |
+| 1 | Fix session details 'undefined customer.first_name' error | ✅ COMPLETED | High |
+| 2 | Fix internal server error when creating appointment for Anna Kunde | ✅ COMPLETED | High |
+| 3 | Fix autofill date off by one day issue | ✅ COMPLETED | High |
+| 4 | Change terminology from 'Sitzungen' to 'Behandlungen' | ✅ COMPLETED | Medium |
+| 5 | Add edit functionality for Behandlungen (frontend) | ✅ COMPLETED | Medium |
+| 7 | Update app_logic.md with current issues and progress | ✅ COMPLETED | Medium |
 
-### ✅ Recently Completed Tasks
+### ✅ Previously Completed Tasks (Sprint 3.3)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 1 | Fix 403 errors for customer Anna Kunde - debug authentication | ✅ COMPLETED | High |
-| 2 | Make timeline view broader than calendar for customers | ✅ COMPLETED | Medium |
-| 3 | Fix studio timeline showing 'undefined undefined' instead of customer names | ✅ COMPLETED | High |
-| 4 | Auto-set studio owner created appointments to 'bestätigt' status | ✅ COMPLETED | Medium |
-| 5 | Auto-change past 'bestätigt' appointments to 'abgeschlossen' | ✅ COMPLETED | Medium |
-| 6 | Allow studio owners to change status to 'abgesagt' or 'nicht erschienen' | ✅ COMPLETED | Medium |
-| 7 | Design session/block system database schema | ✅ COMPLETED | High |
-| 8 | Create session management API endpoints | ✅ COMPLETED | High |
-| 11 | Create session top-up functionality for studio owners (+10/+20) | ✅ COMPLETED | Medium |
-| 12 | Auto-deduct sessions for completed past appointments | ✅ COMPLETED | Medium |
+| 13 | Fix 'meine termine' not loading - customer dashboard fixes | ✅ COMPLETED | High |
+| 14 | Fix past appointments showing in upcoming appointments | ✅ COMPLETED | High |
+| 15 | Change calendar appointment display from '1 termin' text to full circle #7030a0 | ✅ COMPLETED | Medium |
+| 16 | Fix autofill when making appointments | ✅ COMPLETED | Medium |
+| 17 | Replace branding name with Logo AIL.png and make clickable | ✅ COMPLETED | Low |
+| 18 | Update colors from blue to brand colors #7030a0 and #a98dc1 | ✅ COMPLETED | Low |
+| 19 | Implement session display for customers (remaining sessions) | ✅ COMPLETED | Medium |
+| 20 | Implement session display for studio owners (customer session counts) | ✅ COMPLETED | Medium |
+| 21 | Create session top-up functionality for studio owners (+10/+20) | ✅ COMPLETED | Medium |
+| 22 | Implement booking restrictions based on remaining sessions | ✅ COMPLETED | Medium |
+| 23 | Add low session warnings for customers (< 3 remaining) | ✅ COMPLETED | Low |
 
 ---
 
@@ -491,7 +504,7 @@ waitlists, recurring_patterns, analytics_events
 
 *Last Updated: July 19, 2025*  
 *Next Review: Weekly on Fridays*  
-*Current Phase: Phase 3 Complete ✅ - Ready for Phase 4: Notifications & Communication*
+*Current Phase: Phase 3 Sprint 3.4 Complete ✅ - Treatment System Fully Implemented*
 
 ---
 

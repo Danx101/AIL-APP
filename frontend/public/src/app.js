@@ -109,7 +109,7 @@ class App {
                 <div class="col-md-8 mx-auto">
                     <div class="card">
                         <div class="card-header">
-                            <h3>Willkommen bei Abnehmen im Liegen</h3>
+                            <div class="text-center"><img src="assets/images/LOgo AIL.png" alt="Abnehmen im Liegen" style="height: 80px;"><h4 class="mt-2">Willkommen</h4></div>
                         </div>
                         <div class="card-body">
                             <p>Vereinbaren Sie Ihren Termin schnell und einfach online.</p>
@@ -184,7 +184,7 @@ class App {
             <div class="row">
                 <div class="col-md-6 mx-auto">
                     <div class="text-center mb-3">
-                        <h2><a href="#" class="text-decoration-none" id="brandLinkCustomer">Abnehmen im Liegen</a></h2>
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkCustomer"><img src="assets/images/LOgo AIL.png" alt="Abnehmen im Liegen" style="height: 60px;"></a></h2>
                     </div>
                     <div class="card">
                         <div class="card-header">
@@ -269,7 +269,7 @@ class App {
             <div class="row">
                 <div class="col-md-6 mx-auto">
                     <div class="text-center mb-3">
-                        <h2><a href="#" class="text-decoration-none" id="brandLinkStudio">Abnehmen im Liegen</a></h2>
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkStudio"><img src="assets/images/LOgo AIL.png" alt="Abnehmen im Liegen" style="height: 60px;"></a></h2>
                     </div>
                     <div class="card">
                         <div class="card-header">
@@ -484,6 +484,35 @@ class App {
                         </div>
                     </div>
 
+                    <!-- Session Counter Widget -->
+                    <div class="card mb-4" id="sessionCounterWidget">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <i class="fas fa-ticket-alt fa-2x text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="mb-1">Ihre Behandlungspakete</h5>
+                                            <div id="sessionCountDisplay">
+                                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                                <span class="ms-2">Lade Behandlungsstand...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div id="sessionAlert" class="d-none">
+                                        <div class="badge bg-warning text-dark">
+                                            <i class="fas fa-exclamation-triangle"></i> Wenige Behandlungen übrig
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Main Content Tabs -->
                     <div class="card">
                         <div class="card-header">
@@ -558,6 +587,9 @@ class App {
 
         // Load initial calendar view
         this.loadCustomerCalendar();
+        
+        // Load session information
+        this.loadCustomerSessions();
     }
 
     async loadCustomerCalendar() {
@@ -768,14 +800,89 @@ class App {
                     else if (hasPending) badgeClass = 'badge-warning';
                     
                     dayElement.innerHTML = `
-                        <span class="badge ${badgeClass}" style="font-size: 8px;">
-                            ${count} Termin${count > 1 ? 'e' : ''}
-                        </span>
+                        <div style="width: 12px; height: 12px; background-color: #7030a0; border-radius: 50%; margin: 0 auto;"></div>
                     `;
                 }
             });
         } catch (error) {
             console.error('Error loading monthly appointment indicators:', error);
+        }
+    }
+
+    async loadCustomerSessions() {
+        const sessionDisplay = document.getElementById('sessionCountDisplay');
+        const sessionAlert = document.getElementById('sessionAlert');
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/customers/me/sessions', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load session information');
+            }
+            
+            const data = await response.json();
+            const sessions = data.sessions || [];
+            
+            if (sessions.length === 0) {
+                sessionDisplay.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="badge bg-secondary me-2">0</div>
+                        <span class="text-muted">Keine aktiven Behandlungspakete</span>
+                    </div>
+                    <small class="text-muted d-block mt-1">Kontaktieren Sie Ihr Studio, um ein Paket zu erwerben.</small>
+                `;
+                sessionAlert.classList.add('d-none');
+                return;
+            }
+            
+            // Calculate total remaining sessions
+            const totalRemaining = sessions.reduce((sum, session) => {
+                return session.is_active ? sum + session.remaining_sessions : sum;
+            }, 0);
+            
+            // Display session count with color coding
+            let badgeClass = 'bg-success';
+            let statusText = 'Verfügbar';
+            
+            if (totalRemaining <= 0) {
+                badgeClass = 'bg-danger';
+                statusText = 'Keine Behandlungen';
+            } else if (totalRemaining < 3) {
+                badgeClass = 'bg-warning text-dark';
+                statusText = 'Niedrig';
+            }
+            
+            sessionDisplay.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="badge ${badgeClass} me-2 fs-6">${totalRemaining}</div>
+                    <span><strong>Verbleibende Behandlungen</strong></span>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    Status: ${statusText} | 
+                    ${sessions.filter(s => s.is_active).length} aktive${sessions.filter(s => s.is_active).length !== 1 ? 's' : ''} Paket${sessions.filter(s => s.is_active).length !== 1 ? 'e' : ''}
+                </small>
+            `;
+            
+            // Show warning if sessions are low
+            if (totalRemaining > 0 && totalRemaining < 3) {
+                sessionAlert.classList.remove('d-none');
+            } else {
+                sessionAlert.classList.add('d-none');
+            }
+            
+        } catch (error) {
+            console.error('Error loading customer sessions:', error);
+            sessionDisplay.innerHTML = `
+                <div class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Fehler beim Laden der Behandlungsdaten</span>
+                </div>
+            `;
+            sessionAlert.classList.add('d-none');
         }
     }
 
@@ -1163,6 +1270,31 @@ class App {
 
 
     async showAppointmentRequestForm(preselectedDate = null) {
+        // Check session availability first
+        try {
+            const sessionResponse = await fetch('http://localhost:3001/api/v1/customers/me/sessions', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                const sessions = sessionData.sessions || [];
+                const totalRemaining = sessions.reduce((sum, session) => {
+                    return session.is_active ? sum + session.remaining_sessions : sum;
+                }, 0);
+                
+                if (totalRemaining <= 0) {
+                    this.showErrorMessage('Keine Behandlungen verfügbar', 
+                        'Sie haben keine verbleibenden Behandlungen. Bitte kontaktieren Sie Ihr Studio, um ein neues Paket zu erwerben.');
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking session availability:', error);
+            // Continue anyway if session check fails
+        }
         const modalHTML = `
             <div class="modal fade" id="appointmentRequestModal" tabindex="-1">
                 <div class="modal-dialog modal-lg">
@@ -1242,10 +1374,21 @@ class App {
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
-        // Set preselected date if provided
-        if (preselectedDate) {
-            document.getElementById('appointmentDate').value = preselectedDate;
-        }
+        // Set preselected date if provided (wait for DOM to be ready)
+        setTimeout(() => {
+            if (preselectedDate) {
+                const dateInput = document.getElementById('appointmentDate');
+                if (dateInput) {
+                    // Handle both string dates (YYYY-MM-DD) and Date objects
+                    let dateValue = preselectedDate;
+                    if (preselectedDate instanceof Date) {
+                        dateValue = preselectedDate.toISOString().split('T')[0];
+                    }
+                    dateInput.value = dateValue;
+                    console.log('Set appointment date to:', dateValue);
+                }
+            }
+        }, 10);
         
         // Load customer's studio and appointment types
         this.loadCustomerStudioForRequest();
@@ -1322,10 +1465,17 @@ class App {
             const typeSelect = document.getElementById('appointmentType');
             typeSelect.innerHTML = `
                 <option value="">Bitte wählen...</option>
-                ${types.map(type => `
-                    <option value="${type.id}">${type.name}${type.duration ? ` (${type.duration} Min.)` : ''}</option>
-                `).join('')}
+                ${types.map(type => {
+                    const selected = type.name === 'Abnehmen Behandlung' ? 'selected' : '';
+                    return `<option value="${type.id}" ${selected}>${type.name}${type.duration ? ` (${type.duration} Min.)` : ''}</option>`;
+                }).join('')}
             `;
+            
+            // Auto-select "Abnehmen Behandlung" if found
+            const abnehmenType = types.find(type => type.name === 'Abnehmen Behandlung');
+            if (abnehmenType) {
+                typeSelect.value = abnehmenType.id;
+            }
         } catch (error) {
             console.error('Error loading appointment types:', error);
             document.getElementById('appointmentType').innerHTML = `
@@ -1350,6 +1500,34 @@ class App {
             return;
         }
         
+        // Final session availability check
+        try {
+            const sessionResponse = await fetch('http://localhost:3001/api/v1/customers/me/sessions', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                const sessions = sessionData.sessions || [];
+                const totalRemaining = sessions.reduce((sum, session) => {
+                    return session.is_active ? sum + session.remaining_sessions : sum;
+                }, 0);
+                
+                if (totalRemaining <= 0) {
+                    this.showErrorMessage('Keine Behandlungen verfügbar', 
+                        'Sie haben keine verbleibenden Behandlungen mehr. Bitte kontaktieren Sie Ihr Studio, um ein neues Paket zu erwerben.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Anfrage senden';
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking session availability:', error);
+            // Continue with appointment request even if session check fails
+        }
+        
         const appointmentData = {
             appointment_date: document.getElementById('appointmentDate').value,
             start_time: document.getElementById('appointmentTime').value,
@@ -1357,6 +1535,14 @@ class App {
             appointment_type_id: parseInt(document.getElementById('appointmentType').value),
             notes: document.getElementById('appointmentNotes').value
         };
+        
+        // Validate appointment data
+        console.log('Submitting appointment data:', appointmentData);
+        
+        if (!appointmentData.appointment_date || !appointmentData.start_time || !appointmentData.studio_id || !appointmentData.appointment_type_id) {
+            this.showErrorMessage('Validation Error', 'Alle Pflichtfelder müssen ausgefüllt werden.');
+            return;
+        }
         
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gesendet...';
@@ -1371,9 +1557,10 @@ class App {
             // Show success message
             this.showSuccessMessage('Terminanfrage erfolgreich gesendet!', 'Das Studio wird Ihre Anfrage prüfen und sich bei Ihnen melden.');
             
-            // Refresh calendar and appointments
+            // Refresh calendar, appointments, and session counter
             this.loadCustomerCalendar();
             this.loadCustomerAppointments();
+            this.loadCustomerSessions();
         } catch (error) {
             console.error('Error submitting appointment request:', error);
             this.showErrorMessage('Fehler beim Senden der Anfrage', error.message);
@@ -1494,8 +1681,11 @@ class App {
                                 <button class="btn btn-success btn-sm me-2" id="manageAppointmentsBtn">
                                     Termine verwalten
                                 </button>
-                                <button class="btn btn-info btn-sm" id="viewCustomersBtn">
+                                <button class="btn btn-info btn-sm me-2" id="viewCustomersBtn">
                                     Kunden anzeigen
+                                </button>
+                                <button class="btn btn-warning btn-sm" id="manageSessionsBtn">
+                                    Behandlungen verwalten
                                 </button>
                             </div>
                             
@@ -1525,6 +1715,10 @@ class App {
                 
                 document.getElementById('viewCustomersBtn').addEventListener('click', () => {
                     this.showCustomerList(studio.id);
+                });
+                
+                document.getElementById('manageSessionsBtn').addEventListener('click', () => {
+                    this.showSessionManagement(studio.id);
                 });
                 
                 // Load today's appointments
@@ -1911,7 +2105,7 @@ class App {
             <div class="row">
                 <div class="col-md-6 mx-auto">
                     <div class="text-center mb-3">
-                        <h2><a href="#" class="text-decoration-none" id="brandLinkManager">Abnehmen im Liegen</a></h2>
+                        <h2><a href="#" class="text-decoration-none" id="brandLinkManager"><img src="assets/images/LOgo AIL.png" alt="Abnehmen im Liegen" style="height: 60px;"></a></h2>
                     </div>
                     <div class="card">
                         <div class="card-header">
@@ -3511,6 +3705,516 @@ class App {
         }
     }
 
+    showSessionManagement(studioId) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4>Behandlungen verwalten</h4>
+                            <button class="btn btn-outline-secondary" id="backToStudioDashboardFromSessionsBtn">
+                                Zurück zum Dashboard
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>Kunden mit Behandlungen</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="sessionCustomersList">
+                                                <div class="text-center">
+                                                    <div class="spinner-border spinner-border-sm" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2 small">Lade Kunden...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6>Behandlungsdetails</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="sessionDetails">
+                                                <div class="text-muted text-center">
+                                                    <p>Wählen Sie einen Kunden aus der Liste</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Event listener
+        document.getElementById('backToStudioDashboardFromSessionsBtn').addEventListener('click', () => {
+            this.showStudioDashboard();
+        });
+
+        // Store studio ID for use in other functions
+        this.currentStudioId = studioId;
+        
+        // Load customers with sessions
+        this.loadSessionCustomersList(studioId);
+    }
+
+    async loadSessionCustomersList(studioId) {
+        const customersDiv = document.getElementById('sessionCustomersList');
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers/sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customers with sessions');
+            }
+            
+            const data = await response.json();
+            const customers = data.customers || [];
+            
+            if (customers.length === 0) {
+                customersDiv.innerHTML = `
+                    <div class="text-center text-muted">
+                        <p>Noch keine Kunden mit Behandlungspaketen</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            customersDiv.innerHTML = customers.map(customer => {
+                const totalSessions = customer.total_sessions || 0;
+                const remainingSessions = customer.remaining_sessions || 0;
+                const usedSessions = totalSessions - remainingSessions;
+                
+                let statusClass = 'bg-success';
+                if (remainingSessions <= 0) statusClass = 'bg-danger';
+                else if (remainingSessions < 3) statusClass = 'bg-warning text-dark';
+                
+                return `
+                    <div class="list-group-item list-group-item-action" style="cursor: pointer;" 
+                         onclick="window.app.loadCustomerSessionDetails(${customer.customer_id})">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${customer.first_name} ${customer.last_name}</h6>
+                            <span class="badge ${statusClass}">${remainingSessions} / ${totalSessions}</span>
+                        </div>
+                        <p class="mb-1">${customer.email}</p>
+                        <small class="text-muted">
+                            ${usedSessions} verbraucht • ${remainingSessions} verbleibend
+                        </small>
+                    </div>
+                `;
+            }).join('');
+            
+        } catch (error) {
+            customersDiv.innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <small>Fehler beim Laden: ${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    async loadCustomerSessionDetails(customerId) {
+        const detailsDiv = document.getElementById('sessionDetails');
+        
+        // Store current customer ID for use in other functions
+        this.currentCustomerId = customerId;
+        
+        try {
+            detailsDiv.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <p class="mt-2 small">Lade Behandlungsdetails...</p>
+                </div>
+            `;
+            
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customer session details');
+            }
+            
+            const data = await response.json();
+            const customer = data.customer || data; // Handle different response structures
+            const sessions = data.sessions || [];
+            
+            // Validate customer data
+            if (!customer || !customer.first_name) {
+                console.error('Invalid customer data:', data);
+                throw new Error('Kundendaten konnten nicht geladen werden');
+            }
+            
+            detailsDiv.innerHTML = `
+                <div class="mb-4">
+                    <h5>${customer.first_name} ${customer.last_name}</h5>
+                    <p class="text-muted">${customer.email}</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <button class="btn btn-primary btn-sm w-100" onclick="window.app.showSessionTopupModal(${customerId}, 10)">
+                                <i class="fas fa-plus"></i> +10 Behandlungen
+                            </button>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <button class="btn btn-primary btn-sm w-100" onclick="window.app.showSessionTopupModal(${customerId}, 20)">
+                                <i class="fas fa-plus"></i> +20 Behandlungen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Aktive Behandlungspakete</h6>
+                    ${sessions.filter(s => s.is_active).map(session => {
+                        const usedSessions = session.total_sessions - session.remaining_sessions;
+                        const progressPercent = (usedSessions / session.total_sessions) * 100;
+                        
+                        return `
+                            <div class="card mb-2">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span><strong>${session.total_sessions}er Paket</strong></span>
+                                        <div>
+                                            <span class="badge bg-primary me-2">${session.remaining_sessions} verbleibend</span>
+                                            <button class="btn btn-outline-primary btn-sm me-1" 
+                                                    onclick="window.app.showEditSessionModal(${session.id}, ${session.remaining_sessions}, '${session.notes || ''}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm" 
+                                                    onclick="window.app.showDeactivateSessionModal(${session.id}, ${session.total_sessions})">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="progress mb-2" style="height: 8px;">
+                                        <div class="progress-bar" role="progressbar" 
+                                             style="width: ${progressPercent}%" 
+                                             aria-valuenow="${progressPercent}" 
+                                             aria-valuemin="0" aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">
+                                        Erworben: ${new Date(session.purchase_date).toLocaleDateString('de-DE')}
+                                        ${session.notes ? ` | ${session.notes}` : ''}
+                                    </small>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+        } catch (error) {
+            detailsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <small>Fehler beim Laden der Details: ${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    showSessionTopupModal(customerId, amount) {
+        const modalHTML = `
+            <div class="modal fade" id="sessionTopupModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Behandlungen hinzufügen</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Möchten Sie <strong>${amount} Behandlungen</strong> zum Konto dieses Kunden hinzufügen?</p>
+                            <div class="mb-3">
+                                <label for="topupNotes" class="form-label">Notizen (optional)</label>
+                                <textarea class="form-control" id="topupNotes" rows="3" 
+                                          placeholder="z.B. Paket erworben, Nachzahlung..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="confirmTopupBtn">
+                                <i class="fas fa-plus"></i> ${amount} Behandlungen hinzufügen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('sessionTopupModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set up event listener
+        document.getElementById('confirmTopupBtn').addEventListener('click', () => {
+            this.performSessionTopup(customerId, amount);
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('sessionTopupModal'));
+        modal.show();
+    }
+
+    async performSessionTopup(customerId, amount) {
+        const confirmBtn = document.getElementById('confirmTopupBtn');
+        const notes = document.getElementById('topupNotes').value;
+        
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird hinzugefügt...';
+            
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/topup`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount: amount,
+                    notes: notes
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to add sessions');
+            }
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sessionTopupModal'));
+            modal.hide();
+            
+            // Refresh the view
+            this.loadCustomerSessionDetails(customerId);
+            this.loadSessionCustomersList(this.currentStudioId);
+            
+            // Show success message
+            this.showSuccessMessage('Erfolgreich', `${amount} Behandlungen wurden erfolgreich hinzugefügt.`);
+            
+        } catch (error) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `<i class="fas fa-plus"></i> ${amount} Behandlungen hinzufügen`;
+            this.showErrorMessage('Fehler', 'Fehler beim Hinzufügen der Behandlungen: ' + error.message);
+        }
+    }
+
+    showEditSessionModal(sessionId, currentRemaining, currentNotes) {
+        const modalHTML = `
+            <div class="modal fade" id="editSessionModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Behandlungspaket bearbeiten</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="editRemainingTreatments" class="form-label">Verbleibende Behandlungen</label>
+                                <input type="number" class="form-control" id="editRemainingTreatments" 
+                                       value="${currentRemaining}" min="0" max="50">
+                                <div class="form-text">Aktuelle Anzahl der verbleibenden Behandlungen.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="editSessionNotes" class="form-label">Notizen</label>
+                                <textarea class="form-control" id="editSessionNotes" rows="3">${currentNotes}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="confirmEditBtn">
+                                <i class="fas fa-save"></i> Änderungen speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('editSessionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set up event listener
+        document.getElementById('confirmEditBtn').addEventListener('click', () => {
+            this.performSessionEdit(sessionId, currentRemaining);
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('editSessionModal'));
+        modal.show();
+    }
+
+    async performSessionEdit(sessionId, originalRemaining) {
+        const confirmBtn = document.getElementById('confirmEditBtn');
+        const newRemaining = parseInt(document.getElementById('editRemainingTreatments').value);
+        const newNotes = document.getElementById('editSessionNotes').value;
+        
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gespeichert...';
+            
+            // Calculate the difference to determine if we're adding or removing treatments
+            const difference = newRemaining - originalRemaining;
+            
+            const response = await fetch(`http://localhost:3001/api/v1/sessions/${sessionId}/edit`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    remaining_sessions: newRemaining,
+                    notes: newNotes,
+                    adjustment_amount: difference
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update session');
+            }
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editSessionModal'));
+            modal.hide();
+            
+            // Refresh the view
+            const currentCustomerId = this.currentCustomerId; // We need to store this
+            if (currentCustomerId) {
+                this.loadCustomerSessionDetails(currentCustomerId);
+                this.loadSessionCustomersList(this.currentStudioId);
+            }
+            
+            // Show success message
+            this.showSuccessMessage('Erfolgreich', 'Behandlungspaket wurde erfolgreich aktualisiert.');
+            
+        } catch (error) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-save"></i> Änderungen speichern';
+            this.showErrorMessage('Fehler', 'Fehler beim Aktualisieren: ' + error.message);
+        }
+    }
+
+    showDeactivateSessionModal(sessionId, totalSessions) {
+        const modalHTML = `
+            <div class="modal fade" id="deactivateSessionModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Behandlungspaket deaktivieren</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Achtung:</strong> Möchten Sie dieses ${totalSessions}er Behandlungspaket wirklich deaktivieren?
+                            </div>
+                            <p>Das Paket wird deaktiviert und steht nicht mehr für neue Termine zur Verfügung.</p>
+                            <div class="mb-3">
+                                <label for="deactivateReason" class="form-label">Grund (optional)</label>
+                                <textarea class="form-control" id="deactivateReason" rows="3" 
+                                          placeholder="z.B. Kunde hat Studio gewechselt, Rückerstattung..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-danger" id="confirmDeactivateBtn">
+                                <i class="fas fa-times"></i> Paket deaktivieren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('deactivateSessionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set up event listener
+        document.getElementById('confirmDeactivateBtn').addEventListener('click', () => {
+            this.performSessionDeactivation(sessionId);
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('deactivateSessionModal'));
+        modal.show();
+    }
+
+    async performSessionDeactivation(sessionId) {
+        const confirmBtn = document.getElementById('confirmDeactivateBtn');
+        const reason = document.getElementById('deactivateReason').value;
+        
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird deaktiviert...';
+            
+            const response = await fetch(`http://localhost:3001/api/v1/sessions/${sessionId}/deactivate`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reason: reason
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to deactivate session');
+            }
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('deactivateSessionModal'));
+            modal.hide();
+            
+            // Refresh the view
+            const currentCustomerId = this.currentCustomerId;
+            if (currentCustomerId) {
+                this.loadCustomerSessionDetails(currentCustomerId);
+                this.loadSessionCustomersList(this.currentStudioId);
+            }
+            
+            // Show success message
+            this.showSuccessMessage('Erfolgreich', 'Behandlungspaket wurde deaktiviert.');
+            
+        } catch (error) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-times"></i> Paket deaktivieren';
+            this.showErrorMessage('Fehler', 'Fehler beim Deaktivieren: ' + error.message);
+        }
+    }
+
     renderCalendar() {
         // Ensure currentDate is initialized
         if (!this.currentDate) {
@@ -3645,7 +4349,7 @@ class App {
                 const dayElement = document.getElementById(`day-${date}`);
                 if (dayElement) {
                     const count = appointmentsByDate[date].length;
-                    dayElement.innerHTML = `<small class="badge bg-info">${count}</small>`;
+                    dayElement.innerHTML = `<div style="width: 12px; height: 12px; background-color: #7030a0; border-radius: 50%; margin: 0 auto;"></div>`;
                 }
             });
             

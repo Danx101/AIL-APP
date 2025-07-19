@@ -1,6 +1,6 @@
 :root {
-    --primary-color: #0056b3;
-    --secondary-color: #6c757d;
+    --primary-color: #7030a0;
+    --secondary-color: #a98dc1;
     --success-color: #28a745;
     --danger-color: #dc3545;
     --warning-color: #ffc107;
@@ -38,13 +38,13 @@ body {
 }
 
 .btn-primary:hover {
-    background-color: #004085;
-    border-color: #004085;
+    background-color: #5c2685;
+    border-color: #5c2685;
 }
 
 .form-control:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(112, 48, 160, 0.25);
 }
 
 .alert-success {
@@ -79,6 +79,38 @@ body {
     border-radius: 50%;
     display: inline-block;
     margin-right: 0.5rem;
+}
+
+/* Brand color specific styles for better readability */
+.text-primary {
+    color: var(--primary-color) !important;
+}
+
+.bg-primary {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.badge.bg-primary {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+/* Ensure white text on brand color backgrounds */
+.card-header h1, .card-header h2, .card-header h3, .card-header h4, .card-header h5, .card-header h6 {
+    color: white !important;
+}
+
+/* Secondary brand color styles */
+.btn-outline-secondary {
+    color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: white;
 }
 
 @media (max-width: 768px) {
