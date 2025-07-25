@@ -231,25 +231,48 @@
 
 ---
 
-## 🔄 CURRENT TODO LIST & PRIORITIES (July 19, 2025)
-
-### 🔥 High Priority Backend Tasks
-| ID | Task | Status | Priority |
-|----|------|--------|----------|
-| 10 | Add backend API endpoints for session edit/deactivate functionality | ⏳ PENDING | High |
+## 🔄 CURRENT TODO LIST & PRIORITIES (July 25, 2025)
 
 ### 🎨 Medium Priority UI/UX Improvements
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
-| 8 | Studio calendar: Replace dots with filled rectangles based on appointment density | ⏳ PENDING | Medium |
-| 9 | Enforce single activation code generation with 3-day expiry (remove options) | ⏳ PENDING | Medium |
+| 12 | Add comprehensive error handling and loading states throughout application | ⏳ PENDING | Medium |
 
 ### 🎨 Low Priority Design Updates
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
 | 6 | Add logo to top-left corner instead of branding name | ⏳ PENDING | Low |
+| 11 | Plan Lead Lists feature architecture for importing from Excel/Google Sheets | ⏳ PENDING | Low |
 
-### ✅ Recently Completed Tasks (Sprint 3.4 - July 19, 2025)
+### ✅ Recently Completed Tasks (Sprint 3.7 - July 25, 2025)
+| ID | Task | Status | Priority |
+|----|------|--------|----------|
+| 30 | Fix appointment details modal - customer name, time, and status showing N/A or undefined | ✅ COMPLETED | High |
+| 31 | Fix PATCH method CORS issue - Add PATCH to allowed methods for session edit/deactivate | ✅ COMPLETED | High |
+| 32 | Implement backend API endpoints for session edit/deactivate functionality | ✅ COMPLETED | High |
+| 33 | Make calendar appointment blocks clickable with modal details | ✅ COMPLETED | High |
+| 34 | Add studio setting for appointment cancellation/postponement advance notice period (default 48 hours) | ✅ COMPLETED | Medium |
+| 35 | Implement appointment cancellation for customers with configurable advance notice | ✅ COMPLETED | Medium |
+| 36 | Implement appointment postponement for customers with configurable advance notice | ✅ COMPLETED | Medium |
+| 37 | Remove debug console.log statements from codebase | ✅ COMPLETED | High |
+
+### ✅ Previously Completed Tasks (Sprint 3.6 - July 25, 2025)
+| ID | Task | Status | Priority |
+|----|------|--------|----------|
+| 8 | Studio calendar: Replace dots with filled rectangles based on appointment density | ✅ COMPLETED | Medium |
+| 9 | Enforce single activation code generation with 3-day expiry (remove options) | ✅ COMPLETED | Medium |
+| 29 | Fix appointment status constraint issue - SQLITE_CONSTRAINT error | ✅ COMPLETED | High |
+
+### ✅ Previously Completed Tasks (Sprint 3.5 - July 20, 2025)
+| ID | Task | Status | Priority |
+|----|------|--------|----------|
+| 24 | Fix top-up buttons non-functional in Behandlungsdetails | ✅ COMPLETED | High |
+| 25 | Fix 'meine termine' not working for customer appointments | ✅ COMPLETED | High |
+| 26 | Fix customer session amounts not displaying from studio owner | ✅ COMPLETED | High |
+| 27 | Fix function name collision between customer and studio views | ✅ COMPLETED | High |
+| 28 | Fix calendar appointment colors for bestätigte appointments | ✅ COMPLETED | High |
+
+### ✅ Previously Completed Tasks (Sprint 3.4 - July 19, 2025)
 | ID | Task | Status | Priority |
 |----|------|--------|----------|
 | 1 | Fix session details 'undefined customer.first_name' error | ✅ COMPLETED | High |
@@ -502,9 +525,9 @@ waitlists, recurring_patterns, analytics_events
 
 ---
 
-*Last Updated: July 19, 2025*  
+*Last Updated: July 25, 2025*  
 *Next Review: Weekly on Fridays*  
-*Current Phase: Phase 3 Sprint 3.4 Complete ✅ - Treatment System Fully Implemented*
+*Current Phase: Phase 3 Sprint 3.7 Complete ✅ - Advanced Appointment Management & Policy System*
 
 ---
 

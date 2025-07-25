@@ -18,6 +18,7 @@ class Appointment {
     this.created_by_user_id = data.created_by_user_id || null;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
+    
   }
 
   /**
@@ -193,7 +194,8 @@ class Appointment {
         if (err) {
           reject(err);
         } else {
-          resolve(row ? new Appointment(row) : null);
+          // Return raw row to preserve joined fields like customer_first_name, etc.
+          resolve(row);
         }
       });
     });
@@ -390,7 +392,6 @@ class Appointment {
             }
           }
 
-          console.log(`✅ Auto-completed ${appointmentsToComplete.length} past appointments, deducted ${sessionDeductions} sessions`);
           resolve(appointmentsToComplete.length);
         });
 

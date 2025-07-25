@@ -116,4 +116,26 @@ router.get('/',
   studioController.getAll
 );
 
+// Studio settings management
+const validateStudioSettings = [
+  body('cancellation_advance_hours').optional().isInt({ min: 1, max: 168 }).withMessage('Cancellation advance notice must be between 1 and 168 hours'),
+  body('postponement_advance_hours').optional().isInt({ min: 1, max: 168 }).withMessage('Postponement advance notice must be between 1 and 168 hours'),
+  body('max_advance_booking_days').optional().isInt({ min: 1, max: 365 }).withMessage('Max advance booking must be between 1 and 365 days')
+];
+
+router.get('/:id/settings',
+  authenticate,
+  authorize(['studio_owner']),
+  param('id').isInt().withMessage('Studio ID must be an integer'),
+  studioController.getStudioSettings
+);
+
+router.patch('/:id/settings',
+  authenticate,
+  authorize(['studio_owner']),
+  param('id').isInt().withMessage('Studio ID must be an integer'),
+  validateStudioSettings,
+  studioController.updateStudioSettings
+);
+
 module.exports = router;

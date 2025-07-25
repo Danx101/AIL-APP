@@ -32,7 +32,7 @@ const runMigration = () => {
       CREATE TABLE IF NOT EXISTS session_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_session_id INTEGER NOT NULL,
-        transaction_type TEXT NOT NULL CHECK (transaction_type IN ('purchase', 'deduction', 'topup', 'refund')),
+        transaction_type TEXT NOT NULL CHECK (transaction_type IN ('purchase', 'deduction', 'topup', 'refund', 'edit', 'deactivation')),
         amount INTEGER NOT NULL,
         appointment_id INTEGER,
         created_by_user_id INTEGER NOT NULL,

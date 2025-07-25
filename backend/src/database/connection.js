@@ -7,7 +7,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
   } else {
-    console.log(' Connected to SQLite database');
     
     // Enable foreign key constraints
     db.run('PRAGMA foreign_keys = ON');
@@ -19,13 +18,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
     const { runMigration } = require('./migrations/add_manager_codes_table');
     runMigration().catch(console.error);
     
-    // Run appointment tables migration
-    const { runMigration: runAppointmentMigration } = require('./migrations/add_appointment_tables');
-    runAppointmentMigration().catch(console.error);
+    // Run appointment tables migration (commented out - constraint has been fixed)
+    // const { runMigration: runAppointmentMigration } = require('./migrations/add_appointment_tables');
+    // runAppointmentMigration().catch(console.error);
     
     // Run session system migration
     const { runMigration: runSessionMigration } = require('./migrations/session_system');
     runSessionMigration().catch(console.error);
+    
+    // Session transaction types migration - commented out as it's already been run
+    // const { runMigration: runSessionTransactionTypesMigration } = require('./migrations/update_session_transaction_types');
+    // runSessionTransactionTypesMigration().catch(console.error);
   }
 });
 
@@ -78,7 +81,6 @@ function createBasicTables() {
     )
   `);
 
-  console.log(' Basic database tables created/verified');
 }
 
 // Graceful shutdown
@@ -87,7 +89,6 @@ process.on('SIGINT', () => {
     if (err) {
       console.error('Error closing database:', err.message);
     } else {
-      console.log('=� Database connection closed');
     }
     process.exit(0);
   });

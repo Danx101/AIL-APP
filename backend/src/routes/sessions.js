@@ -5,7 +5,9 @@ const {
   validateCustomerId,
   validateSessionTopup,
   validateSessionId,
-  validateStudioId
+  validateStudioId,
+  validateSessionEdit,
+  validateSessionDeactivate
 } = require('../middleware/validation');
 
 const router = express.Router();
@@ -52,6 +54,18 @@ router.get('/studios/:studioId/sessions/stats',
 router.get('/studios/:studioId/customers/sessions',
   validateStudioId,
   sessionController.getStudioCustomersWithSessions
+);
+
+// Edit session package
+router.patch('/sessions/:id/edit',
+  validateSessionEdit,
+  sessionController.editSession
+);
+
+// Deactivate session package
+router.patch('/sessions/:id/deactivate',
+  validateSessionDeactivate,
+  sessionController.deactivateSession
 );
 
 module.exports = router;

@@ -13,9 +13,9 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:53288', 'http://127.0.0.1:3000', 'http://127.0.0.1:53288'],
+  origin: ['http://localhost:3000', 'http://localhost:51124', 'http://localhost:53288', 'http://127.0.0.1:3000', 'http://127.0.0.1:51124', 'http://127.0.0.1:53288'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(morgan('combined'));

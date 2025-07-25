@@ -7,7 +7,6 @@ class AuthController {
   // Register new user
   async register(req, res) {
     try {
-      console.log('Registration request body:', req.body);
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         console.error('Validation errors:', errors.array());

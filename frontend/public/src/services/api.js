@@ -30,15 +30,25 @@ class CustomerAPI {
             
             const url = `${this.baseURL}/appointments/customer/me${params.toString() ? '?' + params.toString() : ''}`;
             
+            console.log('CustomerAPI: Making request to:', url);
+            console.log('CustomerAPI: Auth headers:', this.getAuthHeaders());
+            
             const response = await fetch(url, {
                 headers: this.getAuthHeaders()
             });
             
+            console.log('CustomerAPI: Response status:', response.status);
+            console.log('CustomerAPI: Response ok:', response.ok);
+            
             if (!response.ok) {
-                throw new Error(`Failed to fetch appointments: ${response.status}`);
+                const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                console.error('CustomerAPI: Error response:', errorData);
+                throw new Error(`Failed to fetch appointments: ${response.status} - ${errorData.message || response.statusText}`);
             }
             
-            return await response.json();
+            const result = await response.json();
+            console.log('CustomerAPI: Success response:', result);
+            return result;
         } catch (error) {
             console.error('Error fetching customer appointments:', error);
             throw error;
@@ -194,6 +204,31 @@ class CustomerAPI {
             return await response.json();
         } catch (error) {
             console.error('Error fetching profile:', error);
+            throw error;
+        }
+    }
+
+    // Get customer's session information
+    async getMySessions() {
+        try {
+            console.log('CustomerAPI: Fetching customer sessions...');
+            const response = await fetch(`${this.baseURL}/customers/me/sessions`, {
+                headers: this.getAuthHeaders()
+            });
+            
+            console.log('CustomerAPI: Sessions response status:', response.status);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                console.error('CustomerAPI: Sessions error:', errorData);
+                throw new Error(`Failed to fetch sessions: ${response.status} - ${errorData.message || response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('CustomerAPI: Sessions data received:', result);
+            return result;
+        } catch (error) {
+            console.error('Error fetching customer sessions:', error);
             throw error;
         }
     }

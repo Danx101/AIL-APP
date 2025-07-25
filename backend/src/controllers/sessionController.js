@@ -111,10 +111,23 @@ class SessionController {
         limit: 20
       });
 
+      // Get customer information
+      const customer = await new Promise((resolve, reject) => {
+        db.get('SELECT id, first_name, last_name, email FROM users WHERE id = ?', [customerId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!customer) {
+        return res.status(404).json({ message: 'Customer not found' });
+      }
+
       // Get active session
       const activeSession = await CustomerSession.getActiveSession(customerId, studio.id);
 
       res.json({
+        customer,
         sessions,
         activeSession,
         transactions: recentTransactions,
@@ -460,6 +473,161 @@ class SessionController {
     } catch (error) {
       console.error('Error checking session access:', error);
       return false;
+    }
+  }
+
+  /**
+   * Edit customer session package
+   * PATCH /api/v1/sessions/:id/edit
+   */
+  async editSession(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { remaining_sessions, notes } = req.body;
+
+      // Get session details
+      const session = await CustomerSession.findById(id);
+      if (!session) {
+        return res.status(404).json({ message: 'Session package not found' });
+      }
+
+      // Authorization check
+      const canAccess = await this.canAccessSession(req.user, session);
+      if (!canAccess) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Only studio owners can edit sessions
+      if (req.user.role !== 'studio_owner') {
+        return res.status(403).json({ message: 'Only studio owners can edit session packages' });
+      }
+
+      // Validate remaining sessions doesn't exceed total
+      if (remaining_sessions !== undefined && remaining_sessions > session.total_sessions) {
+        return res.status(400).json({ 
+          message: 'Remaining sessions cannot exceed total sessions' 
+        });
+      }
+
+      // Update session
+      const updatedSession = new CustomerSession({
+        id: parseInt(id),
+        customer_id: session.customer_id,
+        studio_id: session.studio_id,
+        total_sessions: session.total_sessions,
+        remaining_sessions: remaining_sessions !== undefined ? remaining_sessions : session.remaining_sessions,
+        purchase_date: session.purchase_date,
+        notes: notes !== undefined ? notes : session.notes,
+        is_active: session.is_active
+      });
+
+      await updatedSession.update();
+
+      // Create transaction record for the edit
+      const SessionTransaction = require('../models/SessionTransaction');
+      const transaction = new SessionTransaction({
+        customer_session_id: parseInt(id),
+        transaction_type: 'edit',
+        amount: remaining_sessions !== undefined ? (remaining_sessions - session.remaining_sessions) : 0,
+        created_by_user_id: req.user.userId,
+        notes: `Session package edited: ${notes || 'Sessions updated'}`
+      });
+
+      await transaction.create();
+
+      // Get updated session details
+      const finalSession = await CustomerSession.findById(id);
+
+      res.json({
+        message: 'Session package updated successfully',
+        session: finalSession
+      });
+
+    } catch (error) {
+      console.error('Error editing session:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Deactivate customer session package
+   * PATCH /api/v1/sessions/:id/deactivate
+   */
+  async deactivateSession(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { reason, notes } = req.body;
+
+      // Get session details
+      const session = await CustomerSession.findById(id);
+      if (!session) {
+        return res.status(404).json({ message: 'Session package not found' });
+      }
+
+      // Authorization check
+      const canAccess = await this.canAccessSession(req.user, session);
+      if (!canAccess) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Only studio owners can deactivate sessions
+      if (req.user.role !== 'studio_owner') {
+        return res.status(403).json({ message: 'Only studio owners can deactivate session packages' });
+      }
+
+      // Check if already deactivated
+      if (!session.is_active) {
+        return res.status(400).json({ message: 'Session package is already deactivated' });
+      }
+
+      // Deactivate session
+      const deactivatedSession = new CustomerSession({
+        id: parseInt(id),
+        customer_id: session.customer_id,
+        studio_id: session.studio_id,
+        total_sessions: session.total_sessions,
+        remaining_sessions: session.remaining_sessions,
+        purchase_date: session.purchase_date,
+        notes: `DEACTIVATED: ${reason}${notes ? ` - ${notes}` : ''}`,
+        is_active: false
+      });
+
+      await deactivatedSession.update();
+
+      // Create transaction record for the deactivation
+      const SessionTransaction = require('../models/SessionTransaction');
+      const transaction = new SessionTransaction({
+        customer_session_id: parseInt(id),
+        transaction_type: 'deactivation',
+        amount: -session.remaining_sessions, // Mark remaining sessions as lost
+        created_by_user_id: req.user.userId,
+        notes: `Session package deactivated: ${reason}`
+      });
+
+      await transaction.create();
+
+      // Get updated session details
+      const finalSession = await CustomerSession.findById(id);
+
+      res.json({
+        message: 'Session package deactivated successfully',
+        session: finalSession,
+        reason: reason
+      });
+
+    } catch (error) {
+      console.error('Error deactivating session:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   }
 

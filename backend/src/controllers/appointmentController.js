@@ -101,6 +101,7 @@ class AppointmentController {
       if (req.user.role === 'studio_owner') {
         status = 'bestätigt'; // Studio owner appointments are auto-confirmed
       }
+      
 
       // Create the appointment
       const appointment = new Appointment({
@@ -584,6 +585,7 @@ class AppointmentController {
    */
   async getMyAppointments(req, res) {
     try {
+
       // Auto-update past appointment statuses
       await Appointment.updatePastAppointmentStatuses();
 
@@ -595,6 +597,7 @@ class AppointmentController {
       const customerId = req.user.userId;
       const { status, from_date, to_date } = req.query;
 
+
       const filters = {};
       if (status) filters.status = status;
       if (from_date && to_date) {
@@ -602,12 +605,186 @@ class AppointmentController {
         filters.to_date = to_date;
       }
 
+
       const appointments = await Appointment.findByCustomer(customerId, filters);
+
 
       res.json({ appointments });
 
     } catch (error) {
-      console.error('Error getting customer appointments:', error);
+      console.error('❌ Error getting customer appointments:', error);
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+
+  /**
+   * Cancel appointment with advance notice validation
+   * PATCH /api/v1/appointments/:id/cancel
+   */
+  async cancelAppointmentWithNotice(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      // Get appointment details with studio settings
+      const appointment = await new Promise((resolve, reject) => {
+        const query = `
+          SELECT a.*, s.cancellation_advance_hours, s.name as studio_name,
+                 u.first_name as customer_first_name, u.last_name as customer_last_name
+          FROM appointments a
+          JOIN studios s ON a.studio_id = s.id
+          JOIN users u ON a.customer_id = u.id
+          WHERE a.id = ?
+        `;
+        
+        db.get(query, [id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!appointment) {
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+
+      // Authorization check - customers can only cancel their own appointments
+      if (req.user.role === 'customer' && req.user.userId !== appointment.customer_id) {
+        return res.status(403).json({ message: 'You can only cancel your own appointments' });
+      }
+
+      // Check if appointment can be cancelled
+      if (['cancelled', 'completed', 'no_show'].includes(appointment.status)) {
+        return res.status(400).json({ 
+          message: 'This appointment cannot be cancelled',
+          currentStatus: appointment.status
+        });
+      }
+
+      // Calculate time difference for advance notice validation
+      const now = new Date();
+      const appointmentDateTime = new Date(`${appointment.appointment_date}T${appointment.start_time}`);
+      const timeDifferenceHours = (appointmentDateTime - now) / (1000 * 60 * 60);
+      const requiredAdvanceHours = appointment.cancellation_advance_hours || 48;
+
+      // Check advance notice requirement (only for customers)
+      if (req.user.role === 'customer' && timeDifferenceHours < requiredAdvanceHours) {
+        return res.status(400).json({ 
+          message: `Cancellation requires ${requiredAdvanceHours} hours advance notice`,
+          requiredHours: requiredAdvanceHours,
+          currentHours: Math.round(timeDifferenceHours * 10) / 10,
+          canCancelAfter: new Date(appointmentDateTime.getTime() - (requiredAdvanceHours * 60 * 60 * 1000)).toISOString()
+        });
+      }
+
+      // Update appointment status
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE appointments SET status = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          ['cancelled', reason || 'Cancelled by customer', id],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this.changes);
+          }
+        );
+      });
+
+      // If appointment was confirmed, restore customer session
+      if (appointment.status === 'confirmed' || appointment.status === 'bestätigt') {
+        try {
+          const CustomerSession = require('../models/CustomerSession');
+          await CustomerSession.addSession(
+            appointment.customer_id,
+            appointment.studio_id,
+            1,
+            appointment.id,
+            req.user.userId,
+            'Session restored due to appointment cancellation'
+          );
+        } catch (sessionError) {
+          console.error('Error restoring session:', sessionError);
+          // Don't fail the cancellation if session restore fails
+        }
+      }
+
+      res.json({
+        message: 'Appointment cancelled successfully',
+        appointment: {
+          id: appointment.id,
+          status: 'cancelled',
+          cancellation_time: new Date().toISOString(),
+          advance_notice_hours: Math.round(timeDifferenceHours * 10) / 10
+        }
+      });
+
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Check if appointment can be postponed
+   * GET /api/v1/appointments/:id/can-postpone
+   */
+  async canPostponeAppointment(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Get appointment details with studio settings
+      const appointment = await new Promise((resolve, reject) => {
+        const query = `
+          SELECT a.*, s.postponement_advance_hours, s.name as studio_name
+          FROM appointments a
+          JOIN studios s ON a.studio_id = s.id
+          WHERE a.id = ?
+        `;
+        
+        db.get(query, [id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!appointment) {
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+
+      // Authorization check
+      if (req.user.role === 'customer' && req.user.userId !== appointment.customer_id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Check if appointment can be postponed
+      if (['cancelled', 'completed', 'no_show'].includes(appointment.status)) {
+        return res.json({ 
+          canPostpone: false,
+          reason: 'Appointment cannot be postponed',
+          currentStatus: appointment.status
+        });
+      }
+
+      // Calculate time difference for advance notice validation
+      const now = new Date();
+      const appointmentDateTime = new Date(`${appointment.appointment_date}T${appointment.start_time}`);
+      const timeDifferenceHours = (appointmentDateTime - now) / (1000 * 60 * 60);
+      const requiredAdvanceHours = appointment.postponement_advance_hours || 48;
+
+      const canPostpone = req.user.role !== 'customer' || timeDifferenceHours >= requiredAdvanceHours;
+
+      res.json({
+        canPostpone,
+        requiredHours: requiredAdvanceHours,
+        currentHours: Math.round(timeDifferenceHours * 10) / 10,
+        appointment: {
+          id: appointment.id,
+          date: appointment.appointment_date,
+          time: appointment.start_time,
+          status: appointment.status
+        }
+      });
+
+    } catch (error) {
+      console.error('Error checking postponement eligibility:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }

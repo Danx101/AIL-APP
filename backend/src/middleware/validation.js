@@ -25,8 +25,11 @@ const validateRegister = [
   
   body('phone')
     .optional({ nullable: true, checkFalsy: true })
-    .isMobilePhone('de-DE')
-    .withMessage('Please provide a valid German phone number'),
+    .custom((value) => {
+      if (!value || value.trim() === '') return true;
+      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
+    })
+    .withMessage('Please provide a valid phone number'),
   
   body('activationCode')
     .optional()
@@ -71,9 +74,12 @@ const validateProfileUpdate = [
     .withMessage('Last name must be between 2 and 50 characters'),
   
   body('phone')
-    .optional()
-    .isMobilePhone('de-DE')
-    .withMessage('Please provide a valid German phone number')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value.trim() === '') return true;
+      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
+    })
+    .withMessage('Please provide a valid phone number')
 ];
 
 // Studio creation validation
@@ -89,9 +95,12 @@ const validateStudioCreate = [
     .withMessage('Address must be between 5 and 200 characters'),
   
   body('phone')
-    .optional()
-    .isMobilePhone('de-DE')
-    .withMessage('Please provide a valid German phone number'),
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value.trim() === '') return true;
+      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
+    })
+    .withMessage('Please provide a valid phone number'),
   
   body('email')
     .optional()
@@ -272,6 +281,43 @@ const validateSessionId = [
     .withMessage('Session ID must be a positive integer')
 ];
 
+// Session edit validation
+const validateSessionEdit = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Session ID must be a positive integer'),
+  
+  body('remaining_sessions')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Remaining sessions must be a non-negative integer'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage('Notes must be a string with maximum 500 characters')
+];
+
+// Session deactivate validation
+const validateSessionDeactivate = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Session ID must be a positive integer'),
+  
+  body('reason')
+    .notEmpty()
+    .isString()
+    .isLength({ min: 3, max: 200 })
+    .withMessage('Deactivation reason is required and must be between 3 and 200 characters'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage('Notes must be a string with maximum 500 characters')
+];
+
 module.exports = {
   validateRegister,
   validateLogin,
@@ -288,5 +334,7 @@ module.exports = {
   validateAppointmentId,
   validateCustomerId,
   validateSessionTopup,
-  validateSessionId
+  validateSessionId,
+  validateSessionEdit,
+  validateSessionDeactivate
 };

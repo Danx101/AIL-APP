@@ -9,26 +9,17 @@ class App {
     }
 
     async init() {
-        console.log('App.init() called');
         this.setupEventListeners();
-        console.log('About to check API status...');
         this.checkAPIStatus();
-        console.log('About to check auth status...');
         await this.checkAuthStatus();
-        console.log('App initialization complete');
     }
 
     async checkAuthStatus() {
-        console.log('checkAuthStatus called');
-        console.log('window.authService:', window.authService);
-        console.log('isAuthenticated:', window.authService?.isAuthenticated());
         
         if (window.authService && window.authService.isAuthenticated()) {
             try {
-                console.log('Validating token...');
                 await window.authService.validateToken();
                 this.currentUser = window.authService.getCurrentUser();
-                console.log('User authenticated:', this.currentUser);
                 this.updateUIForAuthenticatedUser();
             } catch (error) {
                 console.error('Token validation failed:', error);
@@ -36,7 +27,6 @@ class App {
                 this.updateUIForGuestUser();
             }
         } else {
-            console.log('No auth or not authenticated, showing guest UI');
             this.updateUIForGuestUser();
         }
     }
@@ -101,9 +91,7 @@ class App {
     }
 
     showWelcomePage() {
-        console.log('showWelcomePage called');
         const content = document.getElementById('content');
-        console.log('content element:', content);
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-8 mx-auto">
@@ -814,18 +802,18 @@ class App {
         const sessionAlert = document.getElementById('sessionAlert');
         
         try {
-            const response = await fetch('http://localhost:3001/api/v1/customers/me/sessions', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
+            const data = await window.customerAPI.getMySessions();
             
-            if (!response.ok) {
-                throw new Error('Failed to load session information');
+            // Handle both single session and multiple sessions structure
+            let sessions = [];
+            if (data.session) {
+                // Single session structure from backend
+                sessions = [data.session];
+            } else if (data.sessions) {
+                // Multiple sessions structure (fallback)
+                sessions = data.sessions;
             }
             
-            const data = await response.json();
-            const sessions = data.sessions || [];
             
             if (sessions.length === 0) {
                 sessionDisplay.innerHTML = `
@@ -843,6 +831,7 @@ class App {
             const totalRemaining = sessions.reduce((sum, session) => {
                 return session.is_active ? sum + session.remaining_sessions : sum;
             }, 0);
+            
             
             // Display session count with color coding
             let badgeClass = 'bg-success';
@@ -1127,18 +1116,34 @@ class App {
     }
 
     getCustomerStatusBadgeClass(status) {
+        
         const classes = {
-            'pending': 'bg-warning text-dark',
+            // German terms (primary)
+            'bestätigt': 'bg-success',
+            'abgesagt': 'bg-danger',
+            'abgeschlossen': 'bg-info',
+            'nicht erschienen': 'bg-secondary',
+            // English terms (legacy support)
             'confirmed': 'bg-success',
             'cancelled': 'bg-danger',
             'completed': 'bg-info',
             'no_show': 'bg-secondary'
         };
-        return classes[status] || 'bg-secondary';
+        
+        
+        const result = classes[status] || 'bg-secondary';
+        
+        
+        return result;
     }
 
     async loadCustomerAppointments() {
         const container = document.getElementById('customerAppointmentsContainer');
+        
+        if (!container) {
+            console.error('❌ customerAppointmentsContainer not found - this should only happen in customer view');
+            return;
+        }
         
         try {
             container.innerHTML = `
@@ -1147,7 +1152,6 @@ class App {
                     <div>
                         <select class="form-select form-select-sm" id="customerStatusFilter">
                             <option value="">Alle Status</option>
-                            <option value="pending">Ausstehend</option>
                             <option value="confirmed">Bestätigt</option>
                             <option value="cancelled">Abgesagt</option>
                         </select>
@@ -1181,6 +1185,11 @@ class App {
         const listContainer = document.getElementById('customerAppointmentsList');
         const statusFilter = document.getElementById('customerStatusFilter')?.value || '';
         
+        if (!listContainer) {
+            console.error('customerAppointmentsList container not found - loadCustomerAppointments() should be called first');
+            return;
+        }
+        
         try {
             const filters = {};
             if (statusFilter) filters.status = statusFilter;
@@ -1188,6 +1197,7 @@ class App {
             // Get ALL appointments (both past and upcoming) for "Meine Termine"
             const data = await window.customerAPI.getMyAppointments(filters);
             let appointments = data.appointments || [];
+            
             
             // Sort appointments by date and time (newest first)
             appointments.sort((a, b) => {
@@ -1259,10 +1269,12 @@ class App {
                 `;
             }).join('');
         } catch (error) {
+            console.error('Error loading customer appointments:', error);
             listContainer.innerHTML = `
                 <div class="alert alert-danger">
                     <h6>Fehler beim Laden der Termine</h6>
-                    <p>${error.message}</p>
+                    <p><strong>Details:</strong> ${error.message}</p>
+                    <small class="text-muted">Prüfen Sie die Browser-Konsole für weitere Details oder kontaktieren Sie den Support.</small>
                 </div>
             `;
         }
@@ -1379,13 +1391,9 @@ class App {
             if (preselectedDate) {
                 const dateInput = document.getElementById('appointmentDate');
                 if (dateInput) {
-                    // Handle both string dates (YYYY-MM-DD) and Date objects
-                    let dateValue = preselectedDate;
-                    if (preselectedDate instanceof Date) {
-                        dateValue = preselectedDate.toISOString().split('T')[0];
-                    }
+                    // Use the timezone-safe date formatter
+                    const dateValue = this.formatDateForInput(preselectedDate);
                     dateInput.value = dateValue;
-                    console.log('Set appointment date to:', dateValue);
                 }
             }
         }, 10);
@@ -1537,7 +1545,6 @@ class App {
         };
         
         // Validate appointment data
-        console.log('Submitting appointment data:', appointmentData);
         
         if (!appointmentData.appointment_date || !appointmentData.start_time || !appointmentData.studio_id || !appointmentData.appointment_type_id) {
             this.showErrorMessage('Validation Error', 'Alle Pflichtfelder müssen ausgefüllt werden.');
@@ -1576,12 +1583,43 @@ class App {
         }
         
         try {
-            await window.customerAPI.cancelAppointment(appointmentId);
-            this.showSuccessMessage('Termin abgesagt', 'Ihr Termin wurde erfolgreich abgesagt.');
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}/cancel`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reason: 'Stornierung durch Kunden'
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                // Handle advance notice requirement errors
+                if (response.status === 400 && result.requiredHours) {
+                    this.showErrorMessage(
+                        'Stornierung nicht möglich', 
+                        `Terminabsagen sind nur ${result.requiredHours} Stunden im Voraus möglich. ` +
+                        `Sie haben noch ${result.currentHours} Stunden Zeit. ` +
+                        `Bitte kontaktieren Sie das Studio für kurzfristige Änderungen.`
+                    );
+                    return;
+                }
+                throw new Error(result.message || 'Fehler beim Absagen des Termins');
+            }
+
+            this.showSuccessMessage(
+                'Termin abgesagt', 
+                `Ihr Termin wurde erfolgreich abgesagt. Sie erhielten ${result.appointment.advance_notice_hours} Stunden Vorlaufzeit.`
+            );
             
             // Refresh views
             this.loadCustomerCalendar();
             this.loadCustomerAppointments();
+            this.loadCustomerSessions(); // Refresh session count if restored
+
         } catch (error) {
             console.error('Error cancelling appointment:', error);
             this.showErrorMessage('Fehler beim Absagen', error.message);
@@ -1589,10 +1627,52 @@ class App {
     }
 
     async rescheduleAppointment(appointmentId) {
-        // For now, just show the request form with a note
-        this.showAppointmentRequestForm();
-        // TODO: Implement proper rescheduling logic
-        this.showInfoMessage('Umbuchen', 'Buchen Sie einen neuen Termin und sagen Sie den alten ab, oder kontaktieren Sie das Studio direkt.');
+        try {
+            // First check if appointment can be postponed
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}/can-postpone`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Prüfen der Umbuchung');
+            }
+
+            if (!result.canPostpone) {
+                this.showErrorMessage(
+                    'Umbuchung nicht möglich',
+                    result.reason || 'Dieser Termin kann nicht umgebucht werden.'
+                );
+                return;
+            }
+
+            // Check advance notice requirement
+            if (result.currentHours < result.requiredHours) {
+                this.showErrorMessage(
+                    'Umbuchung nicht möglich',
+                    `Terminumbuchungen sind nur ${result.requiredHours} Stunden im Voraus möglich. ` +
+                    `Sie haben noch ${result.currentHours} Stunden Zeit. ` +
+                    `Bitte kontaktieren Sie das Studio für kurzfristige Änderungen.`
+                );
+                return;
+            }
+
+            // Show appointment request form for rescheduling
+            this.showSuccessMessage(
+                'Umbuchung möglich',
+                `Sie können Ihren Termin vom ${result.appointment.date} um ${result.appointment.time} Uhr umbuchen. ` +
+                `Bitte wählen Sie einen neuen Termin. Ihr alter Termin wird automatisch storniert.`
+            );
+            
+            this.showAppointmentRequestForm();
+
+        } catch (error) {
+            console.error('Error checking reschedule eligibility:', error);
+            this.showErrorMessage('Fehler beim Umbuchen', error.message);
+        }
     }
 
     showSuccessMessage(title, message) {
@@ -1763,23 +1843,16 @@ class App {
                         <div class="card-body">
                             <div id="activationCodeError" class="alert alert-danger d-none"></div>
                             <div id="activationCodeSuccess" class="alert alert-success d-none"></div>
+                            <div class="text-center mb-4">
+                                <p class="mb-3">
+                                    <i class="fas fa-info-circle text-info me-2"></i>
+                                    Es wird <strong>1 Aktivierungscode</strong> mit einer Gültigkeit von <strong>3 Tagen</strong> generiert.
+                                </p>
+                            </div>
                             <form id="activationCodeForm">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="codeCountActivation" class="form-label">Anzahl Codes</label>
-                                            <input type="number" class="form-control" id="codeCountActivation" value="10" min="1" max="100">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="expiresInDaysActivation" class="form-label">Gültig für (Tage)</label>
-                                            <input type="number" class="form-control" id="expiresInDaysActivation" value="365" min="1" max="365">
-                                        </div>
-                                    </div>
-                                </div>
                                 <button type="submit" class="btn btn-primary w-100" id="generateActivationSubmitBtn">
-                                    Aktivierungscodes generieren
+                                    <i class="fas fa-plus-circle me-2"></i>
+                                    Aktivierungscode generieren
                                 </button>
                             </form>
                             <hr>
@@ -1813,9 +1886,10 @@ class App {
     async handleActivationCodeGeneration(e, studioId) {
         e.preventDefault();
         
+        // Fixed values: 1 code, 3-day expiry (as per business requirements)
         const formData = {
-            count: parseInt(document.getElementById('codeCountActivation').value),
-            expiresInDays: parseInt(document.getElementById('expiresInDaysActivation').value)
+            count: 1,
+            expiresInDays: 3
         };
         
         const submitBtn = document.getElementById('generateActivationSubmitBtn');
@@ -1824,7 +1898,7 @@ class App {
         
         try {
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Generiere Codes...';
+            submitBtn.textContent = 'Generiere Code...';
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
@@ -1850,17 +1924,14 @@ class App {
             `;
             successDiv.classList.remove('d-none');
             
-            // Reset form
-            document.getElementById('activationCodeForm').reset();
-            document.getElementById('codeCountActivation').value = 10;
-            document.getElementById('expiresInDaysActivation').value = 365;
+            // Form reset (no fields to reset anymore)
             
         } catch (error) {
             errorDiv.textContent = error.message;
             errorDiv.classList.remove('d-none');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Aktivierungscodes generieren';
+            submitBtn.textContent = 'Aktivierungscode generieren';
         }
     }
 
@@ -2069,7 +2140,6 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            console.log('Registration data:', formData);
             const result = await window.authService.register(formData);
             this.currentUser = result.user;
             
@@ -2466,7 +2536,7 @@ class App {
         
         try {
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Generiere Codes...';
+            submitBtn.textContent = 'Generiere Code...';
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
@@ -2736,8 +2806,7 @@ class App {
                                                     <label class="form-label">Status Filter</label>
                                                     <select class="form-select form-select-sm" id="appointmentStatusFilter">
                                                         <option value="">Alle</option>
-                                                        <option value="pending">Ausstehend</option>
-                                                        <option value="confirmed">Bestätigt</option>
+                                                                                    <option value="confirmed">Bestätigt</option>
                                                         <option value="cancelled">Abgesagt</option>
                                                         <option value="completed">Abgeschlossen</option>
                                                         <option value="no_show">Nicht erschienen</option>
@@ -2817,7 +2886,6 @@ class App {
 
     async loadAppointments(studioId) {
         if (!studioId) {
-            console.warn('No studio ID provided to loadAppointments');
             return;
         }
         
@@ -2889,23 +2957,39 @@ class App {
     }
 
     getStatusBadgeClass(status) {
+        
         const classes = {
-            'pending': 'bg-warning',
+            // German terms (primary)
+            'bestätigt': 'bg-success',
+            'abgesagt': 'bg-danger',
+            'abgeschlossen': 'bg-info',
+            'nicht erschienen': 'bg-secondary',
+            // English terms (legacy support)
             'confirmed': 'bg-success',
             'cancelled': 'bg-danger',
             'completed': 'bg-info',
             'no_show': 'bg-secondary'
         };
-        return classes[status] || 'bg-secondary';
+        
+        
+        const result = classes[status] || 'bg-secondary';
+        
+        
+        return result;
     }
 
     getStatusText(status) {
         const texts = {
-            'pending': 'Ausstehend',
+            // English to German translation (legacy support)
             'confirmed': 'Bestätigt',
             'cancelled': 'Abgesagt',
             'completed': 'Abgeschlossen',
-            'no_show': 'Nicht erschienen'
+            'no_show': 'Nicht erschienen',
+            // German terms (primary)
+            'bestätigt': 'Bestätigt',
+            'abgesagt': 'Abgesagt',
+            'abgeschlossen': 'Abgeschlossen',
+            'nicht erschienen': 'Nicht erschienen'
         };
         return texts[status] || status;
     }
@@ -2971,7 +3055,12 @@ class App {
             
             // Color based on status
             const statusColors = {
-                'pending': '#ffc107',
+                // German statuses (primary)
+                'bestätigt': '#28a745',
+                'abgeschlossen': '#17a2b8', 
+                'abgesagt': '#dc3545',
+                'nicht erschienen': '#6c757d',
+                // English fallbacks
                 'confirmed': '#28a745',
                 'cancelled': '#dc3545',
                 'completed': '#17a2b8',
@@ -3017,7 +3106,6 @@ class App {
             <div class="mt-3">
                 <h6>Status-Legende:</h6>
                 <div class="d-flex flex-wrap gap-3">
-                    <span class="badge" style="background: #ffc107; color: black;">Ausstehend</span>
                     <span class="badge" style="background: #28a745;">Bestätigt</span>
                     <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
                     <span class="badge" style="background: #dc3545;">Abgesagt</span>
@@ -3090,7 +3178,12 @@ class App {
             
             // Color based on status
             const statusColors = {
-                'pending': '#ffc107',
+                // German statuses (primary)
+                'bestätigt': '#28a745',
+                'abgeschlossen': '#17a2b8', 
+                'abgesagt': '#dc3545',
+                'nicht erschienen': '#6c757d',
+                // English fallbacks
                 'confirmed': '#28a745',
                 'cancelled': '#dc3545',
                 'completed': '#17a2b8',
@@ -3113,6 +3206,7 @@ class App {
                             font-size: 12px; 
                             cursor: pointer;
                             box-shadow: 0 1px 3px rgba(0,0,0,0.2);"
+                     onclick="window.app.editAppointment(${appointment.id})"
                      title="Klicken für Details">
                     <div style="font-weight: bold; margin-bottom: 2px;">
                         ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
@@ -3135,7 +3229,6 @@ class App {
             <div class="mt-3">
                 <h6>Status-Legende:</h6>
                 <div class="d-flex flex-wrap gap-3">
-                    <span class="badge" style="background: #ffc107; color: black;">Ausstehend</span>
                     <span class="badge" style="background: #28a745;">Bestätigt</span>
                     <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
                     <span class="badge" style="background: #dc3545;">Abgesagt</span>
@@ -3205,8 +3298,8 @@ class App {
             </div>
         `;
 
-        // Set default date to preselected date or today
-        const defaultDate = preselectedDate ? preselectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        // Set default date to preselected date or today using timezone-safe formatting
+        const defaultDate = preselectedDate ? this.formatDateForInput(preselectedDate) : this.formatDateForInput(new Date());
         document.getElementById('appointmentDate').value = defaultDate;
 
         // Event listeners
@@ -3406,9 +3499,125 @@ class App {
         }
     }
 
-    editAppointment(appointmentId) {
-        // TODO: Implement edit functionality
-        alert('Edit functionality coming soon!');
+    async editAppointment(appointmentId) {
+        try {
+            // Fetch appointment details
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load appointment details');
+            }
+
+            const result = await response.json();
+            
+            // Extract appointment data from API response
+            const appointment = result.appointment || result;
+
+            // Show appointment details modal
+            this.showAppointmentDetailsModal(appointment);
+        } catch (error) {
+            console.error('Error loading appointment details:', error);
+            alert('Fehler beim Laden der Termindetails. Bitte versuchen Sie es erneut.');
+        }
+    }
+
+    showAppointmentDetailsModal(appointment) {
+        
+        // Create modal HTML
+        const modalHTML = `
+            <div class="modal fade" id="appointmentDetailsModal" tabindex="-1" aria-labelledby="appointmentDetailsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title" id="appointmentDetailsModalLabel">
+                                <i class="fas fa-calendar-alt me-2"></i>Termindetails
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-user me-2"></i>Kunde</h6>
+                                    <p class="mb-3">${(appointment.customer_first_name || 'Unbekannt')} ${(appointment.customer_last_name || 'Kunde')}</p>
+                                    
+                                    <h6><i class="fas fa-calendar me-2"></i>Datum & Zeit</h6>
+                                    <p class="mb-3">${this.formatDate(appointment.appointment_date)} um ${appointment.start_time}</p>
+                                    
+                                    <h6><i class="fas fa-clock me-2"></i>Dauer</h6>
+                                    <p class="mb-3">60 Minuten (bis ${this.calculateEndTime(appointment.start_time, 60)})</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-cogs me-2"></i>Behandlungsart</h6>
+                                    <p class="mb-3">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</p>
+                                    
+                                    <h6><i class="fas fa-info-circle me-2"></i>Status</h6>
+                                    <p class="mb-3">
+                                        <span class="badge ${this.getStatusBadgeClass(appointment.status)}">${this.getStatusText(appointment.status)}</span>
+                                    </p>
+                                    
+                                    ${appointment.notes ? `
+                                    <h6><i class="fas fa-sticky-note me-2"></i>Notizen</h6>
+                                    <p class="mb-3">${appointment.notes}</p>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                            <button type="button" class="btn btn-warning me-2" onclick="window.app.editAppointmentDetails(${appointment.id})">
+                                <i class="fas fa-edit me-1"></i>Bearbeiten
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="window.app.changeAppointmentStatus(${appointment.id})">
+                                <i class="fas fa-exchange-alt me-1"></i>Status ändern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('appointmentDetailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('appointmentDetailsModal'));
+        modal.show();
+
+        // Clean up modal after hiding
+        document.getElementById('appointmentDetailsModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString + 'T00:00:00');
+        return date.toLocaleDateString('de-DE', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+
+    async editAppointmentDetails(appointmentId) {
+        // TODO: Implement appointment editing form
+        alert('Terminbearbeitung wird in Kürze implementiert!');
+    }
+
+    async changeAppointmentStatus(appointmentId) {
+        // TODO: Implement status change functionality
+        alert('Status ändern wird in Kürze implementiert!');
     }
 
     calculateEndTime(startTime, durationMinutes) {
@@ -3580,7 +3789,7 @@ class App {
                         e.preventDefault();
                         const customerId = item.dataset.customerId;
                         const customerName = item.querySelector('h6').textContent;
-                        this.loadCustomerAppointments(customerId, customerName);
+                        this.loadStudioCustomerAppointments(customerId, customerName);
                         
                         // Remove active class from all items and add to clicked item
                         document.querySelectorAll('.customer-item').forEach(i => i.classList.remove('active'));
@@ -3598,7 +3807,7 @@ class App {
         }
     }
 
-    async loadCustomerAppointments(customerId, customerName) {
+    async loadStudioCustomerAppointments(customerId, customerName) {
         const appointmentsDiv = document.getElementById('customerAppointments');
         
         if (!appointmentsDiv) {
@@ -3994,7 +4203,7 @@ class App {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    amount: amount,
+                    sessionCount: amount,
                     notes: notes
                 })
             });
@@ -4312,6 +4521,24 @@ class App {
         }
     }
 
+    // Helper function to format date to YYYY-MM-DD without timezone issues
+    formatDateForInput(date) {
+        if (!date) return '';
+        
+        // Ensure we have a Date object
+        if (typeof date === 'string') {
+            const [year, month, day] = date.split('-').map(Number);
+            date = new Date(year, month - 1, day);
+        }
+        
+        // Format using local date components to avoid timezone shifts
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
+    }
+
     async loadMonthlyAppointmentIndicators() {
         if (!this.currentStudioId || !this.currentDate) return;
         
@@ -4344,18 +4571,73 @@ class App {
                 appointmentsByDate[date].push(appointment);
             });
             
-            // Update calendar indicators
-            Object.keys(appointmentsByDate).forEach(date => {
-                const dayElement = document.getElementById(`day-${date}`);
-                if (dayElement) {
-                    const count = appointmentsByDate[date].length;
-                    dayElement.innerHTML = `<div style="width: 12px; height: 12px; background-color: #7030a0; border-radius: 50%; margin: 0 auto;"></div>`;
+            // Configuration for density visualization
+            const maxAppointments = this.maxAppointmentsPerDay || 8; // Default to 8, configurable later
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            // Apply density visualization to calendar day cells themselves
+            const allDaysInMonth = this.getAllDaysInCurrentMonth();
+            allDaysInMonth.forEach(date => {
+                const dayCell = document.querySelector(`[data-date="${date}"]`);
+                if (dayCell) {
+                    const count = appointmentsByDate[date] ? appointmentsByDate[date].length : 0;
+                    const density = Math.min(count / maxAppointments, 1);
+                    const isToday = date === todayStr;
+                    
+                    // Apply density and today styling to the entire cell
+                    this.applyDensityStylesToCell(dayCell, density, isToday);
+                    
+                    // Clear the indicator div since we're styling the whole cell
+                    const dayElement = document.getElementById(`day-${date}`);
+                    if (dayElement) {
+                        dayElement.innerHTML = '';
+                    }
                 }
             });
             
         } catch (error) {
             console.error('Error loading monthly appointments:', error);
         }
+    }
+
+    applyDensityStylesToCell(dayCell, density, isToday = false) {
+        const baseColor = '#a98dc1'; // Secondary brand color
+        const fillHeight = Math.round(density * 100); // Percentage fill from bottom
+        
+        // Create gradient background that fills from bottom
+        const backgroundGradient = `linear-gradient(to top, 
+            ${baseColor}${density > 0 ? 'CC' : '20'} 0%, 
+            ${baseColor}${density > 0 ? 'CC' : '20'} ${fillHeight}%, 
+            transparent ${fillHeight}%, 
+            transparent 100%)`;
+        
+        // Apply background gradient
+        dayCell.style.background = backgroundGradient;
+        
+        // Add gold border for today
+        if (isToday) {
+            dayCell.style.border = '3px solid #FFD700';
+            dayCell.style.boxShadow = '0 0 6px rgba(255, 215, 0, 0.6)';
+        } else {
+            // Reset border if not today
+            dayCell.style.border = '1px solid #dee2e6';
+            dayCell.style.boxShadow = 'none';
+        }
+    }
+
+    getAllDaysInCurrentMonth() {
+        const days = [];
+        const year = this.currentDate.getFullYear();
+        const month = this.currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            days.push(dateString);
+        }
+        
+        return days;
     }
 }
 

@@ -369,6 +369,131 @@ class StudioController {
       res.status(500).json({ message: 'Internal server error' });
     }
   }
+
+  /**
+   * Get studio settings
+   * GET /api/v1/studios/:id/settings
+   */
+  async getStudioSettings(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Authorization check - only studio owner can access their studio settings
+      const studio = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [id, req.user.userId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found or access denied' });
+      }
+
+      res.json({
+        settings: {
+          cancellation_advance_hours: studio.cancellation_advance_hours || 48,
+          postponement_advance_hours: studio.postponement_advance_hours || 48,
+          max_advance_booking_days: studio.max_advance_booking_days || 30,
+          settings_updated_at: studio.settings_updated_at
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching studio settings:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Update studio settings
+   * PATCH /api/v1/studios/:id/settings
+   */
+  async updateStudioSettings(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { 
+        cancellation_advance_hours, 
+        postponement_advance_hours, 
+        max_advance_booking_days 
+      } = req.body;
+
+      // Authorization check - only studio owner can update their studio settings
+      const studio = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [id, req.user.userId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found or access denied' });
+      }
+
+      // Build update query dynamically based on provided fields
+      const updates = [];
+      const values = [];
+
+      if (cancellation_advance_hours !== undefined) {
+        updates.push('cancellation_advance_hours = ?');
+        values.push(cancellation_advance_hours);
+      }
+
+      if (postponement_advance_hours !== undefined) {
+        updates.push('postponement_advance_hours = ?');
+        values.push(postponement_advance_hours);
+      }
+
+      if (max_advance_booking_days !== undefined) {
+        updates.push('max_advance_booking_days = ?');
+        values.push(max_advance_booking_days);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ message: 'No settings provided to update' });
+      }
+
+      // Add timestamp and studio ID
+      updates.push('settings_updated_at = CURRENT_TIMESTAMP');
+      values.push(id);
+
+      const query = `UPDATE studios SET ${updates.join(', ')} WHERE id = ?`;
+
+      await new Promise((resolve, reject) => {
+        db.run(query, values, function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        });
+      });
+
+      // Fetch updated settings
+      const updatedStudio = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM studios WHERE id = ?', [id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      res.json({
+        message: 'Studio settings updated successfully',
+        settings: {
+          cancellation_advance_hours: updatedStudio.cancellation_advance_hours,
+          postponement_advance_hours: updatedStudio.postponement_advance_hours,
+          max_advance_booking_days: updatedStudio.max_advance_booking_days,
+          settings_updated_at: updatedStudio.settings_updated_at
+        }
+      });
+
+    } catch (error) {
+      console.error('Error updating studio settings:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
 }
 
 module.exports = new StudioController();

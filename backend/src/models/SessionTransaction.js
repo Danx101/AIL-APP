@@ -26,7 +26,7 @@ class SessionTransaction {
     if (!this.transaction_type) errors.push('Transaction type is required');
     if (!this.created_by_user_id) errors.push('Created by user ID is required');
     
-    const validTypes = ['purchase', 'deduction', 'topup', 'refund'];
+    const validTypes = ['purchase', 'deduction', 'topup', 'refund', 'edit', 'deactivation'];
     if (this.transaction_type && !validTypes.includes(this.transaction_type)) {
       errors.push(`Invalid transaction type. Must be one of: ${validTypes.join(', ')}`);
     }
@@ -278,8 +278,10 @@ class SessionTransaction {
           COUNT(CASE WHEN st.transaction_type = 'topup' THEN 1 END) as topups,
           COUNT(CASE WHEN st.transaction_type = 'deduction' THEN 1 END) as deductions,
           COUNT(CASE WHEN st.transaction_type = 'refund' THEN 1 END) as refunds,
+          COUNT(CASE WHEN st.transaction_type = 'edit' THEN 1 END) as edits,
+          COUNT(CASE WHEN st.transaction_type = 'deactivation' THEN 1 END) as deactivations,
           SUM(CASE WHEN st.transaction_type IN ('purchase', 'topup') THEN st.amount ELSE 0 END) as sessions_added,
-          SUM(CASE WHEN st.transaction_type IN ('deduction', 'refund') THEN ABS(st.amount) ELSE 0 END) as sessions_deducted
+          SUM(CASE WHEN st.transaction_type IN ('deduction', 'refund', 'deactivation') THEN ABS(st.amount) ELSE 0 END) as sessions_deducted
         FROM session_transactions st
         LEFT JOIN customer_sessions cs ON st.customer_session_id = cs.id
         WHERE cs.studio_id = ? 

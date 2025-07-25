@@ -552,23 +552,16 @@ class App {
                         <div class="card-body">
                             <div id="activationCodeError" class="alert alert-danger d-none"></div>
                             <div id="activationCodeSuccess" class="alert alert-success d-none"></div>
+                            <div class="text-center mb-4">
+                                <p class="mb-3">
+                                    <i class="fas fa-info-circle text-info me-2"></i>
+                                    Es wird <strong>1 Aktivierungscode</strong> mit einer Gültigkeit von <strong>3 Tagen</strong> generiert.
+                                </p>
+                            </div>
                             <form id="activationCodeForm">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="codeCountActivation" class="form-label">Anzahl Codes</label>
-                                            <input type="number" class="form-control" id="codeCountActivation" value="10" min="1" max="100">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="expiresInDaysActivation" class="form-label">Gültig für (Tage)</label>
-                                            <input type="number" class="form-control" id="expiresInDaysActivation" value="365" min="1" max="365">
-                                        </div>
-                                    </div>
-                                </div>
                                 <button type="submit" class="btn btn-primary w-100" id="generateActivationSubmitBtn">
-                                    Aktivierungscodes generieren
+                                    <i class="fas fa-plus-circle me-2"></i>
+                                    Aktivierungscode generieren
                                 </button>
                             </form>
                             <hr>
@@ -602,9 +595,10 @@ class App {
     async handleActivationCodeGeneration(e, studioId) {
         e.preventDefault();
         
+        // Fixed values: 1 code, 3-day expiry (as per business requirements)
         const formData = {
-            count: parseInt(document.getElementById('codeCountActivation').value),
-            expiresInDays: parseInt(document.getElementById('expiresInDaysActivation').value)
+            count: 1,
+            expiresInDays: 3
         };
         
         const submitBtn = document.getElementById('generateActivationSubmitBtn');
@@ -639,17 +633,14 @@ class App {
             `;
             successDiv.classList.remove('d-none');
             
-            // Reset form
-            document.getElementById('activationCodeForm').reset();
-            document.getElementById('codeCountActivation').value = 10;
-            document.getElementById('expiresInDaysActivation').value = 365;
+            // Form reset (no fields to reset anymore)
             
         } catch (error) {
             errorDiv.textContent = error.message;
             errorDiv.classList.remove('d-none');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Aktivierungscodes generieren';
+            submitBtn.textContent = 'Aktivierungscode generieren';
         }
     }
 
