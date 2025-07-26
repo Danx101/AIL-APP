@@ -539,5 +539,7 @@ PATCH /api/v1/appointments/:id/complete - Complete appointment (deduct session)
 was this feature fully integrated already?
 > i cannot select appointments blocks from the calender to see more details and edit, is this on the tasklist already?
 > there should be an option to set up for studio owners to set up how much in advance do the customers can cancel or postpone the appointment. by default 48 hours. 
+>adding customers manually function - in this case customer is not gonna use applicaton at all. the studio owner will add appointments just for its own documentation. 
+>
 
 

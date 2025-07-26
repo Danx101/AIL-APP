@@ -35,8 +35,11 @@ class SessionController {
         return res.status(404).json({ message: 'No associated studio found' });
       }
 
-      // Get active session
-      const activeSession = await CustomerSession.getActiveSession(customerId, studio.id);
+      // Get session block queue
+      const blockQueue = await CustomerSession.getCustomerBlockQueue(customerId, studio.id);
+      
+      // Get total remaining sessions
+      const totalRemaining = await CustomerSession.getTotalRemainingSessions(customerId, studio.id);
       
       // Get recent transactions
       const recentTransactions = await SessionTransaction.findByCustomer(customerId, {
@@ -45,10 +48,11 @@ class SessionController {
       });
 
       res.json({
-        session: activeSession,
+        blocks: blockQueue,
+        totalRemainingSessions: totalRemaining,
         transactions: recentTransactions,
-        hasActiveSessions: activeSession && activeSession.remaining_sessions > 0,
-        remainingSessions: activeSession ? activeSession.remaining_sessions : 0
+        hasActiveSessions: totalRemaining > 0,
+        remainingSessions: totalRemaining // For backward compatibility
       });
 
     } catch (error) {
@@ -142,7 +146,74 @@ class SessionController {
   }
 
   /**
-   * Add sessions to customer (top-up)
+   * Customer purchases own session block
+   * POST /api/v1/customers/me/sessions/purchase
+   */
+  async purchaseSessionBlock(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { sessionCount, notes } = req.body;
+
+      // Only customers can purchase sessions for themselves
+      if (req.user.role !== 'customer') {
+        return res.status(403).json({ message: 'Access denied - customer only' });
+      }
+
+      const customerId = req.user.userId;
+
+      // Validate session count - supports 10, 20, 30, 40 session blocks
+      if (![10, 20, 30, 40].includes(sessionCount)) {
+        return res.status(400).json({ message: 'Session count must be 10, 20, 30, or 40' });
+      }
+
+      // Get customer's associated studio
+      const studio = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT s.id, s.name
+          FROM studios s
+          INNER JOIN activation_codes ac ON s.id = ac.studio_id
+          WHERE ac.used_by_user_id = ? AND ac.is_used = 1
+          LIMIT 1
+        `, [customerId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!studio) {
+        return res.status(404).json({ message: 'No associated studio found' });
+      }
+
+      // Add session block using new FIFO system
+      const result = await CustomerSession.addSessionBlock(
+        customerId,
+        studio.id,
+        sessionCount,
+        customerId, // Customer purchasing for themselves
+        notes || `Customer purchased ${sessionCount} session block`,
+        'standard'
+      );
+
+      res.json({
+        message: `Successfully purchased ${sessionCount} sessions`,
+        sessionId: result.sessionId,
+        transactionId: result.transactionId,
+        blockOrder: result.blockOrder,
+        totalRemainingSessions: await CustomerSession.getTotalRemainingSessions(customerId, studio.id)
+      });
+
+    } catch (error) {
+      console.error('Error purchasing session block:', error);
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+
+  /**
+   * Add sessions to customer (top-up) - Studio Owner Only
    * POST /api/v1/customers/:customerId/sessions/topup
    */
   async topupCustomerSessions(req, res) {
@@ -160,9 +231,9 @@ class SessionController {
         return res.status(403).json({ message: 'Access denied - studio owner only' });
       }
 
-      // Validate session count
-      if (![10, 20].includes(sessionCount)) {
-        return res.status(400).json({ message: 'Session count must be 10 or 20' });
+      // Validate session count - now supports 10, 20, 30, 40 session blocks
+      if (![10, 20, 30, 40].includes(sessionCount)) {
+        return res.status(400).json({ message: 'Session count must be 10, 20, 30, or 40' });
       }
 
       // Get studio owner's studio
@@ -195,13 +266,14 @@ class SessionController {
         return res.status(403).json({ message: 'Customer not associated with your studio' });
       }
 
-      // Add sessions
-      const result = await CustomerSession.addSessions(
+      // Add session block using new FIFO system
+      const result = await CustomerSession.addSessionBlock(
         customerId,
         studio.id,
         sessionCount,
         req.user.userId,
-        notes || `Studio owner added ${sessionCount} sessions`
+        notes || `Studio owner added ${sessionCount} session block`,
+        'standard'
       );
 
       res.json({
@@ -307,9 +379,9 @@ class SessionController {
 
       await updatedAppointment.update();
 
-      // Deduct session
+      // Deduct session using FIFO system
       try {
-        const sessionResult = await CustomerSession.deductSession(
+        const sessionResult = await CustomerSession.deductSessionFIFO(
           appointment.customer_id,
           appointment.studio_id,
           appointment.id,
@@ -627,6 +699,86 @@ class SessionController {
 
     } catch (error) {
       console.error('Error deactivating session:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get customer's session block queue
+   * GET /api/v1/customers/:customerId/sessions/blocks
+   */
+  async getCustomerBlockQueue(req, res) {
+    try {
+      const { customerId } = req.params;
+
+      // Authorization check: Studio owners and customers can access this
+      if (req.user.role === 'customer' && req.user.userId !== parseInt(customerId)) {
+        return res.status(403).json({ message: 'Access denied - can only view own sessions' });
+      }
+
+      if (req.user.role === 'studio_owner') {
+        // Verify customer belongs to this studio
+        const studio = await new Promise((resolve, reject) => {
+          db.get('SELECT * FROM studios WHERE owner_id = ?', [req.user.userId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (!studio) {
+          return res.status(404).json({ message: 'Studio not found' });
+        }
+
+        const customerStudio = await new Promise((resolve, reject) => {
+          db.get(`
+            SELECT s.id
+            FROM studios s
+            INNER JOIN activation_codes ac ON s.id = ac.studio_id
+            WHERE ac.used_by_user_id = ? AND ac.is_used = 1 AND s.id = ?
+            LIMIT 1
+          `, [customerId, studio.id], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (!customerStudio) {
+          return res.status(403).json({ message: 'Customer not associated with your studio' });
+        }
+      }
+
+      // Get customer's studio
+      const studio = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT s.id
+          FROM studios s
+          INNER JOIN activation_codes ac ON s.id = ac.studio_id
+          WHERE ac.used_by_user_id = ? AND ac.is_used = 1
+          LIMIT 1
+        `, [customerId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!studio) {
+        return res.status(404).json({ message: 'No associated studio found' });
+      }
+
+      // Get block queue
+      const blockQueue = await CustomerSession.getCustomerBlockQueue(customerId, studio.id);
+      
+      // Get total remaining sessions
+      const totalRemaining = await CustomerSession.getTotalRemainingSessions(customerId, studio.id);
+
+      res.json({
+        blocks: blockQueue,
+        totalRemainingSessions: totalRemaining,
+        hasActiveSessions: totalRemaining > 0
+      });
+
+    } catch (error) {
+      console.error('Error getting customer block queue:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }

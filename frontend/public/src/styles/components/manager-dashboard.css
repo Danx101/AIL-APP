@@ -1,0 +1,314 @@
+/* Manager Dashboard Styles */
+
+.manager-dashboard {
+    display: flex;
+    min-height: 100vh;
+    background: var(--gradient-bg);
+}
+
+.manager-dashboard .sidebar {
+    width: var(--sidebar-width);
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-medium);
+    z-index: 1020;
+}
+
+.manager-dashboard .main-content {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    min-height: 100vh;
+}
+
+/* Sidebar specific styles */
+.manager-dashboard .sidebar-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.manager-dashboard .sidebar-brand h5 {
+    background: var(--gradient-purple);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.manager-dashboard .sidebar-nav {
+    padding: 1rem;
+}
+
+.manager-dashboard .nav-link {
+    border-radius: var(--border-radius);
+    margin-bottom: 0.25rem;
+    transition: all var(--transition-speed) ease;
+    color: var(--dark-color);
+    border: 1px solid transparent;
+}
+
+.manager-dashboard .nav-link:hover {
+    background: rgba(232, 121, 249, 0.1);
+    border-color: rgba(232, 121, 249, 0.2);
+    color: var(--primary);
+    transform: translateX(4px);
+}
+
+.manager-dashboard .nav-link.active {
+    background: var(--gradient-purple);
+    color: white;
+    box-shadow: var(--shadow-light);
+}
+
+.manager-dashboard .sidebar-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Dashboard Cards */
+.manager-dashboard .card {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border-radius: var(--glass-border-radius);
+    transition: all var(--transition-speed) ease;
+}
+
+.manager-dashboard .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.manager-dashboard .card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Icon circles */
+.icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+/* Statistics cards */
+.manager-dashboard .stats-card {
+    transition: all var(--transition-speed) ease;
+}
+
+.manager-dashboard .stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-heavy);
+}
+
+/* Table styles */
+.manager-dashboard .table {
+    background: transparent;
+}
+
+.manager-dashboard .table th {
+    border-top: none;
+    border-bottom: 2px solid rgba(232, 121, 249, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+.manager-dashboard .table td {
+    border-color: rgba(255, 255, 255, 0.1);
+    vertical-align: middle;
+}
+
+.manager-dashboard .table tbody tr:hover {
+    background: rgba(232, 121, 249, 0.05);
+}
+
+/* Button styles */
+.manager-dashboard .btn-primary {
+    background: var(--gradient-purple);
+    border: none;
+    box-shadow: var(--shadow-light);
+    transition: all var(--transition-speed) ease;
+}
+
+.manager-dashboard .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.manager-dashboard .btn-outline-primary {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.manager-dashboard .btn-outline-primary:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+/* Badge styles */
+.manager-dashboard .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+}
+
+/* Loading animations */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Responsive design */
+@media (max-width: 991.98px) {
+    .manager-dashboard .sidebar {
+        transform: translateX(-100%);
+        transition: transform var(--transition-speed) ease;
+    }
+    
+    .manager-dashboard .sidebar.show {
+        transform: translateX(0);
+    }
+    
+    .manager-dashboard .main-content {
+        margin-left: 0;
+    }
+    
+    .mobile-header {
+        display: block !important;
+    }
+}
+
+/* Quick actions card */
+.manager-dashboard .quick-actions .btn {
+    text-align: left;
+    padding: 0.75rem 1rem;
+}
+
+.manager-dashboard .quick-actions .btn i {
+    width: 20px;
+}
+
+/* Empty state styles */
+.manager-dashboard .empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.manager-dashboard .empty-state .display-4 {
+    opacity: 0.3;
+}
+
+/* Connection status indicators */
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.status-indicator.active {
+    background-color: var(--success-color);
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.inactive {
+    background-color: var(--warning-color);
+}
+
+.status-indicator.error {
+    background-color: var(--danger-color);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+/* Action buttons */
+.manager-dashboard .action-buttons .btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .manager-dashboard .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .manager-dashboard .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .manager-dashboard .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Toast notifications positioning */
+#toast-container {
+    z-index: 1100;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+}
+
+/* Dashboard content spacing */
+.manager-dashboard .main-content .container-fluid {
+    max-width: 1400px;
+}
+
+/* Chart and graph containers */
+.manager-dashboard .chart-container {
+    position: relative;
+    height: 300px;
+    margin: 1rem 0;
+}
+
+/* Sync status animations */
+.sync-status.syncing {
+    animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+/* Accessibility improvements */
+.manager-dashboard .btn:focus,
+.manager-dashboard .nav-link:focus {
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+}
+
+/* Print styles */
+@media print {
+    .manager-dashboard .sidebar,
+    .manager-dashboard .sidebar-footer,
+    .manager-dashboard .action-buttons {
+        display: none;
+    }
+    
+    .manager-dashboard .main-content {
+        margin-left: 0;
+    }
+}

@@ -26,6 +26,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
     const { runMigration: runSessionMigration } = require('./migrations/session_system');
     runSessionMigration().catch(console.error);
     
+    // Run leads system migration (includes Google Sheets integration tables)
+    const leadsSystemMigration = require('./migrations/add_leads_system');
+    leadsSystemMigration.up(db).catch(console.error);
+    
+    // Run manager authorization migration (adds manager_id to google_sheets_integrations)
+    const managerAuthMigration = require('./migrations/update_manager_authorization');
+    managerAuthMigration.up(db).catch(console.error);
+    
     // Session transaction types migration - commented out as it's already been run
     // const { runMigration: runSessionTransactionTypesMigration } = require('./migrations/update_session_transaction_types');
     // runSessionTransactionTypesMigration().catch(console.error);

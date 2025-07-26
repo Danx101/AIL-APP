@@ -14,6 +14,8 @@ class CustomerSession {
     this.purchase_date = data.purchase_date || null;
     this.notes = data.notes || null;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
+    this.block_order = data.block_order || null;
+    this.block_type = data.block_type || 'standard';
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
   }
@@ -52,8 +54,8 @@ class CustomerSession {
       const query = `
         INSERT INTO customer_sessions (
           customer_id, studio_id, total_sessions, remaining_sessions, 
-          purchase_date, notes, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          purchase_date, notes, is_active, block_order, block_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       db.run(query, [
@@ -63,7 +65,9 @@ class CustomerSession {
         this.remaining_sessions || this.total_sessions,
         this.purchase_date || new Date().toISOString(),
         this.notes,
-        this.is_active
+        this.is_active,
+        this.block_order,
+        this.block_type
       ], function(err) {
         if (err) {
           reject(err);
@@ -90,7 +94,7 @@ class CustomerSession {
     return new Promise((resolve, reject) => {
       const query = `
         UPDATE customer_sessions SET 
-          remaining_sessions = ?, notes = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+          remaining_sessions = ?, notes = ?, is_active = ?, block_type = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `;
 
@@ -98,6 +102,7 @@ class CustomerSession {
         this.remaining_sessions,
         this.notes,
         this.is_active,
+        this.block_type,
         this.id
       ], function(err) {
         if (err) {
@@ -314,26 +319,122 @@ class CustomerSession {
   }
 
   /**
-   * Add sessions to customer's session package (top-up)
+   * Add new session block to customer's queue (FIFO system)
    */
-  static async addSessions(customerId, studioId, sessionCount, addedByUserId, notes = null) {
+  static async addSessionBlock(customerId, studioId, sessionCount, addedByUserId, notes = null, blockType = 'standard') {
     return new Promise(async (resolve, reject) => {
       try {
-        // Get active session or create new one
-        let activeSession = await CustomerSession.getActiveSession(customerId, studioId);
+        // Get next block order number
+        const nextBlockOrder = await CustomerSession.getNextBlockOrder(customerId, studioId);
         
-        if (!activeSession) {
-          // Create new session package
-          const newSession = new CustomerSession({
-            customer_id: customerId,
-            studio_id: studioId,
-            total_sessions: sessionCount,
-            remaining_sessions: sessionCount,
-            notes: notes || `Initial session package (${sessionCount} sessions)`
+        // Create new session block
+        const newBlock = new CustomerSession({
+          customer_id: customerId,
+          studio_id: studioId,
+          total_sessions: sessionCount,
+          remaining_sessions: sessionCount,
+          notes: notes || `Session block (${sessionCount} sessions)`,
+          block_order: nextBlockOrder,
+          block_type: blockType
+        });
+        
+        const sessionId = await newBlock.create();
+
+        // Create transaction record
+        const SessionTransaction = require('./SessionTransaction');
+        const transaction = new SessionTransaction({
+          customer_session_id: sessionId,
+          transaction_type: 'purchase',
+          amount: sessionCount,
+          created_by_user_id: addedByUserId,
+          notes: notes || `Added ${sessionCount} session block`
+        });
+
+        const transactionId = await transaction.create();
+
+        resolve({
+          sessionId: sessionId,
+          transactionId: transactionId,
+          blockOrder: nextBlockOrder,
+          remainingSessions: sessionCount
+        });
+
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Get next block order number for customer
+   */
+  static async getNextBlockOrder(customerId, studioId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT COALESCE(MAX(block_order), 0) + 1 as next_order
+        FROM customer_sessions 
+        WHERE customer_id = ? AND studio_id = ?
+      `;
+
+      db.get(query, [customerId, studioId], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row.next_order);
+        }
+      });
+    });
+  }
+
+  /**
+   * Get customer's session blocks in FIFO order
+   */
+  static async getCustomerBlockQueue(customerId, studioId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT cs.*, 
+               u.first_name as customer_first_name, u.last_name as customer_last_name, u.email as customer_email,
+               s.name as studio_name
+        FROM customer_sessions cs
+        LEFT JOIN users u ON cs.customer_id = u.id
+        LEFT JOIN studios s ON cs.studio_id = s.id
+        WHERE cs.customer_id = ? AND cs.studio_id = ? AND cs.is_active = 1
+        ORDER BY cs.block_order ASC
+      `;
+
+      db.all(query, [customerId, studioId], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  /**
+   * Deduct session using FIFO block consumption
+   */
+  static async deductSessionFIFO(customerId, studioId, appointmentId, deductedByUserId, notes = null) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Get first block with remaining sessions (FIFO order)
+        const activeBlock = await new Promise((resolve, reject) => {
+          const query = `
+            SELECT * FROM customer_sessions 
+            WHERE customer_id = ? AND studio_id = ? AND is_active = 1 AND remaining_sessions > 0
+            ORDER BY block_order ASC
+            LIMIT 1
+          `;
+
+          db.get(query, [customerId, studioId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
           });
-          
-          const sessionId = await newSession.create();
-          activeSession = await CustomerSession.findById(sessionId);
+        });
+        
+        if (!activeBlock) {
+          throw new Error('No active session blocks available for deduction');
         }
 
         // Start transaction
@@ -341,29 +442,33 @@ class CustomerSession {
           db.run('BEGIN TRANSACTION', (err) => {
             if (err) return reject(err);
 
-            // Update sessions
+            // Update remaining sessions
             const updateQuery = `
               UPDATE customer_sessions 
-              SET remaining_sessions = remaining_sessions + ?, 
-                  total_sessions = total_sessions + ?,
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?
+              SET remaining_sessions = remaining_sessions - 1, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND remaining_sessions > 0
             `;
 
-            db.run(updateQuery, [sessionCount, sessionCount, activeSession.id], function(updateErr) {
+            db.run(updateQuery, [activeBlock.id], function(updateErr) {
               if (updateErr) {
                 db.run('ROLLBACK');
                 return reject(updateErr);
               }
 
+              if (this.changes === 0) {
+                db.run('ROLLBACK');
+                return reject(new Error('Failed to deduct session - no sessions available'));
+              }
+
               // Create transaction record
               const SessionTransaction = require('./SessionTransaction');
               const transaction = new SessionTransaction({
-                customer_session_id: activeSession.id,
-                transaction_type: activeSession.total_sessions === sessionCount ? 'purchase' : 'topup',
-                amount: sessionCount,
-                created_by_user_id: addedByUserId,
-                notes: notes || `Added ${sessionCount} sessions`
+                customer_session_id: activeBlock.id,
+                transaction_type: 'deduction',
+                amount: -1,
+                appointment_id: appointmentId,
+                created_by_user_id: deductedByUserId,
+                notes: notes || `Session deducted from block ${activeBlock.block_order}`
               });
 
               transaction.create().then((transactionId) => {
@@ -373,9 +478,10 @@ class CustomerSession {
                     return reject(commitErr);
                   }
                   resolve({
-                    sessionId: activeSession.id,
+                    sessionId: activeBlock.id,
                     transactionId: transactionId,
-                    remainingSessions: activeSession.remaining_sessions + sessionCount
+                    blockOrder: activeBlock.block_order,
+                    remainingSessions: activeBlock.remaining_sessions - 1
                   });
                 });
               }).catch((transactionErr) => {
@@ -389,6 +495,36 @@ class CustomerSession {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Get total remaining sessions across all active blocks
+   */
+  static async getTotalRemainingSessions(customerId, studioId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT COALESCE(SUM(remaining_sessions), 0) as total_remaining
+        FROM customer_sessions 
+        WHERE customer_id = ? AND studio_id = ? AND is_active = 1
+      `;
+
+      db.get(query, [customerId, studioId], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row.total_remaining);
+        }
+      });
+    });
+  }
+
+  /**
+   * Add sessions to customer's session package (top-up) - DEPRECATED
+   * Use addSessionBlock instead
+   */
+  static async addSessions(customerId, studioId, sessionCount, addedByUserId, notes = null) {
+    // Redirect to new block-based system
+    return CustomerSession.addSessionBlock(customerId, studioId, sessionCount, addedByUserId, notes);
   }
 }
 

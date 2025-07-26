@@ -1,0 +1,500 @@
+/* Lead Management Component Styles */
+
+.lead-management {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Statistics Cards */
+.lead-management .icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.lead-management .card {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border-radius: var(--glass-border-radius);
+    transition: all var(--transition-speed) ease;
+}
+
+.lead-management .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.lead-management .card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Search and Filter Section */
+.lead-management .form-control,
+.lead-management .form-select {
+    border: 2px solid rgba(232, 121, 249, 0.2);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-speed) ease;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.lead-management .form-control:focus,
+.lead-management .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+    background: white;
+}
+
+/* Table Styles */
+.lead-management .table {
+    background: transparent;
+    font-size: 0.9rem;
+}
+
+.lead-management .table th {
+    border-top: none;
+    border-bottom: 2px solid rgba(232, 121, 249, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    color: var(--primary-dark);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lead-management .table td {
+    border-color: rgba(255, 255, 255, 0.1);
+    vertical-align: middle;
+    padding: 1rem 0.75rem;
+}
+
+.lead-management .table tbody tr {
+    transition: all var(--transition-speed) ease;
+}
+
+.lead-management .table tbody tr:hover {
+    background: rgba(232, 121, 249, 0.05);
+    transform: translateX(2px);
+}
+
+/* Avatar Circles */
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+/* Badge Styles */
+.lead-management .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+.lead-management .dropdown-toggle::after {
+    margin-left: 0.5em;
+}
+
+/* Button Styles */
+.lead-management .btn {
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    transition: all var(--transition-speed) ease;
+}
+
+.lead-management .btn-primary {
+    background: var(--gradient-purple);
+    border: none;
+    box-shadow: var(--shadow-light);
+}
+
+.lead-management .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+}
+
+.lead-management .btn-group-sm .btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+.lead-management .btn-outline-primary {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.lead-management .btn-outline-primary:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.lead-management .btn-outline-success {
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.lead-management .btn-outline-success:hover {
+    background: var(--success-color);
+    border-color: var(--success-color);
+    transform: translateY(-1px);
+}
+
+.lead-management .btn-outline-secondary {
+    border-color: rgba(107, 114, 128, 0.5);
+    color: var(--dark-color);
+}
+
+.lead-management .btn-outline-secondary:hover {
+    background: rgba(107, 114, 128, 0.1);
+    border-color: rgba(107, 114, 128, 0.8);
+    transform: translateY(-1px);
+}
+
+/* Pagination */
+.lead-management .pagination {
+    margin: 0;
+}
+
+.lead-management .page-link {
+    border: 1px solid rgba(232, 121, 249, 0.2);
+    color: var(--primary);
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 0.375rem;
+    margin: 0 0.125rem;
+    transition: all var(--transition-speed) ease;
+}
+
+.lead-management .page-link:hover {
+    background: var(--primary-light);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.lead-management .page-item.active .page-link {
+    background: var(--gradient-purple);
+    border-color: var(--primary);
+    box-shadow: var(--shadow-light);
+}
+
+.lead-management .page-item.disabled .page-link {
+    opacity: 0.5;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Modal Styles */
+.lead-management .modal-content {
+    border: none;
+    border-radius: var(--glass-border-radius);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    box-shadow: var(--shadow-heavy);
+}
+
+.lead-management .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.lead-management .modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.lead-management .modal-title {
+    background: var(--gradient-purple);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Form Validation */
+.lead-management .form-control.is-valid {
+    border-color: var(--success-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2310b981' d='m2.3 6.73.94-.94 1.06 1.06-1.53 1.53z'/%3e%3c/svg%3e");
+}
+
+.lead-management .form-control.is-invalid {
+    border-color: var(--danger-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23ef4444'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m5.8 4.6 1.4 1.4M5.8 7.4l1.4-1.4'/%3e%3c/svg%3e");
+}
+
+/* Empty State */
+.lead-management .empty-state {
+    padding: 3rem 2rem;
+    text-align: center;
+}
+
+.lead-management .empty-state .display-4 {
+    opacity: 0.3;
+    margin-bottom: 1.5rem;
+}
+
+.lead-management .empty-state h5 {
+    color: var(--dark-color);
+    opacity: 0.7;
+    margin-bottom: 1rem;
+}
+
+.lead-management .empty-state p {
+    max-width: 500px;
+    margin: 0 auto 2rem;
+    line-height: 1.6;
+}
+
+/* Loading States */
+.lead-management .loading-row {
+    background: linear-gradient(90deg, transparent, rgba(232, 121, 249, 0.1), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Status Indicators */
+.status-new { color: var(--primary); }
+.status-contacted { color: var(--info-color); }
+.status-qualified { color: var(--success-color); }
+.status-converted { color: var(--success-color); }
+.status-not-interested { color: var(--secondary); }
+.status-invalid { color: var(--danger-color); }
+
+/* Lead Detail Modal */
+.lead-management .lead-detail-content .card {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(232, 121, 249, 0.1);
+}
+
+.lead-management .lead-detail-content .form-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+/* Action Buttons */
+.lead-management .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.lead-management .action-buttons .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+/* Phone and Email Links */
+.lead-management a[href^="tel:"] {
+    color: var(--success-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.lead-management a[href^="tel:"]:hover {
+    text-decoration: underline;
+    color: var(--success-color);
+}
+
+.lead-management a[href^="mailto:"] {
+    color: var(--info-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.lead-management a[href^="mailto:"]:hover {
+    text-decoration: underline;
+    color: var(--info-color);
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .lead-management {
+        padding: 0 1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .lead-management .table-responsive {
+        font-size: 0.85rem;
+    }
+    
+    .lead-management .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .avatar-circle {
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .lead-management .table th,
+    .lead-management .table td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .lead-management .card-body {
+        padding: 1rem;
+    }
+    
+    .lead-management .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .lead-management .action-buttons {
+        flex-direction: column;
+    }
+    
+    .lead-management .action-buttons .btn {
+        min-width: auto;
+    }
+    
+    /* Hide less important columns on mobile */
+    .lead-management .table td:nth-child(3), /* Email */
+    .lead-management .table th:nth-child(3),
+    .lead-management .table td:nth-child(6), /* Created */
+    .lead-management .table th:nth-child(6) {
+        display: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .lead-management .empty-state {
+        padding: 2rem 1rem;
+    }
+    
+    .lead-management .empty-state .display-4 {
+        font-size: 2.5rem;
+    }
+    
+    .lead-management .pagination {
+        font-size: 0.85rem;
+    }
+    
+    .lead-management .page-link {
+        padding: 0.375rem 0.75rem;
+    }
+    
+    /* Stack filter row on very small screens */
+    .lead-management .filter-row .col-lg-2,
+    .lead-management .filter-row .col-lg-4 {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Accessibility Improvements */
+.lead-management .btn:focus,
+.lead-management .form-control:focus,
+.lead-management .form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+}
+
+.lead-management .table tbody tr:focus-within {
+    outline: 2px solid rgba(232, 121, 249, 0.5);
+    outline-offset: -2px;
+}
+
+/* Print Styles */
+@media print {
+    .lead-management .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .lead-management .btn,
+    .lead-management .action-buttons,
+    .lead-management .pagination {
+        display: none;
+    }
+    
+    .lead-management .table {
+        font-size: 0.8rem;
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .lead-management .card {
+        border: 2px solid var(--dark-color);
+    }
+    
+    .lead-management .table th {
+        background: var(--dark-color);
+        color: white;
+    }
+    
+    .lead-management .badge {
+        border: 1px solid var(--dark-color);
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .lead-management .card,
+    .lead-management .btn,
+    .lead-management .table tbody tr {
+        transition: none;
+    }
+    
+    .fade-in,
+    .slide-in {
+        animation: none;
+    }
+}

@@ -7,6 +7,9 @@ require('dotenv').config();
 // Initialize database connection
 const db = require('./src/database/connection');
 
+// Initialize services
+const schedulerService = require('./src/services/schedulerService');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -52,6 +55,10 @@ app.use('/api/v1/studios', studioRoutes);
 const managerRoutes = require('./src/routes/manager');
 app.use('/api/v1/manager', managerRoutes);
 
+// Manager lead routes
+const managerLeadRoutes = require('./src/routes/managerLeads');
+app.use('/api/v1/manager', managerLeadRoutes);
+
 // Appointment routes
 const appointmentRoutes = require('./src/routes/appointments');
 app.use('/api/v1/appointments', appointmentRoutes);
@@ -59,6 +66,14 @@ app.use('/api/v1/appointments', appointmentRoutes);
 // Session routes
 const sessionRoutes = require('./src/routes/sessions');
 app.use('/api/v1', sessionRoutes);
+
+// Lead routes
+const leadRoutes = require('./src/routes/leads');
+app.use('/api/v1/leads', leadRoutes);
+
+// Twilio webhook routes
+const twilioRoutes = require('./src/routes/twilio');
+app.use('/api/v1/twilio', twilioRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -75,10 +90,17 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`=� Server running on port ${PORT}`);
-  console.log(`=� Health check: http://localhost:${PORT}/health`);
-  console.log(`=' API status: http://localhost:${PORT}/api/v1/status`);
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🔍 Health check: http://localhost:${PORT}/health`);
+  console.log(`⚡ API status: http://localhost:${PORT}/api/v1/status`);
+  
+  // Initialize scheduler service
+  try {
+    await schedulerService.initialize();
+  } catch (error) {
+    console.error('Failed to initialize scheduler service:', error);
+  }
 });
 
 module.exports = app;

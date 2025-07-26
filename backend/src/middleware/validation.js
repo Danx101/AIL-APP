@@ -318,6 +318,171 @@ const validateSessionDeactivate = [
     .withMessage('Notes must be a string with maximum 500 characters')
 ];
 
+// Lead validation
+const validateLeadCreate = [
+  body('studio_id')
+    .isInt({ min: 1 })
+    .withMessage('Studio ID must be a positive integer'),
+  
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be between 2 and 100 characters'),
+  
+  body('phone_number')
+    .trim()
+    .matches(/^[\+]?[0-9\s\-\(\)]{7,20}$/)
+    .withMessage('Please provide a valid phone number'),
+  
+  body('email')
+    .optional({ nullable: true, checkFalsy: true })
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email address'),
+  
+  body('source')
+    .optional()
+    .isIn(['manual', 'google_sheets', 'website', 'referral', 'advertisement', 'social_media'])
+    .withMessage('Invalid source'),
+  
+  body('status')
+    .optional()
+    .isIn(['new', 'contacted', 'qualified', 'interested', 'not_interested', 'follow_up', 'converted', 'lost'])
+    .withMessage('Invalid status'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .isLength({ max: 1000 })
+    .withMessage('Notes must be a string with maximum 1000 characters')
+];
+
+const validateLeadUpdate = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be between 2 and 100 characters'),
+  
+  body('phone_number')
+    .optional()
+    .trim()
+    .matches(/^[\+]?[0-9\s\-\(\)]{7,20}$/)
+    .withMessage('Please provide a valid phone number'),
+  
+  body('email')
+    .optional({ nullable: true, checkFalsy: true })
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email address'),
+  
+  body('source')
+    .optional()
+    .isIn(['manual', 'google_sheets', 'website', 'referral', 'advertisement', 'social_media'])
+    .withMessage('Invalid source'),
+  
+  body('status')
+    .optional()
+    .isIn(['new', 'contacted', 'qualified', 'interested', 'not_interested', 'follow_up', 'converted', 'lost'])
+    .withMessage('Invalid status'),
+  
+  body('notes')
+    .optional()
+    .isString()
+    .isLength({ max: 1000 })
+    .withMessage('Notes must be a string with maximum 1000 characters'),
+  
+  body('next_follow_up')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601()
+    .withMessage('Next follow up must be a valid date'),
+  
+  body('lead_score')
+    .optional()
+    .isInt({ min: 0, max: 100 })
+    .withMessage('Lead score must be between 0 and 100'),
+  
+  body('conversion_status')
+    .optional()
+    .isIn(['lead', 'prospect', 'customer', 'lost'])
+    .withMessage('Invalid conversion status')
+];
+
+const validateLeadId = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Lead ID must be a positive integer')
+];
+
+const validateGoogleSheetsImport = [
+  body('studio_id')
+    .isInt({ min: 1 })
+    .withMessage('Studio ID must be a positive integer'),
+  
+  body('sheet_url')
+    .trim()
+    .matches(/^(https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+|[a-zA-Z0-9-_]+)/)
+    .withMessage('Please provide a valid Google Sheets URL or sheet ID'),
+  
+  body('column_mapping')
+    .isObject()
+    .withMessage('Column mapping must be an object'),
+  
+  body('column_mapping.name')
+    .notEmpty()
+    .withMessage('Name column mapping is required'),
+  
+  body('column_mapping.phone_number')
+    .notEmpty()
+    .withMessage('Phone number column mapping is required')
+];
+
+const validateGoogleSheetsConnect = [
+  body('studio_id')
+    .isInt({ min: 1 })
+    .withMessage('Studio ID must be a positive integer'),
+  
+  body('sheet_url')
+    .trim()
+    .matches(/^(https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+|[a-zA-Z0-9-_]+)/)
+    .withMessage('Please provide a valid Google Sheets URL or sheet ID'),
+  
+  body('column_mapping')
+    .isObject()
+    .withMessage('Column mapping must be an object'),
+  
+  body('column_mapping.name')
+    .notEmpty()
+    .withMessage('Name column mapping is required'),
+  
+  body('column_mapping.phone_number')
+    .notEmpty()
+    .withMessage('Phone number column mapping is required'),
+  
+  body('auto_sync_enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Auto sync enabled must be a boolean')
+];
+
+const validateGoogleSheetsPreview = [
+  body('sheet_url')
+    .trim()
+    .matches(/^(https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+|[a-zA-Z0-9-_]+)/)
+    .withMessage('Please provide a valid Google Sheets URL or sheet ID'),
+  
+  body('worksheet_index')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Worksheet index must be a non-negative integer')
+];
+
+const validateIntegrationId = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Integration ID must be a positive integer')
+];
+
 module.exports = {
   validateRegister,
   validateLogin,
@@ -336,5 +501,12 @@ module.exports = {
   validateSessionTopup,
   validateSessionId,
   validateSessionEdit,
-  validateSessionDeactivate
+  validateSessionDeactivate,
+  validateLeadCreate,
+  validateLeadUpdate,
+  validateLeadId,
+  validateGoogleSheetsImport,
+  validateGoogleSheetsConnect,
+  validateGoogleSheetsPreview,
+  validateIntegrationId
 };

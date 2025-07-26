@@ -10,6 +10,7 @@ class App {
 
     async init() {
         this.setupEventListeners();
+        this.initSidebar();
         this.checkAPIStatus();
         await this.checkAuthStatus();
     }
@@ -32,19 +33,67 @@ class App {
     }
 
     updateUIForAuthenticatedUser() {
-        const navbar = document.querySelector('.navbar-nav');
-        if (navbar) {
-            navbar.innerHTML = `
-                <span class="navbar-text me-3">
-                    Welcome, ${this.currentUser.firstName}!
-                </span>
-                <button class="btn btn-outline-light btn-sm" id="logoutBtn">
-                    Logout
-                </button>
-            `;
+        // Update sidebar user menu and hide auth buttons
+        const userMenuSidebar = document.getElementById('userMenuSidebar');
+        const authButtonsSidebar = document.getElementById('authButtonsSidebar');
+        const userDisplayNameSidebar = document.getElementById('userDisplayNameSidebar');
+        
+        if (userMenuSidebar && authButtonsSidebar) {
+            userMenuSidebar.style.display = 'block';
+            authButtonsSidebar.style.display = 'none';
             
-            document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (userDisplayNameSidebar) {
+                userDisplayNameSidebar.textContent = `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+            }
+        }
+
+        // Update sidebar navigation
+        this.updateSidebarNavigation();
+
+
+        // Add user profile toggle functionality
+        const userProfileToggle = document.getElementById('userProfileToggle');
+        const userActions = document.getElementById('userActions');
+        const userChevron = document.getElementById('userChevron');
+        
+        if (userProfileToggle && userActions && userChevron) {
+            userProfileToggle.addEventListener('click', () => {
+                const isExpanded = userActions.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    userActions.classList.remove('expanded');
+                    userActions.style.display = 'none';
+                    userChevron.parentElement.classList.remove('expanded');
+                } else {
+                    userActions.style.display = 'flex';
+                    setTimeout(() => {
+                        userActions.classList.add('expanded');
+                    }, 10);
+                    userChevron.parentElement.classList.add('expanded');
+                }
+            });
+        }
+
+        // Add user action button functionality
+        const logoutBtnSidebar = document.getElementById('logoutBtnSidebar');
+        const profileBtnSidebar = document.getElementById('profileBtnSidebar');
+        const settingsBtnSidebar = document.getElementById('settingsBtnSidebar');
+        
+        if (logoutBtnSidebar) {
+            logoutBtnSidebar.addEventListener('click', () => {
                 this.logout();
+            });
+        }
+        
+        if (profileBtnSidebar) {
+            profileBtnSidebar.addEventListener('click', () => {
+                this.navigateToSection('profile');
+            });
+        }
+        
+        if (settingsBtnSidebar) {
+            settingsBtnSidebar.addEventListener('click', () => {
+                this.navigateToSection('settings');
             });
         }
 
@@ -59,21 +108,34 @@ class App {
     }
 
     updateUIForGuestUser() {
-        const navbar = document.querySelector('.navbar-nav');
-        if (navbar) {
-            navbar.innerHTML = `
-                <a class="nav-link" href="#" id="loginBtn">Login</a>
-                <a class="nav-link" href="#" id="registerBtn">Registrieren</a>
-            `;
-            
-            document.getElementById('loginBtn').addEventListener('click', () => {
-                this.showLoginModal();
-            });
-            
-            document.getElementById('registerBtn').addEventListener('click', () => {
-                this.showRegisterModal();
+        // Update sidebar auth buttons and hide user menu
+        const userMenuSidebar = document.getElementById('userMenuSidebar');
+        const authButtonsSidebar = document.getElementById('authButtonsSidebar');
+        
+        if (userMenuSidebar && authButtonsSidebar) {
+            userMenuSidebar.style.display = 'none';
+            authButtonsSidebar.style.display = 'flex';
+        }
+
+        // Update sidebar navigation for guest
+        this.updateSidebarNavigation();
+
+        // Add auth button event listeners in sidebar
+        const loginBtnSidebar = document.getElementById('loginBtnSidebar');
+        const registerBtnSidebar = document.getElementById('registerBtnSidebar');
+        
+        if (loginBtnSidebar) {
+            loginBtnSidebar.addEventListener('click', () => {
+                this.showCustomerLogin();
             });
         }
+        
+        if (registerBtnSidebar) {
+            registerBtnSidebar.addEventListener('click', () => {
+                this.showCustomerRegister();
+            });
+        }
+
 
         // Show welcome page
         this.showWelcomePage();
@@ -92,6 +154,11 @@ class App {
 
     showWelcomePage() {
         const content = document.getElementById('content');
+        if (!content) {
+            console.error('Content element not found, redirecting to home');
+            window.location.href = '/';
+            return;
+        }
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-8 mx-auto">
@@ -572,6 +639,9 @@ class App {
             this.loadCustomerAppointments();
         });
         
+        document.getElementById('sessions-tab').addEventListener('shown.bs.tab', () => {
+            this.loadCustomerSessionsTab();
+        });
 
         // Load initial calendar view
         this.loadCustomerCalendar();
@@ -817,11 +887,16 @@ class App {
             
             if (sessions.length === 0) {
                 sessionDisplay.innerHTML = `
-                    <div class="d-flex align-items-center">
-                        <div class="badge bg-secondary me-2">0</div>
-                        <span class="text-muted">Keine aktiven Behandlungspakete</span>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="badge bg-secondary me-2">0</div>
+                            <span class="text-muted">Keine aktiven Behandlungspakete</span>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="window.app.showCustomerSessionPurchaseModal()">
+                            <i class="fas fa-shopping-cart me-1"></i>Paket kaufen
+                        </button>
                     </div>
-                    <small class="text-muted d-block mt-1">Kontaktieren Sie Ihr Studio, um ein Paket zu erwerben.</small>
+                    <small class="text-muted d-block mt-1">Kaufen Sie neue Behandlungspakete direkt hier oder kontaktieren Sie Ihr Studio.</small>
                 `;
                 sessionAlert.classList.add('d-none');
                 return;
@@ -846,13 +921,21 @@ class App {
             }
             
             sessionDisplay.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <div class="badge ${badgeClass} me-2 fs-6">${totalRemaining}</div>
-                    <span><strong>Verbleibende Behandlungen</strong></span>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="badge ${badgeClass} me-2 fs-6">${totalRemaining}</div>
+                        <span><strong>Verbleibende Behandlungen</strong></span>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="window.app.showCustomerSessionPurchaseModal()">
+                        <i class="fas fa-plus me-1"></i>Nachbuchen
+                    </button>
                 </div>
                 <small class="text-muted d-block mt-1">
                     Status: ${statusText} | 
                     ${sessions.filter(s => s.is_active).length} aktive${sessions.filter(s => s.is_active).length !== 1 ? 's' : ''} Paket${sessions.filter(s => s.is_active).length !== 1 ? 'e' : ''}
+                    <br><a href="#" onclick="window.app.showCustomerSessionDetails()" class="text-decoration-none small">
+                        <i class="fas fa-eye me-1"></i>Behandlungsblöcke anzeigen
+                    </a>
                 </small>
             `;
             
@@ -1280,6 +1363,397 @@ class App {
         }
     }
 
+    /**
+     * Load customer sessions tab content
+     */
+    async loadCustomerSessionsTab() {
+        const container = document.getElementById('customerSessions');
+        
+        try {
+            // Show loading
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <p class="mt-2">Lade Behandlungsblöcke...</p>
+                </div>
+            `;
+
+            const data = await window.customerAPI.getMySessions();
+            const blocks = data.blocks || [];
+            const totalRemaining = data.totalRemainingSessions || 0;
+
+            container.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="mb-0">
+                                <i class="fas fa-dumbbell text-primary me-2"></i>
+                                Meine Behandlungsblöcke
+                            </h5>
+                            <button class="btn btn-primary" onclick="window.app.showCustomerSessionPurchaseModal()">
+                                <i class="fas fa-shopping-cart me-1"></i>Neues Paket kaufen
+                            </button>
+                        </div>
+
+                        <div class="alert alert-info mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Gesamt verfügbare Behandlungen: ${totalRemaining}</strong>
+                                </div>
+                                <small class="text-muted">FIFO-System: Älteste Pakete werden zuerst verbraucht</small>
+                            </div>
+                        </div>
+
+                        ${blocks.length === 0 ? `
+                            <div class="text-center py-5">
+                                <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                                <h5 class="text-muted">Keine aktiven Behandlungsblöcke</h5>
+                                <p class="text-muted">Kaufen Sie Ihr erstes Behandlungspaket, um zu beginnen.</p>
+                                <button class="btn btn-primary btn-lg" onclick="window.app.showCustomerSessionPurchaseModal()">
+                                    <i class="fas fa-shopping-cart me-2"></i>Erstes Paket kaufen
+                                </button>
+                            </div>
+                        ` : `
+                            <div class="row g-3">
+                                ${blocks.map((block, index) => `
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card h-100 ${block.remaining_sessions === 0 ? 'border-secondary' : index === 0 ? 'border-success' : 'border-primary'}">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                                    <h6 class="card-title mb-0">
+                                                        Behandlungsblock ${block.block_order || index + 1}
+                                                        ${index === 0 && block.remaining_sessions > 0 ? 
+                                                            '<br><span class="badge bg-success mt-1">Aktiv</span>' : 
+                                                            block.remaining_sessions === 0 ? 
+                                                            '<br><span class="badge bg-secondary mt-1">Verbraucht</span>' :
+                                                            '<br><span class="badge bg-primary mt-1">Warteschlange</span>'
+                                                        }
+                                                    </h6>
+                                                    <div class="text-end">
+                                                        <span class="badge ${block.remaining_sessions > 0 ? 'bg-primary' : 'bg-secondary'} fs-6">
+                                                            ${block.remaining_sessions}/${block.total_sessions}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="progress mb-3" style="height: 8px;">
+                                                    <div class="progress-bar ${block.remaining_sessions > 0 ? (index === 0 ? 'bg-success' : 'bg-primary') : 'bg-secondary'}" 
+                                                        style="width: ${(block.remaining_sessions / block.total_sessions) * 100}%"></div>
+                                                </div>
+                                                
+                                                <div class="small text-muted">
+                                                    <p class="mb-1">
+                                                        <i class="fas fa-calendar me-1"></i>
+                                                        Gekauft: ${new Date(block.purchase_date).toLocaleDateString('de-DE')}
+                                                    </p>
+                                                    <p class="mb-1">
+                                                        <i class="fas fa-layer-group me-1"></i>
+                                                        Queue-Position: ${index + 1}
+                                                    </p>
+                                                    ${block.notes ? `
+                                                        <p class="mb-0">
+                                                            <i class="fas fa-sticky-note me-1"></i>
+                                                            ${block.notes}
+                                                        </p>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                            <div class="card-footer bg-transparent">
+                                                <small class="text-muted">
+                                                    ${block.remaining_sessions === 0 ? 
+                                                        '<i class="fas fa-check-circle text-success me-1"></i>Vollständig genutzt' : 
+                                                        `<i class="fas fa-clock text-primary me-1"></i>${block.remaining_sessions} Behandlung${block.remaining_sessions !== 1 ? 'en' : ''} übrig`
+                                                    }
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="mt-4 p-3 bg-light rounded">
+                                <h6><i class="fas fa-info-circle text-primary me-1"></i>Wie funktioniert das FIFO-System?</h6>
+                                <ul class="small mb-0">
+                                    <li>Behandlungen werden vom <strong>ältesten Block</strong> (niedrigste Queue-Position) zuerst verbraucht</li>
+                                    <li>Erst wenn ein Block <strong>vollständig aufgebraucht</strong> ist, wird der nächste Block aktiviert</li>
+                                    <li>Sie können jederzeit <strong>neue Pakete kaufen</strong>, die automatisch ans Ende der Warteschlange gesetzt werden</li>
+                                </ul>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error loading customer sessions tab:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-exclamation-triangle me-1"></i>Fehler beim Laden der Behandlungsblöcke</h6>
+                    <p class="mb-0">${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Show customer session purchase modal
+     */
+    async showCustomerSessionPurchaseModal() {
+        // Create modal HTML
+        const modalHTML = `
+            <div class="modal fade" id="sessionPurchaseModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-shopping-cart text-primary me-2"></i>
+                                Behandlungspaket kaufen
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Wählen Sie ein Paket:</label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <div class="card h-100 session-package" data-sessions="10">
+                                            <div class="card-body text-center">
+                                                <h6 class="card-title">10 Behandlungen</h6>
+                                                <p class="card-text text-muted small">Ideal für den Einstieg</p>
+                                                <div class="badge bg-light text-dark">Basic</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="card h-100 session-package" data-sessions="20">
+                                            <div class="card-body text-center">
+                                                <h6 class="card-title">20 Behandlungen</h6>
+                                                <p class="card-text text-muted small">Beliebt</p>
+                                                <div class="badge bg-primary text-white">Standard</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="card h-100 session-package" data-sessions="30">
+                                            <div class="card-body text-center">
+                                                <h6 class="card-title">30 Behandlungen</h6>
+                                                <p class="card-text text-muted small">Beste Wahl</p>
+                                                <div class="badge bg-success text-white">Premium</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="card h-100 session-package" data-sessions="40">
+                                            <div class="card-body text-center">
+                                                <h6 class="card-title">40 Behandlungen</h6>
+                                                <p class="card-text text-muted small">Maximaler Wert</p>
+                                                <div class="badge bg-warning text-dark">Deluxe</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="purchaseNotes" class="form-label">Notizen (optional):</label>
+                                <textarea class="form-control" id="purchaseNotes" rows="2" 
+                                    placeholder="Zusätzliche Informationen zu Ihrem Kauf..."></textarea>
+                            </div>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <small>Ihr neues Behandlungspaket wird automatisch zu Ihrer Warteschlange hinzugefügt.</small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="confirmPurchaseBtn" disabled>
+                                <i class="fas fa-shopping-cart me-1"></i>Paket kaufen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Set up event listeners
+        const packageCards = document.querySelectorAll('.session-package');
+        const confirmBtn = document.getElementById('confirmPurchaseBtn');
+        let selectedSessionCount = null;
+
+        packageCards.forEach(card => {
+            card.addEventListener('click', () => {
+                // Remove active class from all cards
+                packageCards.forEach(c => c.classList.remove('border-primary', 'bg-light'));
+                
+                // Add active class to selected card
+                card.classList.add('border-primary', 'bg-light');
+                
+                // Update selected session count
+                selectedSessionCount = parseInt(card.dataset.sessions);
+                
+                // Enable confirm button
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = `<i class="fas fa-shopping-cart me-1"></i>${selectedSessionCount} Behandlungen kaufen`;
+            });
+        });
+
+        confirmBtn.addEventListener('click', async () => {
+            if (!selectedSessionCount) return;
+
+            await this.purchaseCustomerSessionBlock(selectedSessionCount);
+        });
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('sessionPurchaseModal'));
+        modal.show();
+
+        // Clean up modal after hiding
+        document.getElementById('sessionPurchaseModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    /**
+     * Purchase session block for customer
+     */
+    async purchaseCustomerSessionBlock(sessionCount) {
+        const confirmBtn = document.getElementById('confirmPurchaseBtn');
+        const originalText = confirmBtn.innerHTML;
+        
+        try {
+            // Show loading state
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Wird gekauft...';
+            
+            const notes = document.getElementById('purchaseNotes').value;
+            const result = await window.customerAPI.purchaseSessionBlock(sessionCount, notes);
+            
+            // Hide modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sessionPurchaseModal'));
+            modal.hide();
+            
+            // Show success message
+            this.showSuccessMessage(
+                'Behandlungspaket erfolgreich gekauft!', 
+                `Sie haben ${sessionCount} Behandlungen erworben. Das Paket wurde zu Ihrer Warteschlange hinzugefügt.`
+            );
+            
+            // Reload sessions to show updated count
+            await this.loadCustomerSessions();
+            
+        } catch (error) {
+            console.error('Error purchasing session block:', error);
+            this.showErrorMessage('Fehler beim Kauf', error.message);
+            
+            // Reset button
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = originalText;
+        }
+    }
+
+    /**
+     * Show customer session details and block queue
+     */
+    async showCustomerSessionDetails() {
+        try {
+            const data = await window.customerAPI.getMySessions();
+            const blocks = data.blocks || [];
+            const totalRemaining = data.totalRemainingSessions || 0;
+
+            const modalHTML = `
+                <div class="modal fade" id="sessionDetailsModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-dumbbell text-primary me-2"></i>
+                                    Meine Behandlungsblöcke
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <strong>Gesamt verfügbare Behandlungen: ${totalRemaining}</strong>
+                                        <br><small>Behandlungen werden in der Reihenfolge des Kaufs (FIFO) verbraucht.</small>
+                                    </div>
+                                </div>
+                                
+                                ${blocks.length === 0 ? `
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                                        <p>Keine aktiven Behandlungsblöcke</p>
+                                        <button class="btn btn-primary" onclick="window.app.showCustomerSessionPurchaseModal()" data-bs-dismiss="modal">
+                                            <i class="fas fa-shopping-cart me-1"></i>Erstes Paket kaufen
+                                        </button>
+                                    </div>
+                                ` : `
+                                    <div class="row g-3">
+                                        ${blocks.map((block, index) => `
+                                            <div class="col-md-6">
+                                                <div class="card h-100 ${block.remaining_sessions === 0 ? 'border-secondary' : 'border-primary'}">
+                                                    <div class="card-body">
+                                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                                            <h6 class="card-title mb-0">
+                                                                Block ${block.block_order || index + 1}
+                                                                ${index === 0 && block.remaining_sessions > 0 ? 
+                                                                    '<span class="badge bg-success ms-2">Aktiv</span>' : ''}
+                                                            </h6>
+                                                            <span class="badge ${block.remaining_sessions > 0 ? 'bg-primary' : 'bg-secondary'}">
+                                                                ${block.remaining_sessions}/${block.total_sessions}
+                                                            </span>
+                                                        </div>
+                                                        <p class="card-text small text-muted mb-2">
+                                                            Gekauft: ${new Date(block.purchase_date).toLocaleDateString('de-DE')}
+                                                        </p>
+                                                        <div class="progress mb-2" style="height: 6px;">
+                                                            <div class="progress-bar ${block.remaining_sessions > 0 ? 'bg-primary' : 'bg-secondary'}" 
+                                                                style="width: ${(block.remaining_sessions / block.total_sessions) * 100}%"></div>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            ${block.remaining_sessions === 0 ? 'Vollständig genutzt' : 
+                                                              `${block.remaining_sessions} Behandlung${block.remaining_sessions !== 1 ? 'en' : ''} übrig`}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    
+                                    <div class="text-center mt-4">
+                                        <button class="btn btn-outline-primary" onclick="window.app.showCustomerSessionPurchaseModal()" data-bs-dismiss="modal">
+                                            <i class="fas fa-plus me-1"></i>Weiteres Paket kaufen
+                                        </button>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add modal to DOM
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('sessionDetailsModal'));
+            modal.show();
+
+            // Clean up modal after hiding
+            document.getElementById('sessionDetailsModal').addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+
+        } catch (error) {
+            console.error('Error loading session details:', error);
+            this.showErrorMessage('Fehler beim Laden', 'Behandlungsblöcke konnten nicht geladen werden.');
+        }
+    }
+
 
     async showAppointmentRequestForm(preselectedDate = null) {
         // Check session availability first
@@ -1693,31 +2167,65 @@ class App {
     showStudioDashboard() {
         const content = document.getElementById('content');
         content.innerHTML = `
-            <div class="row">
-                <div class="col-md-10 mx-auto">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4>Studio Dashboard</h4>
-                            <button class="btn btn-outline-primary" id="setupStudioBtn">Studio Setup</button>
+            <div class="container-fluid p-4">
+                <!-- Welcome Header -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="glass-card p-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h1 class="h3 mb-1">Willkommen zurück, ${this.currentUser.firstName}!</h1>
+                                    <p class="text-muted mb-0">Hier ist Ihr Studio-Überblick für heute</p>
+                                </div>
+                                <div class="text-end">
+                                    <div class="text-muted small">${new Date().toLocaleDateString('de-DE', { 
+                                        weekday: 'long', 
+                                        year: 'numeric', 
+                                        month: 'long', 
+                                        day: 'numeric' 
+                                    })}</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h5>Willkommen, ${this.currentUser.firstName}!</h5>
-                                    <p>Sie sind erfolgreich angemeldet als Studio-Inhaber.</p>
-                                    <p><strong>Email:</strong> ${this.currentUser.email}</p>
-                                    <p><strong>Name:</strong> ${this.currentUser.firstName} ${this.currentUser.lastName}</p>
-                                </div>
-                                <div class="col-md-6">
-                                    <div id="studioStatus">
-                                        <div class="text-center">
-                                            <div class="spinner-border" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p class="mt-2">Lade Studio-Status...</p>
-                                        </div>
+                    </div>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div class="metrics-grid" id="dashboardMetrics">
+                    ${this.createLoadingMetrics()}
+                </div>
+
+                <!-- Studio Status and Quick Actions -->
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="glass-card p-4 mb-4">
+                            <h5 class="mb-3">Studio Status</h5>
+                            <div id="studioStatus">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
                                     </div>
+                                    <p class="mt-2 text-muted">Lade Studio-Informationen...</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="glass-card p-4 mb-4">
+                            <h5 class="mb-3">Quick Actions</h5>
+                            <div class="d-grid gap-2" id="quickActions">
+                                <button class="btn btn-primary" disabled>
+                                    <i class="fas fa-users me-2"></i>
+                                    Lead Management
+                                </button>
+                                <button class="btn btn-outline-primary" disabled>
+                                    <i class="fas fa-plus-circle me-2"></i>
+                                    Aktivierungscodes
+                                </button>
+                                <button class="btn btn-outline-primary" disabled>
+                                    <i class="fas fa-calendar me-2"></i>
+                                    Termine verwalten
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1725,12 +2233,135 @@ class App {
             </div>
         `;
 
-        document.getElementById('setupStudioBtn').addEventListener('click', () => {
-            this.showStudioSetup();
-        });
-
-        // Check if user has a studio
+        // Check if user has a studio and load metrics
         this.checkStudioStatus();
+        this.loadDashboardMetrics();
+    }
+
+    createLoadingMetrics() {
+        const metrics = [
+            { title: 'Aktive Kunden', icon: 'fas fa-users', gradient: 'gradient-purple' },
+            { title: 'Heutige Termine', icon: 'fas fa-calendar-day', gradient: 'gradient-blue' },
+            { title: 'Monats-Umsatz', icon: 'fas fa-euro-sign', gradient: 'gradient-green' },
+            { title: 'Auslastung', icon: 'fas fa-chart-line', gradient: 'gradient-orange' }
+        ];
+
+        return metrics.map(metric => `
+            <div class="metric-card loading">
+                <div class="metric-card-content">
+                    <div class="metric-info">
+                        <div class="metric-value">000</div>
+                        <div class="metric-title">${metric.title}</div>
+                        <div class="metric-change">Loading</div>
+                    </div>
+                    <div class="metric-icon-wrapper ${metric.gradient}">
+                        <i class="${metric.icon}"></i>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async loadDashboardMetrics() {
+        try {
+            // Simulate API calls - replace with real data
+            const metrics = await this.fetchStudioMetrics();
+            this.renderDashboardMetrics(metrics);
+        } catch (error) {
+            console.error('Error loading dashboard metrics:', error);
+            this.renderDashboardMetrics(this.getDefaultMetrics());
+        }
+    }
+
+    async fetchStudioMetrics() {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Mock data - replace with real API calls
+        return {
+            activeCustomers: { value: 247, change: '+12 diese Woche', changeType: 'positive' },
+            todayAppointments: { value: 8, change: '2 ausstehend', changeType: 'neutral' },
+            monthlyRevenue: { value: '€3.240', change: '+18% vs. letzter Monat', changeType: 'positive' },
+            utilization: { value: '94%', change: 'Diese Woche', changeType: 'neutral' }
+        };
+    }
+
+    getDefaultMetrics() {
+        return {
+            activeCustomers: { value: 0, change: 'Keine Daten', changeType: 'neutral' },
+            todayAppointments: { value: 0, change: 'Keine Termine', changeType: 'neutral' },
+            monthlyRevenue: { value: '€0', change: 'Noch keine Umsätze', changeType: 'neutral' },
+            utilization: { value: '0%', change: 'Noch keine Auslastung', changeType: 'neutral' }
+        };
+    }
+
+    renderDashboardMetrics(metrics) {
+        const metricsContainer = document.getElementById('dashboardMetrics');
+        if (!metricsContainer) return;
+
+        const metricConfigs = [
+            { 
+                key: 'activeCustomers', 
+                title: 'Aktive Kunden', 
+                icon: 'fas fa-users', 
+                gradient: 'gradient-purple' 
+            },
+            { 
+                key: 'todayAppointments', 
+                title: 'Heutige Termine', 
+                icon: 'fas fa-calendar-day', 
+                gradient: 'gradient-blue' 
+            },
+            { 
+                key: 'monthlyRevenue', 
+                title: 'Monats-Umsatz', 
+                icon: 'fas fa-euro-sign', 
+                gradient: 'gradient-green' 
+            },
+            { 
+                key: 'utilization', 
+                title: 'Auslastung', 
+                icon: 'fas fa-chart-line', 
+                gradient: 'gradient-orange' 
+            }
+        ];
+
+        const metricCards = metricConfigs.map((config, index) => {
+            const data = metrics[config.key];
+            return `
+                <div class="metric-card" style="animation-delay: ${index * 0.1}s">
+                    <div class="metric-card-content">
+                        <div class="metric-info">
+                            <div class="metric-value">${data.value}</div>
+                            <div class="metric-title">${config.title}</div>
+                            <div class="metric-change ${data.changeType}">${data.change}</div>
+                        </div>
+                        <div class="metric-icon-wrapper ${config.gradient}">
+                            <i class="${config.icon}"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        metricsContainer.innerHTML = metricCards;
+
+        // Add animation classes
+        setTimeout(() => {
+            const cards = metricsContainer.querySelectorAll('.metric-card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.6s ease';
+                    
+                    requestAnimationFrame(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    });
+                }, index * 100);
+            });
+        }, 100);
     }
 
     async checkStudioStatus() {
@@ -1748,58 +2379,61 @@ class App {
                 const studio = data.studio;
                 
                 statusDiv.innerHTML = `
-                    <div class="card">
-                        <div class="card-body">
-                            <h6>Ihr Studio: ${studio.name}</h6>
-                            <p><strong>Stadt:</strong> ${studio.city}</p>
-                            <p><strong>Adresse:</strong> ${studio.address}</p>
-                            <p><strong>Telefon:</strong> ${studio.phone}</p>
-                            <div class="mt-3">
-                                <button class="btn btn-primary btn-sm me-2" id="generateActivationCodesBtn">
-                                    Aktivierungscodes generieren
-                                </button>
-                                <button class="btn btn-success btn-sm me-2" id="manageAppointmentsBtn">
-                                    Termine verwalten
-                                </button>
-                                <button class="btn btn-info btn-sm me-2" id="viewCustomersBtn">
-                                    Kunden anzeigen
-                                </button>
-                                <button class="btn btn-warning btn-sm" id="manageSessionsBtn">
-                                    Behandlungen verwalten
-                                </button>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="glass-card p-3 mb-3">
+                                <h6 class="mb-3"><i class="fas fa-building me-2"></i>${studio.name}</h6>
+                                <div class="studio-info">
+                                    <div class="info-item mb-2">
+                                        <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                        <strong>Stadt:</strong> ${studio.city}
+                                    </div>
+                                    <div class="info-item mb-2">
+                                        <i class="fas fa-home text-primary me-2"></i>
+                                        <strong>Adresse:</strong> ${studio.address}
+                                    </div>
+                                    <div class="info-item">
+                                        <i class="fas fa-phone text-primary me-2"></i>
+                                        <strong>Telefon:</strong> ${studio.phone}
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- Today's appointments overview -->
-                            <div class="mt-4">
-                                <h6>Heutige Termine</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="glass-card p-3 mb-3">
+                                <h6 class="mb-3">Heutige Termine</h6>
                                 <div id="todaysAppointments">
                                     <div class="text-center">
-                                        <div class="spinner-border spinner-border-sm" role="status">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
                                             <span class="visually-hidden">Loading...</span>
                                         </div>
-                                        <p class="mt-2 small">Lade heutige Termine...</p>
+                                        <p class="mt-2 small text-muted">Lade heutige Termine...</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 `;
+
+                // Enable quick action buttons
+                const quickActionsContainer = document.getElementById('quickActions');
+                if (quickActionsContainer) {
+                    quickActionsContainer.innerHTML = `
+                        <button class="btn btn-primary" onclick="app.showStudioLeadManagement(${studio.id})">
+                            <i class="fas fa-users me-2"></i>
+                            Lead Management
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="app.showActivationCodeGeneration(${studio.id})">
+                            <i class="fas fa-plus-circle me-2"></i>
+                            Aktivierungscodes
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="app.navigateToSection('termine')">
+                            <i class="fas fa-calendar me-2"></i>
+                            Termine verwalten
+                        </button>
+                    `;
+                }
                 
-                document.getElementById('generateActivationCodesBtn').addEventListener('click', () => {
-                    this.showActivationCodeGeneration(studio.id);
-                });
-                
-                document.getElementById('manageAppointmentsBtn').addEventListener('click', () => {
-                    this.showAppointmentManagement(studio.id);
-                });
-                
-                document.getElementById('viewCustomersBtn').addEventListener('click', () => {
-                    this.showCustomerList(studio.id);
-                });
-                
-                document.getElementById('manageSessionsBtn').addEventListener('click', () => {
-                    this.showSessionManagement(studio.id);
-                });
                 
                 // Load today's appointments
                 this.loadTodaysAppointments(studio.id);
@@ -1831,6 +2465,28 @@ class App {
         }
     }
 
+    showStudioLeadManagement(studioId) {
+        // Initialize Lead Management for the studio
+        const content = document.getElementById('content');
+        content.innerHTML = `<div id="lead-management-content"></div>`;
+        
+        if (window.leadManagement) {
+            window.leadManagement.init(studioId);
+        } else {
+            console.error('Lead Management component not loaded');
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <h4>Error</h4>
+                    <p>Lead Management component failed to load. Please refresh the page.</p>
+                    <button class="btn btn-outline-primary" onclick="app.showStudioDashboard()">
+                        <i class="bi bi-arrow-left me-2"></i>
+                        Back to Dashboard
+                    </button>
+                </div>
+            `;
+        }
+    }
+
     showActivationCodeGeneration(studioId) {
         const content = document.getElementById('content');
         content.innerHTML = `
@@ -1856,10 +2512,7 @@ class App {
                                 </button>
                             </form>
                             <hr>
-                            <div class="d-flex justify-content-between">
-                                <button class="btn btn-outline-secondary" id="backToDashboardBtn">
-                                    Zurück zum Dashboard
-                                </button>
+                            <div class="d-flex justify-content-end">
                                 <button class="btn btn-outline-info" id="viewExistingCodesBtn">
                                     Vorhandene Codes anzeigen
                                 </button>
@@ -1874,9 +2527,6 @@ class App {
             this.handleActivationCodeGeneration(e, studioId);
         });
 
-        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
-        });
 
         document.getElementById('viewExistingCodesBtn').addEventListener('click', () => {
             this.showExistingActivationCodes(studioId);
@@ -1941,11 +2591,8 @@ class App {
             <div class="row">
                 <div class="col-md-10 mx-auto">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h4>Vorhandene Aktivierungscodes</h4>
-                            <button class="btn btn-outline-secondary" id="backFromCodesBtn">
-                                Zurück zum Dashboard
-                            </button>
                         </div>
                         <div class="card-body">
                             <div id="activationCodesList">
@@ -2236,214 +2883,21 @@ class App {
     }
 
     showManagerDashboard() {
-        const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4>Manager Dashboard</h4>
-                            <div class="btn-group">
-                                <button class="btn btn-primary" id="generateCodesBtn">Codes generieren</button>
-                                <button class="btn btn-outline-secondary" id="viewStatsBtn">Statistiken</button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="managerContent">
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="card bg-primary text-white">
-                                            <div class="card-body">
-                                                <h5>Willkommen, ${this.currentUser.firstName}!</h5>
-                                                <p>Sie sind als Manager angemeldet.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-8">
-                                        <div id="managerStats">
-                                            <div class="text-center">
-                                                <div class="spinner-border" role="status">
-                                                    <span class="visually-hidden">Loading...</span>
-                                                </div>
-                                                <p class="mt-2">Lade Statistiken...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="row mt-4">
-                                    <div class="col-md-12">
-                                        <div class="card">
-                                            <div class="card-header d-flex justify-content-between align-items-center">
-                                                <h5>Registrierte Studios</h5>
-                                                <button class="btn btn-sm btn-outline-primary" id="refreshStudiosBtn">
-                                                    Aktualisieren
-                                                </button>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="studiosList">
-                                                    <div class="text-center">
-                                                        <div class="spinner-border spinner-border-sm" role="status">
-                                                            <span class="visually-hidden">Loading...</span>
-                                                        </div>
-                                                        <p class="mt-2">Lade Studios...</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('generateCodesBtn').addEventListener('click', () => {
-            this.showCodeGenerationForm();
-        });
-
-        document.getElementById('viewStatsBtn').addEventListener('click', () => {
-            this.loadManagerStats();
-        });
-
-        document.getElementById('refreshStudiosBtn').addEventListener('click', () => {
-            this.loadManagerStudios();
-        });
-
-        // Load initial stats and studios
-        this.loadManagerStats();
-        this.loadManagerStudios();
-    }
-
-    async loadManagerStats() {
-        const statsDiv = document.getElementById('managerStats');
-        
-        try {
-            const response = await fetch('http://localhost:3001/api/v1/manager/stats', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to load stats');
-            }
-            
-            const data = await response.json();
-            const stats = data.statistics;
-            
-            statsDiv.innerHTML = `
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">${stats.codes.total}</h5>
-                                <p class="card-text">Codes Gesamt</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">${stats.codes.used}</h5>
-                                <p class="card-text">Codes Verwendet</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">${stats.studios.total}</h5>
-                                <p class="card-text">Studios</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">${stats.cities.count}</h5>
-                                <p class="card-text">Städte</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-        } catch (error) {
-            statsDiv.innerHTML = `
+        // Initialize the new Manager Dashboard
+        if (window.managerDashboard) {
+            window.managerDashboard.init();
+        } else {
+            console.error('Manager Dashboard component not loaded');
+            const content = document.getElementById('content');
+            content.innerHTML = `
                 <div class="alert alert-danger">
-                    Fehler beim Laden der Statistiken: ${error.message}
+                    <h4>Error</h4>
+                    <p>Manager Dashboard component failed to load. Please refresh the page.</p>
                 </div>
             `;
         }
     }
 
-    async loadManagerStudios() {
-        const studiosDiv = document.getElementById('studiosList');
-        
-        try {
-            const response = await fetch('http://localhost:3001/api/v1/manager/studios', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to load studios');
-            }
-            
-            const data = await response.json();
-            const studios = data.studios;
-            
-            if (studios.length === 0) {
-                studiosDiv.innerHTML = `
-                    <div class="text-center text-muted">
-                        <p>Noch keine Studios registriert.</p>
-                        <small>Studios werden angezeigt, sobald Studio-Inhaber sich mit Manager-Codes registriert haben.</small>
-                    </div>
-                `;
-            } else {
-                studiosDiv.innerHTML = `
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Studio Name</th>
-                                    <th>Inhaber</th>
-                                    <th>Stadt</th>
-                                    <th>Adresse</th>
-                                    <th>Telefon</th>
-                                    <th>Registriert</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${studios.map(studio => `
-                                    <tr>
-                                        <td><strong>${studio.name}</strong></td>
-                                        <td>${studio.owner_first_name} ${studio.owner_last_name}<br>
-                                            <small class="text-muted">${studio.owner_email}</small></td>
-                                        <td>${studio.city || studio.intended_city}</td>
-                                        <td>${studio.address}</td>
-                                        <td>${studio.phone || '-'}</td>
-                                        <td>${new Date(studio.created_at).toLocaleDateString('de-DE')}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-        } catch (error) {
-            studiosDiv.innerHTML = `
-                <div class="alert alert-danger">
-                    Fehler beim Laden der Studios: ${error.message}
-                </div>
-            `;
-        }
-    }
 
     showCodeGenerationForm() {
         const content = document.getElementById('managerContent');
@@ -2451,11 +2905,8 @@ class App {
             <div class="row">
                 <div class="col-md-6">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h5>Manager Code generieren</h5>
-                            <button class="btn btn-sm btn-outline-secondary" id="backToDashboardBtn">
-                                ← Zurück zum Dashboard
-                            </button>
                         </div>
                         <div class="card-body">
                             <div id="codeGenerationError" class="alert alert-danger d-none"></div>
@@ -2514,9 +2965,6 @@ class App {
             this.handleCodeGeneration(e);
         });
 
-        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
-            this.showManagerDashboard();
-        });
     }
 
     async handleCodeGeneration(e) {
@@ -2611,11 +3059,8 @@ class App {
             <div class="row">
                 <div class="col-md-8 mx-auto">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h4>Studio Setup</h4>
-                            <button class="btn btn-outline-secondary" id="backToDashboardFromSetupBtn">
-                                Zurück zum Dashboard
-                            </button>
                         </div>
                         <div class="card-body">
                             <div id="studioSetupError" class="alert alert-danger d-none"></div>
@@ -2666,9 +3111,6 @@ class App {
 
         document.getElementById('studioSetupForm').addEventListener('submit', (e) => {
             this.handleStudioSetup(e);
-        });
-        document.getElementById('backToDashboardFromSetupBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
         });
 
         // Load pre-fill information
@@ -2774,12 +3216,9 @@ class App {
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h4>Termine verwalten</h4>
-                            <div class="btn-group">
+                            <div>
                                 <button class="btn btn-primary" id="createAppointmentBtn">
                                     Neuer Termin
-                                </button>
-                                <button class="btn btn-outline-secondary" id="backToStudioDashboardBtn">
-                                    Zurück zum Dashboard
                                 </button>
                             </div>
                         </div>
@@ -2852,9 +3291,6 @@ class App {
             this.showCreateAppointmentForm(studioId);
         });
 
-        document.getElementById('backToStudioDashboardBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
-        });
 
         document.getElementById('filterAppointmentsBtn').addEventListener('click', () => {
             this.loadAppointments(studioId);
@@ -3611,13 +4047,347 @@ class App {
     }
 
     async editAppointmentDetails(appointmentId) {
-        // TODO: Implement appointment editing form
-        alert('Terminbearbeitung wird in Kürze implementiert!');
+        try {
+            // First, fetch the appointment details
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load appointment details');
+            }
+
+            const result = await response.json();
+            const appointment = result.appointment || result;
+
+            // Close the details modal and show edit modal
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (detailsModal) {
+                detailsModal.hide();
+            }
+
+            // Create edit form modal
+            this.showAppointmentEditModal(appointment);
+
+        } catch (error) {
+            console.error('Error loading appointment for editing:', error);
+            alert('Fehler beim Laden der Termindetails zum Bearbeiten.');
+        }
+    }
+
+    showAppointmentEditModal(appointment) {
+        // Create edit modal HTML
+        const modalHTML = `
+            <div class="modal fade" id="appointmentEditModal" tabindex="-1" aria-labelledby="appointmentEditModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background-color: #7030a0; color: white;">
+                            <h5 class="modal-title" id="appointmentEditModalLabel">
+                                <i class="fas fa-edit me-2"></i>Termin bearbeiten
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editAppointmentForm">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="editAppointmentDate" class="form-label">
+                                                <i class="fas fa-calendar me-2"></i>Datum
+                                            </label>
+                                            <input type="date" class="form-control" id="editAppointmentDate" 
+                                                   value="${appointment.appointment_date}" required>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="editStartTime" class="form-label">
+                                                <i class="fas fa-clock me-2"></i>Startzeit
+                                            </label>
+                                            <input type="time" class="form-control" id="editStartTime" 
+                                                   value="${appointment.start_time}" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="editAppointmentStatus" class="form-label">
+                                                <i class="fas fa-info-circle me-2"></i>Status
+                                            </label>
+                                            <select class="form-select" id="editAppointmentStatus">
+                                                <option value="pending" ${appointment.status === 'pending' ? 'selected' : ''}>Ausstehend</option>
+                                                <option value="bestätigt" ${appointment.status === 'bestätigt' || appointment.status === 'confirmed' ? 'selected' : ''}>Bestätigt</option>
+                                                <option value="abgeschlossen" ${appointment.status === 'abgeschlossen' || appointment.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
+                                                <option value="abgesagt" ${appointment.status === 'abgesagt' || appointment.status === 'cancelled' ? 'selected' : ''}>Abgesagt</option>
+                                                <option value="nicht erschienen" ${appointment.status === 'nicht erschienen' || appointment.status === 'no_show' ? 'selected' : ''}>Nicht erschienen</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                <i class="fas fa-clock me-2"></i>Dauer
+                                            </label>
+                                            <input type="text" class="form-control" value="60 Minuten" readonly>
+                                            <small class="text-muted">Endzeit wird automatisch berechnet</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="mb-3">
+                                            <label for="editAppointmentNotes" class="form-label">
+                                                <i class="fas fa-sticky-note me-2"></i>Notizen
+                                            </label>
+                                            <textarea class="form-control" id="editAppointmentNotes" rows="3" 
+                                                      placeholder="Zusätzliche Notizen zum Termin...">${appointment.notes || ''}</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Kunde:</strong> ${appointment.customer_first_name} ${appointment.customer_last_name}<br>
+                                            <strong>Behandlung:</strong> ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" style="background-color: #7030a0; border-color: #7030a0;" onclick="window.app.saveAppointmentChanges(${appointment.id})">
+                                <i class="fas fa-save me-1"></i>Änderungen speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing edit modal if present
+        const existingModal = document.getElementById('appointmentEditModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('appointmentEditModal'));
+        modal.show();
+
+        // Clean up modal after hiding
+        document.getElementById('appointmentEditModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    async saveAppointmentChanges(appointmentId) {
+        try {
+            const appointmentDate = document.getElementById('editAppointmentDate').value;
+            const startTime = document.getElementById('editStartTime').value;
+            const status = document.getElementById('editAppointmentStatus').value;
+            const notes = document.getElementById('editAppointmentNotes').value;
+
+            // Calculate end time (60 minutes after start time)
+            const [hours, minutes] = startTime.split(':').map(Number);
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0, 0);
+            const endDate = new Date(startDate.getTime() + (60 * 60000));
+            const endTime = endDate.toTimeString().slice(0, 5);
+
+            // Prepare update data
+            const updateData = {
+                appointment_date: appointmentDate,
+                start_time: startTime,
+                end_time: endTime,
+                status: status,
+                notes: notes.trim() || null
+            };
+
+            // Send update request
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(updateData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update appointment');
+            }
+
+            const result = await response.json();
+
+            // Close the edit modal
+            const editModal = bootstrap.Modal.getInstance(document.getElementById('appointmentEditModal'));
+            if (editModal) {
+                editModal.hide();
+            }
+
+            // Show success message
+            this.showSuccessMessage('Erfolg!', 'Termin wurde erfolgreich aktualisiert.');
+
+            // Refresh calendar and appointments view
+            this.renderCalendar();
+            if (this.currentStudioId) {
+                this.loadAppointments(this.currentStudioId);
+            }
+
+        } catch (error) {
+            console.error('Error saving appointment changes:', error);
+            alert('Fehler beim Speichern der Änderungen: ' + error.message);
+        }
     }
 
     async changeAppointmentStatus(appointmentId) {
-        // TODO: Implement status change functionality
-        alert('Status ändern wird in Kürze implementiert!');
+        try {
+            // First, fetch current appointment status
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load appointment details');
+            }
+
+            const result = await response.json();
+            const appointment = result.appointment || result;
+
+            // Close the details modal and show status change modal
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (detailsModal) {
+                detailsModal.hide();
+            }
+
+            // Create status change modal
+            this.showStatusChangeModal(appointment);
+
+        } catch (error) {
+            console.error('Error loading appointment for status change:', error);
+            alert('Fehler beim Laden der Termindetails.');
+        }
+    }
+
+    showStatusChangeModal(appointment) {
+        const modalHTML = `
+            <div class="modal fade" id="statusChangeModal" tabindex="-1" aria-labelledby="statusChangeModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background-color: #7030a0; color: white;">
+                            <h5 class="modal-title" id="statusChangeModalLabel">
+                                <i class="fas fa-exchange-alt me-2"></i>Status ändern
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <h6><i class="fas fa-user me-2"></i>Termin für:</h6>
+                                <p class="mb-2">${appointment.customer_first_name} ${appointment.customer_last_name}</p>
+                                <p class="mb-3 text-muted">${this.formatDate(appointment.appointment_date)} um ${appointment.start_time}</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="newStatus" class="form-label">
+                                    <i class="fas fa-info-circle me-2"></i>Neuer Status:
+                                </label>
+                                <select class="form-select" id="newStatus">
+                                    <option value="pending" ${appointment.status === 'pending' ? 'selected' : ''}>Ausstehend</option>
+                                    <option value="bestätigt" ${appointment.status === 'bestätigt' || appointment.status === 'confirmed' ? 'selected' : ''}>Bestätigt</option>
+                                    <option value="abgeschlossen" ${appointment.status === 'abgeschlossen' || appointment.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
+                                    <option value="abgesagt" ${appointment.status === 'abgesagt' || appointment.status === 'cancelled' ? 'selected' : ''}>Abgesagt</option>
+                                    <option value="nicht erschienen" ${appointment.status === 'nicht erschienen' || appointment.status === 'no_show' ? 'selected' : ''}>Nicht erschienen</option>
+                                </select>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Aktueller Status:</strong> 
+                                <span class="badge ${this.getStatusBadgeClass(appointment.status)} ms-2">
+                                    ${this.getStatusText(appointment.status)}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" style="background-color: #7030a0; border-color: #7030a0;" onclick="window.app.updateAppointmentStatus(${appointment.id})">
+                                <i class="fas fa-check me-1"></i>Status aktualisieren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('statusChangeModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('statusChangeModal'));
+        modal.show();
+
+        // Clean up modal after hiding
+        document.getElementById('statusChangeModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    async updateAppointmentStatus(appointmentId) {
+        try {
+            const newStatus = document.getElementById('newStatus').value;
+
+            // Send status update request
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/${appointmentId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update appointment status');
+            }
+
+            const result = await response.json();
+
+            // Close the status modal
+            const statusModal = bootstrap.Modal.getInstance(document.getElementById('statusChangeModal'));
+            if (statusModal) {
+                statusModal.hide();
+            }
+
+            // Show success message
+            this.showSuccessMessage('Erfolg!', 'Terminstatus wurde erfolgreich aktualisiert.');
+
+            // Refresh calendar and appointments view
+            this.renderCalendar();
+            if (this.currentStudioId) {
+                this.loadAppointments(this.currentStudioId);
+            }
+
+        } catch (error) {
+            console.error('Error updating appointment status:', error);
+            alert('Fehler beim Aktualisieren des Status: ' + error.message);
+        }
     }
 
     calculateEndTime(startTime, durationMinutes) {
@@ -3686,62 +4456,359 @@ class App {
     showCustomerList(studioId) {
         const content = document.getElementById('content');
         content.innerHTML = `
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4>Kunden Übersicht</h4>
-                            <button class="btn btn-outline-secondary" id="backToStudioDashboardFromCustomersBtn">
-                                Zurück zum Dashboard
-                            </button>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6>Kundenliste</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="customersList">
-                                                <div class="text-center">
-                                                    <div class="spinner-border spinner-border-sm" role="status">
-                                                        <span class="visually-hidden">Loading...</span>
-                                                    </div>
-                                                    <p class="mt-2 small">Lade Kunden...</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+            <div class="container-fluid p-4">
+                <!-- Header Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="glass-card p-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h1 class="h3 mb-1">Kunden Management</h1>
+                                    <p class="text-muted mb-0">Verwalten Sie Ihre Kunden und deren Behandlungen</p>
                                 </div>
-                                <div class="col-md-8">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6>Kunden Termine</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="customerAppointments">
-                                                <div class="text-muted text-center">
-                                                    <p>Wählen Sie einen Kunden aus der Liste</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div>
+                                    <button class="btn btn-primary" id="addCustomerBtn">
+                                        <i class="fas fa-plus me-2"></i>
+                                        Neuer Kunde
+                                    </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search and Filter Bar -->
+                <div class="customer-search-bar">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="search-input-group">
+                                <i class="fas fa-search search-icon"></i>
+                                <input 
+                                    type="text" 
+                                    class="search-input" 
+                                    id="customerSearch" 
+                                    placeholder="Kunden suchen nach Name, E-Mail oder Telefon..."
+                                >
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="flex-1">
+                                    <select class="filter-select" id="statusFilter">
+                                        <option value="all">Alle Status</option>
+                                        <option value="active">Aktiv</option>
+                                        <option value="inactive">Inaktiv</option>
+                                        <option value="vip">VIP</option>
+                                        <option value="new">Neu</option>
+                                    </select>
+                                </div>
+                                <div class="text-muted small" id="customerCount">
+                                    <i class="fas fa-users me-1"></i>
+                                    <span id="customerCountNumber">0</span> Kunden
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers Grid -->
+                <div class="customers-grid" id="customersGrid">
+                    <!-- Loading state -->
+                    <div class="col-12">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Lade Kunden...</p>
                         </div>
                     </div>
                 </div>
             </div>
         `;
 
-        // Event listener
-        document.getElementById('backToStudioDashboardFromCustomersBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
+        // Initialize customer management
+        this.initializeCustomerManagement(studioId);
+    }
+
+    initializeCustomerManagement(studioId) {
+        this.currentStudioId = studioId;
+        this.allCustomers = [];
+        this.filteredCustomers = [];
+        this.searchTerm = '';
+        this.statusFilter = 'all';
+
+        // Set up event listeners
+        this.setupCustomerSearchAndFilter();
+        
+        // Load customers
+        this.loadCustomersData(studioId);
+    }
+
+    setupCustomerSearchAndFilter() {
+        const searchInput = document.getElementById('customerSearch');
+        const statusFilter = document.getElementById('statusFilter');
+        const addCustomerBtn = document.getElementById('addCustomerBtn');
+
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchTerm = e.target.value.toLowerCase();
+                    this.filterAndRenderCustomers();
+                }, 300);
+            });
+        }
+
+        if (statusFilter) {
+            statusFilter.addEventListener('change', (e) => {
+                this.statusFilter = e.target.value;
+                this.filterAndRenderCustomers();
+            });
+        }
+
+        if (addCustomerBtn) {
+            addCustomerBtn.addEventListener('click', () => {
+                this.showAddCustomerModal();
+            });
+        }
+    }
+
+    async loadCustomersData(studioId) {
+        try {
+            // Simulate API call - replace with real endpoint
+            const response = await fetch(`http://localhost:3001/api/v1/customers/studio/${studioId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.allCustomers = data.customers || [];
+            } else {
+                // Use mock data for now
+                this.allCustomers = this.getMockCustomers();
+            }
+        } catch (error) {
+            console.error('Error loading customers:', error);
+            this.allCustomers = this.getMockCustomers();
+        }
+
+        this.filterAndRenderCustomers();
+    }
+
+    getMockCustomers() {
+        return [
+            {
+                id: 1,
+                firstName: 'Anna',
+                lastName: 'Schmidt',
+                email: 'anna.schmidt@email.com',
+                phone: '+49 123 456789',
+                status: 'active',
+                sessionBalance: 8,
+                lastAppointment: '2024-01-15',
+                createdDate: '2023-12-01'
+            },
+            {
+                id: 2,
+                firstName: 'Marco',
+                lastName: 'Weber',
+                email: 'marco.weber@email.com',
+                phone: '+49 987 654321',
+                status: 'vip',
+                sessionBalance: 12,
+                lastAppointment: '2024-01-18',
+                createdDate: '2023-11-15'
+            },
+            {
+                id: 3,
+                firstName: 'Sarah',
+                lastName: 'Müller',
+                email: 'sarah.mueller@email.com',
+                phone: '+49 555 123456',
+                status: 'inactive',
+                sessionBalance: 2,
+                lastAppointment: '2023-12-20',
+                createdDate: '2023-10-10'
+            },
+            {
+                id: 4,
+                firstName: 'Lisa',
+                lastName: 'Klein',
+                email: 'lisa.klein@email.com',
+                phone: '+49 777 888999',
+                status: 'new',
+                sessionBalance: 5,
+                lastAppointment: null,
+                createdDate: '2024-01-20'
+            }
+        ];
+    }
+
+    filterAndRenderCustomers() {
+        this.filteredCustomers = this.allCustomers.filter(customer => {
+            const matchesSearch = !this.searchTerm || 
+                customer.firstName.toLowerCase().includes(this.searchTerm) ||
+                customer.lastName.toLowerCase().includes(this.searchTerm) ||
+                customer.email.toLowerCase().includes(this.searchTerm) ||
+                (customer.phone && customer.phone.includes(this.searchTerm));
+
+            const matchesStatus = this.statusFilter === 'all' || 
+                customer.status === this.statusFilter;
+
+            return matchesSearch && matchesStatus;
         });
 
-        // Load customers
-        this.loadCustomersList(studioId);
+        this.renderCustomersGrid();
+        this.updateCustomerCount();
+    }
+
+    renderCustomersGrid() {
+        const grid = document.getElementById('customersGrid');
+        if (!grid) return;
+
+        if (this.filteredCustomers.length === 0) {
+            grid.innerHTML = this.createEmptyState();
+            return;
+        }
+
+        const customersHTML = this.filteredCustomers.map((customer, index) => 
+            this.createCustomerCard(customer, index)
+        ).join('');
+
+        grid.innerHTML = customersHTML;
+
+        // Add staggered animation
+        setTimeout(() => {
+            const cards = grid.querySelectorAll('.customer-card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.6s ease';
+                    
+                    requestAnimationFrame(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    });
+                }, index * 100);
+            });
+        }, 100);
+    }
+
+    createCustomerCard(customer, index) {
+        const initials = this.getCustomerInitials(customer.firstName, customer.lastName);
+        const statusClass = this.getStatusClass(customer.status);
+        const statusText = this.getStatusText(customer.status);
+        
+        return `
+            <div class="customer-card" data-customer-id="${customer.id}" style="animation-delay: ${index * 0.1}s">
+                <div class="customer-card-header">
+                    <div class="customer-avatar">
+                        <span class="avatar-initials">${initials}</span>
+                    </div>
+                    <div class="customer-info">
+                        <h3 class="customer-name">${customer.firstName} ${customer.lastName}</h3>
+                        <p class="customer-email">${customer.email}</p>
+                    </div>
+                    <span class="customer-status ${statusClass}">
+                        ${statusText}
+                    </span>
+                </div>
+                
+                <div class="customer-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Telefon:</span>
+                        <span class="detail-value">${customer.phone || 'Nicht angegeben'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Behandlungen:</span>
+                        <span class="detail-value">${customer.sessionBalance || 0}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Letzter Termin:</span>
+                        <span class="detail-value">${this.formatDate(customer.lastAppointment) || 'Kein Termin'}</span>
+                    </div>
+                </div>
+                
+                <div class="customer-actions">
+                    <button class="btn btn-primary details-btn" onclick="app.showCustomerDetails(${customer.id})">
+                        <i class="fas fa-eye me-2"></i>
+                        Details anzeigen
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    createEmptyState() {
+        return `
+            <div class="customers-empty-state">
+                <div class="empty-state-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3 class="empty-state-title">
+                    ${this.searchTerm || this.statusFilter !== 'all' 
+                        ? 'Keine Kunden gefunden' 
+                        : 'Noch keine Kunden'}
+                </h3>
+                <p class="empty-state-text">
+                    ${this.searchTerm || this.statusFilter !== 'all' 
+                        ? 'Versuchen Sie, Ihre Suchkriterien zu ändern' 
+                        : 'Fügen Sie Ihren ersten Kunden hinzu, um zu beginnen'}
+                </p>
+                ${this.searchTerm || this.statusFilter !== 'all' ? '' : `
+                    <button class="btn btn-primary" onclick="app.showAddCustomerModal()">
+                        <i class="fas fa-plus me-2"></i>
+                        Ersten Kunden hinzufügen
+                    </button>
+                `}
+            </div>
+        `;
+    }
+
+    getCustomerInitials(firstName, lastName) {
+        return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
+    }
+
+    getStatusClass(status) {
+        return status || 'inactive';
+    }
+
+    getStatusText(status) {
+        const statusMap = {
+            'active': 'Aktiv',
+            'inactive': 'Inaktiv',
+            'vip': 'VIP',
+            'new': 'Neu'
+        };
+        return statusMap[status] || 'Unbekannt';
+    }
+
+    updateCustomerCount() {
+        const countElement = document.getElementById('customerCountNumber');
+        if (countElement) {
+            countElement.textContent = this.filteredCustomers.length;
+        }
+    }
+
+    formatDate(dateString) {
+        if (!dateString) return null;
+        const date = new Date(dateString);
+        return date.toLocaleDateString('de-DE');
+    }
+
+    showCustomerDetails(customerId) {
+        const customer = this.allCustomers.find(c => c.id === customerId);
+        if (customer) {
+            alert(`Details für ${customer.firstName} ${customer.lastName}\n\nDiese Funktion wird in der nächsten Phase implementiert.`);
+        }
+    }
+
+    showAddCustomerModal() {
+        alert('Neuen Kunden hinzufügen\n\nDiese Funktion wird in der nächsten Phase implementiert.');
     }
 
     async loadCustomersList(studioId) {
@@ -3789,7 +4856,9 @@ class App {
                         e.preventDefault();
                         const customerId = item.dataset.customerId;
                         const customerName = item.querySelector('h6').textContent;
-                        this.loadStudioCustomerAppointments(customerId, customerName);
+                        
+                        // Show tabs and load both appointments and sessions
+                        this.selectCustomer(customerId, customerName);
                         
                         // Remove active class from all items and add to clicked item
                         document.querySelectorAll('.customer-item').forEach(i => i.classList.remove('active'));
@@ -3914,17 +4983,236 @@ class App {
         }
     }
 
+    /**
+     * Select customer and show integrated tabs for appointments and sessions
+     */
+    selectCustomer(customerId, customerName) {
+        // Hide initial prompt and show tabs
+        document.getElementById('customerSelectPrompt').style.display = 'none';
+        document.getElementById('customerDetailTabs').classList.remove('d-none');
+        
+        // Update header
+        document.getElementById('customerDetailHeader').textContent = `${customerName} - Details`;
+        
+        // Store current customer
+        this.currentCustomerId = customerId;
+        this.currentCustomerName = customerName;
+        
+        // Load data for both tabs
+        this.loadStudioCustomerAppointments(customerId, customerName);
+        this.loadCustomerSessionBlocks(customerId, customerName);
+    }
+
+    /**
+     * Load customer's session blocks in new format
+     */
+    async loadCustomerSessionBlocks(customerId, customerName) {
+        const sessionsDiv = document.getElementById('customerSessions');
+        
+        if (!sessionsDiv) {
+            console.error('customerSessions element not found');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/blocks`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customer session blocks');
+            }
+            
+            const data = await response.json();
+            const blocks = data.blocks || [];
+            const totalRemaining = data.totalRemainingSessions || 0;
+            
+            sessionsDiv.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6>Behandlungsblöcke für ${customerName}</h6>
+                    <div class="dropdown">
+                        <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-plus-circle me-2"></i>Block hinzufügen
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 10)">10 Behandlungen</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 20)">20 Behandlungen</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 30)">30 Behandlungen</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 40)">40 Behandlungen</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Summary Card -->
+                <div class="card mb-3 ${totalRemaining > 0 ? 'border-success' : 'border-warning'}">
+                    <div class="card-body text-center">
+                        <h4 class="mb-1 ${totalRemaining > 0 ? 'text-success' : 'text-warning'}">
+                            ${totalRemaining}
+                        </h4>
+                        <small class="text-muted">Verbleibende Behandlungen insgesamt</small>
+                    </div>
+                </div>
+                
+                <!-- Session Blocks -->
+                <div class="session-blocks">
+                    ${blocks.length === 0 ? 
+                        `<div class="text-center text-muted py-4">
+                            <i class="fas fa-dumbbell fa-2x mb-3"></i>
+                            <p>Noch keine Behandlungsblöcke</p>
+                            <small>Fügen Sie einen Block hinzu, um zu beginnen</small>
+                        </div>` :
+                        blocks.map((block, index) => `
+                            <div class="card mb-2 ${block.remaining_sessions > 0 ? '' : 'opacity-50'}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="card-title mb-1">
+                                                <i class="fas fa-cube me-2"></i>
+                                                Block ${block.block_order} 
+                                                <span class="badge ${block.remaining_sessions > 0 ? 'bg-primary' : 'bg-secondary'}">
+                                                    ${block.remaining_sessions > 0 ? 'Aktiv' : 'Verbraucht'}
+                                                </span>
+                                            </h6>
+                                            <p class="card-text mb-2">
+                                                <strong>${block.remaining_sessions}</strong> von <strong>${block.total_sessions}</strong> verbleibend
+                                            </p>
+                                            <div class="progress mb-2" style="height: 8px;">
+                                                <div class="progress-bar ${block.remaining_sessions > 5 ? 'bg-success' : block.remaining_sessions > 2 ? 'bg-warning' : 'bg-danger'}" 
+                                                     style="width: ${(block.remaining_sessions / block.total_sessions) * 100}%"></div>
+                                            </div>
+                                            <small class="text-muted">
+                                                <i class="fas fa-calendar me-1"></i>
+                                                Gekauft: ${new Date(block.purchase_date).toLocaleDateString('de-DE')}
+                                            </small>
+                                        </div>
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="fas fa-cog"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="window.app.editSessionBlock(${block.id})">
+                                                    <i class="fas fa-edit me-2"></i>Bearbeiten
+                                                </a></li>
+                                                <li><a class="dropdown-item text-danger" href="#" onclick="window.app.deactivateSessionBlock(${block.id})">
+                                                    <i class="fas fa-times me-2"></i>Deaktivieren
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    ${block.notes ? `<div class="mt-2"><small class="text-muted">${block.notes}</small></div>` : ''}
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            `;
+            
+        } catch (error) {
+            sessionsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>Fehler beim Laden der Behandlungsblöcke</h6>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Add new session block to customer
+     */
+    async addSessionBlock(customerId, sessionCount) {
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/topup`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionCount: sessionCount,
+                    notes: `${sessionCount} Behandlungsblock hinzugefügt`
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Hinzufügen des Blocks');
+            }
+            
+            // Show success message
+            this.showSuccessMessage('Erfolg', `${sessionCount} Behandlungen erfolgreich hinzugefügt`);
+            
+            // Reload session blocks
+            this.loadCustomerSessionBlocks(customerId, this.currentCustomerName);
+            
+        } catch (error) {
+            console.error('Error adding session block:', error);
+            this.showErrorMessage('Fehler beim Hinzufügen', error.message);
+        }
+    }
+
+    /**
+     * Edit session block
+     */
+    async editSessionBlock(sessionId) {
+        // Implementation for editing session blocks
+        // This would open a modal with edit form
+        console.log('Edit session block:', sessionId);
+        this.showErrorMessage('Hinweis', 'Bearbeitungsfunktion wird noch implementiert');
+    }
+
+    /**
+     * Deactivate session block
+     */
+    async deactivateSessionBlock(sessionId) {
+        if (!confirm('Möchten Sie diesen Behandlungsblock wirklich deaktivieren?')) {
+            return;
+        }
+        
+        try {
+            const reason = prompt('Grund für Deaktivierung:', 'Vom Studio-Besitzer deaktiviert');
+            if (!reason) return;
+            
+            const response = await fetch(`http://localhost:3001/api/v1/sessions/${sessionId}/deactivate`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reason: reason,
+                    notes: 'Block deaktiviert'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Deaktivieren');
+            }
+            
+            this.showSuccessMessage('Erfolg', 'Behandlungsblock wurde deaktiviert');
+            
+            // Reload session blocks
+            this.loadCustomerSessionBlocks(this.currentCustomerId, this.currentCustomerName);
+            
+        } catch (error) {
+            console.error('Error deactivating session block:', error);
+            this.showErrorMessage('Fehler beim Deaktivieren', error.message);
+        }
+    }
+
     showSessionManagement(studioId) {
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="row">
                 <div class="col-md-12">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h4>Behandlungen verwalten</h4>
-                            <button class="btn btn-outline-secondary" id="backToStudioDashboardFromSessionsBtn">
-                                Zurück zum Dashboard
-                            </button>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -3967,9 +5255,6 @@ class App {
         `;
 
         // Event listener
-        document.getElementById('backToStudioDashboardFromSessionsBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
-        });
 
         // Store studio ID for use in other functions
         this.currentStudioId = studioId;
@@ -4639,6 +5924,374 @@ class App {
         
         return days;
     }
+
+    // Sidebar Management
+    initSidebar() {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const mainContent = document.querySelector('.main-content');
+
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => {
+                this.toggleSidebar();
+            });
+        }
+
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', () => {
+                this.closeSidebar();
+            });
+        }
+
+        // Make logo clickable to return to dashboard
+        const logoImg = document.querySelector('.logo-img');
+        if (logoImg) {
+            logoImg.style.cursor = 'pointer';
+            logoImg.addEventListener('click', () => {
+                this.navigateToSection('dashboard');
+            });
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 992) {
+                this.closeSidebar();
+            }
+        });
+    }
+
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        
+        sidebar.classList.toggle('show');
+        sidebarOverlay.classList.toggle('show');
+    }
+
+    closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        
+        sidebar.classList.remove('show');
+        sidebarOverlay.classList.remove('show');
+    }
+
+    updateSidebarNavigation() {
+        const sidebarNav = document.getElementById('sidebarNav');
+        if (!sidebarNav) return;
+
+        let navItems = [];
+
+        if (!this.currentUser) {
+            // Guest navigation
+            navItems = [
+                { icon: 'fas fa-home', text: 'Home', section: 'welcome', active: true },
+                { icon: 'fas fa-sign-in-alt', text: 'Login', section: 'login' },
+                { icon: 'fas fa-user-plus', text: 'Registrieren', section: 'register' }
+            ];
+        } else {
+            // Authenticated user navigation based on role
+            switch (this.currentUser.role) {
+                case 'manager':
+                    navItems = [
+                        { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
+                        { icon: 'fas fa-building', text: 'Studios', section: 'studios' },
+                        { icon: 'fas fa-users', text: 'Studio Owners', section: 'owners' },
+                        { icon: 'fas fa-key', text: 'Aktivierungscodes', section: 'aktivierungscodes' },
+                        { icon: 'fas fa-chart-line', text: 'Analytics', section: 'analytics' }
+                    ];
+                    break;
+                    
+                case 'studio_owner':
+                    navItems = [
+                        { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
+                        { icon: 'fas fa-calendar-alt', text: 'Termine', section: 'termine' },
+                        { icon: 'fas fa-users', text: 'Kunden', section: 'kunden' },
+                        { icon: 'fas fa-user-plus', text: 'Lead Listen', section: 'leads' },
+                        { icon: 'fas fa-dumbbell', text: 'Behandlungen', section: 'behandlungen' },
+                        { icon: 'fas fa-chart-bar', text: 'Berichte', section: 'berichte' }
+                    ];
+                    break;
+                    
+                case 'customer':
+                    navItems = [
+                        { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
+                        { icon: 'fas fa-calendar-check', text: 'Meine Termine', section: 'appointments' },
+                        { icon: 'fas fa-dumbbell', text: 'Meine Behandlungen', section: 'sessions' },
+                        { icon: 'fas fa-user', text: 'Profil', section: 'profile' },
+                        { icon: 'fas fa-phone', text: 'Kontakt', section: 'contact' }
+                    ];
+                    break;
+                    
+                default:
+                    navItems = [
+                        { icon: 'fas fa-home', text: 'Home', section: 'welcome', active: true }
+                    ];
+            }
+        }
+
+        // Generate navigation HTML
+        const navHTML = navItems.map(item => `
+            <li class="nav-item">
+                <a class="nav-link ${item.active ? 'active' : ''}" href="#" data-section="${item.section}">
+                    <i class="${item.icon}"></i>
+                    <span class="nav-text">${item.text}</span>
+                </a>
+            </li>
+        `).join('');
+
+        sidebarNav.innerHTML = navHTML;
+
+        // Add click event listeners
+        sidebarNav.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = link.getAttribute('data-section');
+                this.navigateToSection(section);
+                
+                // Update active state
+                sidebarNav.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                // Close sidebar on mobile
+                if (window.innerWidth < 992) {
+                    this.closeSidebar();
+                }
+            });
+        });
+    }
+
+    navigateToSection(section) {
+        // This method will handle navigation to different sections
+        switch (section) {
+            case 'welcome':
+                this.showWelcomePage();
+                break;
+            case 'login':
+                this.showLoginModal();
+                break;
+            case 'register':
+                this.showRegisterModal();
+                break;
+            case 'dashboard':
+                if (this.currentUser) {
+                    if (this.currentUser.role === 'manager') {
+                        this.showManagerDashboard();
+                    } else if (this.currentUser.role === 'studio_owner') {
+                        this.showStudioDashboard();
+                    } else if (this.currentUser.role === 'customer') {
+                        this.showCustomerDashboard();
+                    }
+                } else {
+                    this.showWelcomePage();
+                }
+                break;
+            case 'calendar':
+            case 'termine':
+                if (this.currentStudioId) {
+                    this.showAppointmentManagement(this.currentStudioId);
+                } else {
+                    this.getCurrentStudioId().then(studioId => {
+                        if (studioId) this.showAppointmentManagement(studioId);
+                    });
+                }
+                break;
+            case 'customers':
+            case 'kunden':
+                if (this.currentStudioId) {
+                    this.showCustomerList(this.currentStudioId);
+                } else {
+                    this.getCurrentStudioId().then(studioId => {
+                        if (studioId) this.showCustomerList(studioId);
+                    });
+                }
+                break;
+            case 'leads':
+                this.showLeadsView();
+                break;
+            case 'sessions':
+            case 'behandlungen':
+                if (this.currentStudioId) {
+                    this.showSessionManagement(this.currentStudioId);
+                } else {
+                    this.getCurrentStudioId().then(studioId => {
+                        if (studioId) this.showSessionManagement(studioId);
+                    });
+                }
+                break;
+            case 'aktivierungscodes':
+                if (this.currentUser.role === 'manager') {
+                    this.showCodeGenerationForm();
+                } else if (this.currentStudioId) {
+                    this.showActivationCodeGeneration(this.currentStudioId);
+                } else {
+                    this.getCurrentStudioId().then(studioId => {
+                        if (studioId) this.showActivationCodeGeneration(studioId);
+                    });
+                }
+                break;
+            case 'profile':
+                if (this.currentUser.role === 'studio_owner') {
+                    this.showStudioSetup();
+                } else {
+                    this.showProfileView();
+                }
+                break;
+            case 'settings':
+                this.showSettingsView();
+                break;
+            case 'studios':
+                if (this.currentUser.role === 'manager') {
+                    this.showManagerDashboard(); // Studios are shown in manager dashboard
+                }
+                break;
+            case 'reports':
+            case 'berichte':
+                this.showReportsView();
+                break;
+            case 'analytics':
+                this.showAnalyticsView();
+                break;
+            // Add more cases as needed
+            default:
+                console.log(`Navigation to ${section} not implemented yet`);
+        }
+    }
+
+    // Helper method to get current studio ID
+    async getCurrentStudioId() {
+        if (this.currentStudioId) return this.currentStudioId;
+        
+        try {
+            const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.currentStudioId = data.studio.id;
+                return this.currentStudioId;
+            }
+        } catch (error) {
+            console.error('Error getting studio ID:', error);
+        }
+        return null;
+    }
+
+    // Placeholder methods for missing navigation features
+    showLeadsView() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-user-plus me-2"></i>Lead Listen</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Coming Soon!</strong> Lead Listen Funktionalität wird bald verfügbar sein.
+                                <br><small>Hier werden Sie Ihre Leads verwalten und in Kunden konvertieren können.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showReportsView() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-chart-bar me-2"></i>Berichte</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Coming Soon!</strong> Berichtsfunktionen sind in Entwicklung.
+                                <br><small>Hier werden Sie detaillierte Berichte über Termine, Umsätze und Kunden finden.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showAnalyticsView() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-chart-line me-2"></i>Analytics</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Coming Soon!</strong> Analytics Dashboard wird bald verfügbar sein.
+                                <br><small>Hier werden Sie erweiterte Analysen und Insights zu Ihrem Business finden.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showProfileView() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-user me-2"></i>Mein Profil</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Coming Soon!</strong> Profilverwaltung ist in Entwicklung.
+                                <br><small>Hier können Sie bald Ihre persönlichen Daten verwalten.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showSettingsView() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-cog me-2"></i>Einstellungen</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Coming Soon!</strong> Einstellungen werden bald verfügbar sein.
+                                <br><small>Hier können Sie bald Systemeinstellungen und Präferenzen konfigurieren.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
 }
 
 // Initialize the app when DOM is loaded

@@ -20,6 +20,12 @@ router.get('/customers/me/sessions',
   sessionController.getMySessionInfo
 );
 
+// Customer purchases own session block
+router.post('/customers/me/sessions/purchase',
+  validateSessionTopup,
+  sessionController.purchaseSessionBlock
+);
+
 // Studio owner view of customer sessions
 router.get('/customers/:customerId/sessions',
   validateCustomerId,
@@ -31,6 +37,12 @@ router.post('/customers/:customerId/sessions/topup',
   validateCustomerId,
   validateSessionTopup,
   sessionController.topupCustomerSessions
+);
+
+// Get customer's session block queue
+router.get('/customers/:customerId/sessions/blocks',
+  validateCustomerId,
+  sessionController.getCustomerBlockQueue
 );
 
 // Get session transaction history

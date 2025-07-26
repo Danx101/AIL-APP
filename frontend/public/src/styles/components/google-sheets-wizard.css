@@ -1,0 +1,428 @@
+/* Google Sheets Wizard Styles */
+
+.google-sheets-wizard {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Wizard Progress */
+.wizard-progress {
+    position: relative;
+}
+
+.wizard-progress .progress {
+    background-color: rgba(232, 121, 249, 0.1);
+    border-radius: 10px;
+}
+
+.wizard-progress .progress-bar {
+    background: var(--gradient-purple);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.wizard-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+}
+
+.step-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(232, 121, 249, 0.1);
+    border: 2px solid rgba(232, 121, 249, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+    transition: all var(--transition-speed) ease;
+    color: var(--primary);
+}
+
+.wizard-step.active .step-circle {
+    background: var(--gradient-purple);
+    border-color: var(--primary);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: var(--shadow-medium);
+}
+
+.wizard-step.completed .step-circle {
+    background: var(--success-color);
+    border-color: var(--success-color);
+    color: white;
+}
+
+.step-title {
+    font-weight: 500;
+    color: var(--dark-color);
+    opacity: 0.7;
+    transition: opacity var(--transition-speed) ease;
+}
+
+.wizard-step.active .step-title,
+.wizard-step.completed .step-title {
+    opacity: 1;
+    font-weight: 600;
+}
+
+/* Step Content */
+.step-content {
+    min-height: 400px;
+    padding: 2rem 0;
+}
+
+.step-content .display-4 {
+    opacity: 0.8;
+}
+
+/* Form Elements */
+.google-sheets-wizard .form-control-lg {
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+    border-radius: var(--border-radius);
+    border: 2px solid rgba(232, 121, 249, 0.2);
+    transition: all var(--transition-speed) ease;
+}
+
+.google-sheets-wizard .form-control-lg:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+}
+
+.google-sheets-wizard .form-control.is-valid {
+    border-color: var(--success-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2310b981' d='m2.3 6.73.94-.94 1.06 1.06-1.53 1.53z'/%3e%3c/svg%3e");
+}
+
+.google-sheets-wizard .form-control.is-invalid {
+    border-color: var(--danger-color);
+}
+
+/* Sheet Preview */
+.sheet-preview {
+    border: 1px solid rgba(232, 121, 249, 0.2);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.sheet-preview .table {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.sheet-preview .table th {
+    background: var(--primary-light);
+    border-color: rgba(232, 121, 249, 0.3);
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+.sheet-preview .table td {
+    border-color: rgba(232, 121, 249, 0.1);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Column Mapping */
+.column-mapping .form-select {
+    border: 2px solid rgba(232, 121, 249, 0.2);
+    transition: all var(--transition-speed) ease;
+}
+
+.column-mapping .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+}
+
+.mapping-preview {
+    background: rgba(232, 121, 249, 0.05);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+}
+
+/* Studio Selection */
+.studio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.studio-card {
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+
+.studio-card .card {
+    border-color: rgba(232, 121, 249, 0.2);
+    background: rgba(255, 255, 255, 0.7);
+    transition: all var(--transition-speed) ease;
+}
+
+.studio-card:hover .card {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.studio-card.selected .card {
+    border-color: var(--primary);
+    background: var(--primary-light);
+    box-shadow: var(--shadow-medium);
+}
+
+.selection-indicator {
+    opacity: 0;
+    color: var(--primary);
+    font-size: 1.25rem;
+    transition: opacity var(--transition-speed) ease;
+}
+
+.studio-card.selected .selection-indicator {
+    opacity: 1;
+}
+
+/* Summary */
+.summary-grid .summary-item {
+    padding: 0.75rem;
+    background: rgba(232, 121, 249, 0.05);
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--primary);
+}
+
+.mapping-summary {
+    background: rgba(232, 121, 249, 0.05);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+}
+
+/* Wizard Navigation */
+.google-sheets-wizard .card-footer {
+    background: rgba(255, 255, 255, 0.5);
+    border-top: 1px solid rgba(232, 121, 249, 0.1);
+}
+
+.google-sheets-wizard .btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    transition: all var(--transition-speed) ease;
+}
+
+.google-sheets-wizard .btn-primary {
+    background: var(--gradient-purple);
+    border: none;
+    box-shadow: var(--shadow-light);
+}
+
+.google-sheets-wizard .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+}
+
+.google-sheets-wizard .btn-primary:disabled {
+    background: rgba(232, 121, 249, 0.5);
+    opacity: 0.6;
+}
+
+.google-sheets-wizard .btn-outline-secondary {
+    border-color: rgba(107, 114, 128, 0.5);
+    color: var(--dark-color);
+}
+
+.google-sheets-wizard .btn-outline-secondary:hover {
+    background: rgba(107, 114, 128, 0.1);
+    border-color: rgba(107, 114, 128, 0.8);
+    transform: translateY(-1px);
+}
+
+/* Alert Styles */
+.google-sheets-wizard .alert {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+}
+
+.google-sheets-wizard .alert-info {
+    background: rgba(6, 182, 212, 0.1);
+    color: #0891b2;
+}
+
+.google-sheets-wizard .alert-info .alert-heading {
+    color: #0891b2;
+}
+
+/* Code styling */
+.google-sheets-wizard code {
+    background: rgba(232, 121, 249, 0.1);
+    color: var(--primary-dark);
+    padding: 0.2em 0.4em;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Loading States */
+.wizard-loading {
+    position: relative;
+}
+
+.wizard-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 10;
+    border-radius: var(--border-radius);
+}
+
+.wizard-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid rgba(232, 121, 249, 0.3);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 11;
+    transform: translate(-50%, -50%);
+}
+
+/* Form Switch Styling */
+.google-sheets-wizard .form-switch .form-check-input {
+    width: 2.5rem;
+    height: 1.25rem;
+    background-color: rgba(232, 121, 249, 0.2);
+    border: none;
+}
+
+.google-sheets-wizard .form-switch .form-check-input:checked {
+    background-color: var(--primary);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+}
+
+.google-sheets-wizard .form-switch .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .google-sheets-wizard {
+        padding: 0 1rem;
+    }
+    
+    .wizard-step {
+        margin-bottom: 1rem;
+    }
+    
+    .step-circle {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
+    }
+    
+    .step-title {
+        font-size: 0.8rem;
+    }
+    
+    .studio-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .step-content {
+        min-height: 300px;
+        padding: 1rem 0;
+    }
+    
+    .sheet-preview {
+        padding: 1rem;
+    }
+    
+    .google-sheets-wizard .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .wizard-progress .d-flex {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .wizard-step {
+        flex: 1;
+        min-width: calc(50% - 0.25rem);
+    }
+    
+    .google-sheets-wizard .card-footer .d-flex {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .google-sheets-wizard .card-footer .btn {
+        width: 100%;
+    }
+}
+
+/* Animation for step transitions */
+.step-content {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Validation styling */
+.validation-success {
+    color: var(--success-color);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.validation-error {
+    color: var(--danger-color);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Step completion animation */
+.wizard-step.completed .step-circle {
+    animation: completionPulse 0.6s ease-out;
+}
+
+@keyframes completionPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}

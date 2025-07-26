@@ -232,6 +232,36 @@ class CustomerAPI {
             throw error;
         }
     }
+
+    // Purchase session block for customer
+    async purchaseSessionBlock(sessionCount, notes = '') {
+        try {
+            console.log('CustomerAPI: Purchasing session block...', { sessionCount, notes });
+            const response = await fetch(`${this.baseURL}/customers/me/sessions/purchase`, {
+                method: 'POST',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify({
+                    sessionCount: sessionCount,
+                    notes: notes
+                })
+            });
+            
+            console.log('CustomerAPI: Purchase response status:', response.status);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                console.error('CustomerAPI: Purchase error:', errorData);
+                throw new Error(`Failed to purchase session block: ${response.status} - ${errorData.message || response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('CustomerAPI: Purchase success:', result);
+            return result;
+        } catch (error) {
+            console.error('Error purchasing session block:', error);
+            throw error;
+        }
+    }
 }
 
 // Global instance
