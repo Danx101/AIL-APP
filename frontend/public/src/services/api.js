@@ -1,7 +1,10 @@
 // Customer API Service for appointment management
 class CustomerAPI {
     constructor() {
-        this.baseURL = 'http://localhost:3001/api/v1';
+        // Use environment variable for backend URL, fallback to localhost for development
+        this.baseURL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001/api/v1'
+            : 'https://your-railway-backend-url.railway.app/api/v1'; // Will be updated after Railway deployment
     }
 
     // Get authentication headers

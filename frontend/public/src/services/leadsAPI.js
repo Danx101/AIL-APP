@@ -1,7 +1,10 @@
 // Studio Owner Leads API Service
 class LeadsAPI {
     constructor() {
-        this.baseURL = 'http://localhost:3001/api/v1';
+        // Dynamic API base URL based on environment
+        this.baseURL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001/api/v1'
+            : 'https://your-railway-backend-url.railway.app/api/v1'; // Will be updated after Railway deployment
     }
 
     // Get authentication headers

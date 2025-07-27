@@ -1,4 +1,7 @@
-const API_BASE_URL = 'http://localhost:3001';
+// Dynamic API base URL based on environment
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001'
+  : 'https://your-railway-backend-url.railway.app'; // Will be updated after Railway deployment
 
 class AuthService {
   constructor() {

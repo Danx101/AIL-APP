@@ -5,7 +5,9 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 // Initialize database connection
-const db = require('./src/database/connection');
+const db = process.env.NODE_ENV === 'production' 
+  ? require('./src/database/mysql-connection')
+  : require('./src/database/connection');
 
 // Initialize services
 const schedulerService = require('./src/services/schedulerService');
@@ -15,12 +17,38 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:51124', 'http://localhost:53288', 'http://127.0.0.1:3000', 'http://127.0.0.1:51124', 'http://127.0.0.1:53288'],
+// CORS configuration for development and production
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:51124', 
+      'http://localhost:53288',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:51124',
+      'http://127.0.0.1:53288'
+    ];
+    
+    // Add production frontend URL
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -94,6 +122,17 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔍 Health check: http://localhost:${PORT}/health`);
   console.log(`⚡ API status: http://localhost:${PORT}/api/v1/status`);
+  
+  // Initialize MySQL database in production
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const { initializeDatabase } = require('./src/database/mysql-connection');
+      await initializeDatabase();
+      console.log('🗄️ MySQL database initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize MySQL database:', error);
+    }
+  }
   
   // Initialize scheduler service
   try {

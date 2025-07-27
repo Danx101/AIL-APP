@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "live-server --port=3000 --host=localhost public/",
     "start": "live-server --port=3000 --host=localhost public/",
-    "build": "echo 'Build process not implemented yet'",
+    "build": "cp -r public/* dist/ || mkdir -p dist && cp -r public/* dist/",
     "test": "jest",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix"
