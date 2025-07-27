@@ -49,14 +49,14 @@ class LeadManagement {
                     <div class="col">
                         <h2 class="h3 mb-0">
                             <i class="bi bi-people text-primary me-2"></i>
-                            Lead Management
+                            Lead Verwaltung
                         </h2>
-                        <p class="text-muted mb-0">Manage imported and manual leads for your studio</p>
+                        <p class="text-muted mb-0">Verwalten Sie importierte und manuelle Leads für Ihr Studio</p>
                     </div>
                     <div class="col-auto">
                         <button class="btn btn-primary" onclick="leadManagement.showAddLeadModal()">
                             <i class="bi bi-person-plus me-2"></i>
-                            Add Manual Lead
+                            Manuellen Lead hinzufügen
                         </button>
                     </div>
                 </div>
@@ -74,9 +74,9 @@ class LeadManagement {
                                     </div>
                                     <div class="flex-grow-1 ms-3">
                                         <div class="fw-bold text-primary fs-4" id="total-leads">
-                                            ${this.isLoading ? '...' : (this.stats.total || 0)}
+                                            ${this.isLoading ? '...' : (this.stats.total_leads || 0)}
                                         </div>
-                                        <div class="text-muted small">Total Leads</div>
+                                        <div class="text-muted small">Gesamt Leads</div>
                                     </div>
                                 </div>
                             </div>
@@ -94,9 +94,9 @@ class LeadManagement {
                                     </div>
                                     <div class="flex-grow-1 ms-3">
                                         <div class="fw-bold text-success fs-4" id="new-leads">
-                                            ${this.isLoading ? '...' : (this.stats.new || 0)}
+                                            ${this.isLoading ? '...' : (this.stats.new_leads || 0)}
                                         </div>
-                                        <div class="text-muted small">New Leads</div>
+                                        <div class="text-muted small">Neue Leads</div>
                                     </div>
                                 </div>
                             </div>
@@ -114,9 +114,9 @@ class LeadManagement {
                                     </div>
                                     <div class="flex-grow-1 ms-3">
                                         <div class="fw-bold text-warning fs-4" id="contacted-leads">
-                                            ${this.isLoading ? '...' : (this.stats.contacted || 0)}
+                                            ${this.isLoading ? '...' : (this.stats.contacted_leads || 0)}
                                         </div>
-                                        <div class="text-muted small">Contacted</div>
+                                        <div class="text-muted small">Kontaktiert</div>
                                     </div>
                                 </div>
                             </div>
@@ -134,9 +134,9 @@ class LeadManagement {
                                     </div>
                                     <div class="flex-grow-1 ms-3">
                                         <div class="fw-bold text-info fs-4" id="converted-leads">
-                                            ${this.isLoading ? '...' : (this.stats.converted || 0)}
+                                            ${this.isLoading ? '...' : (this.stats.converted_leads || 0)}
                                         </div>
-                                        <div class="text-muted small">Converted</div>
+                                        <div class="text-muted small">Konvertiert</div>
                                     </div>
                                 </div>
                             </div>
@@ -149,41 +149,44 @@ class LeadManagement {
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-lg-4">
-                                <label for="search-leads" class="form-label fw-bold">Search</label>
+                                <label for="search-leads" class="form-label fw-bold">Suchen</label>
                                 <input type="text" 
                                        class="form-control" 
                                        id="search-leads" 
-                                       placeholder="Search by name, phone, or email..."
+                                       placeholder="Nach Name, Telefon oder E-Mail suchen..."
                                        value="${this.filters.search}">
                             </div>
                             <div class="col-lg-2">
                                 <label for="filter-status" class="form-label fw-bold">Status</label>
                                 <select class="form-select" id="filter-status">
-                                    <option value="">All Statuses</option>
-                                    ${window.leadsAPI.getAvailableStatuses().map(status => `
-                                        <option value="${status.value}" ${this.filters.status === status.value ? 'selected' : ''}>
-                                            ${status.label}
-                                        </option>
-                                    `).join('')}
+                                    <option value="">Alle Status</option>
+                                    <option value="new" ${this.filters.status === 'new' ? 'selected' : ''}>Neu</option>
+                                    <option value="contacted" ${this.filters.status === 'contacted' ? 'selected' : ''}>Kontaktiert</option>
+                                    <option value="qualified" ${this.filters.status === 'qualified' ? 'selected' : ''}>Qualifiziert</option>
+                                    <option value="interested" ${this.filters.status === 'interested' ? 'selected' : ''}>Interessiert</option>
+                                    <option value="not_interested" ${this.filters.status === 'not_interested' ? 'selected' : ''}>Nicht interessiert</option>
+                                    <option value="follow_up" ${this.filters.status === 'follow_up' ? 'selected' : ''}>Nachfass-Termin</option>
+                                    <option value="converted" ${this.filters.status === 'converted' ? 'selected' : ''}>Konvertiert</option>
+                                    <option value="lost" ${this.filters.status === 'lost' ? 'selected' : ''}>Verloren</option>
                                 </select>
                             </div>
                             <div class="col-lg-2">
-                                <label for="filter-source" class="form-label fw-bold">Source</label>
+                                <label for="filter-source" class="form-label fw-bold">Quelle</label>
                                 <select class="form-select" id="filter-source">
-                                    <option value="">All Sources</option>
+                                    <option value="">Alle Quellen</option>
                                     <option value="google_sheets" ${this.filters.source === 'google_sheets' ? 'selected' : ''}>Google Sheets</option>
-                                    <option value="manual" ${this.filters.source === 'manual' ? 'selected' : ''}>Manual Entry</option>
+                                    <option value="manual" ${this.filters.source === 'manual' ? 'selected' : ''}>Manuell</option>
                                 </select>
                             </div>
                             <div class="col-lg-2">
-                                <label for="filter-from-date" class="form-label fw-bold">From Date</label>
+                                <label for="filter-from-date" class="form-label fw-bold">Von Datum</label>
                                 <input type="date" 
                                        class="form-control" 
                                        id="filter-from-date"
                                        value="${this.filters.from_date}">
                             </div>
                             <div class="col-lg-2">
-                                <label for="filter-to-date" class="form-label fw-bold">To Date</label>
+                                <label for="filter-to-date" class="form-label fw-bold">Bis Datum</label>
                                 <input type="date" 
                                        class="form-control" 
                                        id="filter-to-date"
@@ -270,7 +273,7 @@ class LeadManagement {
     async loadStats() {
         try {
             const response = await window.leadsAPI.getLeadStats(this.studioId);
-            this.stats = response.stats || {};
+            this.stats = response.leadStats || {};
             this.updateStatsCards();
         } catch (error) {
             console.error('Error loading stats:', error);
@@ -831,10 +834,10 @@ class LeadManagement {
     // Update stats cards
     updateStatsCards() {
         const elements = {
-            'total-leads': this.stats.total || 0,
-            'new-leads': this.stats.new || 0,
-            'contacted-leads': this.stats.contacted || 0,
-            'converted-leads': this.stats.converted || 0
+            'total-leads': this.stats.total_leads || 0,
+            'new-leads': this.stats.new_leads || 0,
+            'contacted-leads': this.stats.contacted_leads || 0,
+            'converted-leads': this.stats.converted_leads || 0
         };
 
         Object.entries(elements).forEach(([id, value]) => {

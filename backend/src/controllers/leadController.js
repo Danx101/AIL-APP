@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const Lead = require('../models/Lead');
 const LeadCallLog = require('../models/LeadCallLog');
+const Studio = require('../models/Studio');
 const twilioService = require('../services/twilioService');
 const googleSheetsService = require('../services/googleSheetsService');
 
@@ -14,8 +15,13 @@ class LeadController {
       const { studioId } = req.params;
       const { status, source, search, sort_by, sort_order, page = 1, limit = 20 } = req.query;
 
-      // Authorization check
-      if (req.user.role !== 'manager' && req.user.studioId !== parseInt(studioId)) {
+      // Authorization check - verify studio ownership
+      const studio = await Studio.findById(studioId);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (req.user.role !== 'admin' && studio.owner_id !== req.user.userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
@@ -434,8 +440,13 @@ class LeadController {
     try {
       const { studioId } = req.params;
 
-      // Authorization check
-      if (req.user.role !== 'manager' && req.user.studioId !== parseInt(studioId)) {
+      // Authorization check - verify studio ownership
+      const studio = await Studio.findById(studioId);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (req.user.role !== 'admin' && studio.owner_id !== req.user.userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
 

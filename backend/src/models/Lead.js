@@ -148,7 +148,7 @@ class Lead {
   static async findByStudioId(studioId, options = {}) {
     return new Promise((resolve, reject) => {
       let sql = `
-        SELECT l.*, s.studio_name, s.city as studio_city
+        SELECT l.*, s.name as studio_name, s.city as studio_city
         FROM leads l
         LEFT JOIN studios s ON l.studio_id = s.id
         WHERE l.studio_id = ?
@@ -241,7 +241,7 @@ class Lead {
         WHERE studio_id = ?
       `;
       
-      db.get(sql, [studioId], (err, row) => {
+      db.get(sql, studioId, (err, row) => {
         if (err) {
           reject(err);
         } else {

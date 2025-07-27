@@ -357,8 +357,18 @@ class StudioController {
            ORDER BY u.created_at DESC`,
           [id],
           (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
+            if (err) {
+              console.error('Database error fetching customers:', err);
+              reject(err);
+            } else {
+              // Add status calculation for each customer
+              const customersWithStatus = rows.map(customer => ({
+                ...customer,
+                status: 'neu', // For now, we'll calculate this separately if needed
+                total_sessions: 0 // Will be calculated in session blocks
+              }));
+              resolve(customersWithStatus);
+            }
           }
         );
       });
@@ -366,6 +376,101 @@ class StudioController {
       res.json({ customers });
     } catch (error) {
       console.error('Error fetching studio customers:', error);
+      res.status(500).json({ 
+        message: 'Internal server error', 
+        error: error.message,
+        details: 'Failed to load customers from database'
+      });
+    }
+  }
+
+  /**
+   * Get dashboard statistics for a studio
+   * GET /api/v1/studios/:id/dashboard-stats
+   */
+  async getDashboardStats(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Check if studio exists and user owns it
+      const studio = await Studio.findById(id);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (studio.owner_id !== req.user.userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Get dashboard statistics
+      const stats = await new Promise((resolve, reject) => {
+        const today = new Date().toISOString().split('T')[0];
+        
+        db.get(
+          `SELECT 
+             COUNT(DISTINCT CASE WHEN cs.remaining_sessions > 0 AND cs.is_active = 1 THEN u.id END) as active_customers,
+             COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('confirmed', 'pending', 'bestätigt') THEN a.id END) as today_remaining_appointments,
+             COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('completed', 'abgeschlossen') THEN a.id END) as today_completed_appointments,
+             COUNT(DISTINCT a.id) as total_appointments_this_week
+           FROM users u
+           JOIN activation_codes ac ON u.id = ac.used_by_user_id
+           LEFT JOIN customer_sessions cs ON u.id = cs.customer_id AND cs.studio_id = ?
+           LEFT JOIN appointments a ON u.id = a.customer_id AND a.studio_id = ?
+           WHERE ac.studio_id = ? AND u.role = 'customer'`,
+          [today, today, id, id, id],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      // Calculate utilization (simplified - based on appointments vs theoretical capacity)
+      const utilization = await new Promise((resolve, reject) => {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekStartStr = weekStart.toISOString().split('T')[0];
+        
+        db.get(
+          `SELECT COUNT(*) as weekly_appointments
+           FROM appointments 
+           WHERE studio_id = ? 
+           AND appointment_date >= ? 
+           AND status IN ('confirmed', 'completed', 'bestätigt', 'abgeschlossen')`,
+          [id, weekStartStr],
+          (err, row) => {
+            if (err) reject(err);
+            else {
+              // 5 working days × 8 appointments + 1 working day × 5 appointments = 45 theoretical capacity
+              const theoreticalCapacity = 45;
+              const utilizationRate = Math.round((row.weekly_appointments / theoreticalCapacity) * 100);
+              resolve(Math.min(utilizationRate, 100)); // Cap at 100%
+            }
+          }
+        );
+      });
+
+      res.json({
+        stats: {
+          activeCustomers: {
+            value: stats.active_customers || 0,
+            change: `${stats.active_customers || 0} registriert`,
+            changeType: 'neutral'
+          },
+          todayAppointments: {
+            value: stats.today_remaining_appointments || 0,
+            change: `${stats.today_remaining_appointments || 0} verbleibend`,
+            changeType: 'neutral'
+          },
+          utilization: {
+            value: `${utilization}%`,
+            change: 'Diese Woche',
+            changeType: 'neutral'
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -492,6 +597,90 @@ class StudioController {
     } catch (error) {
       console.error('Error updating studio settings:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Update customer data (for studio owners)
+   * PATCH /api/v1/studios/:studioId/customers/:customerId
+   */
+  async updateCustomer(req, res) {
+    try {
+      const { studioId, customerId } = req.params;
+      const { first_name, last_name, email, phone } = req.body;
+
+      // Check if studio exists and user owns it
+      const studio = await Studio.findById(studioId);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (studio.owner_id !== req.user.userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Verify customer belongs to this studio (has used activation code from this studio)
+      const customerStudioLink = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT u.id FROM users u
+           JOIN activation_codes ac ON u.id = ac.used_by_user_id
+           WHERE u.id = ? AND ac.studio_id = ? AND u.role = 'customer'`,
+          [customerId, studioId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (!customerStudioLink) {
+        return res.status(404).json({ message: 'Customer not found or not associated with this studio' });
+      }
+
+      // Validate input
+      if (!first_name || !last_name || !email) {
+        return res.status(400).json({ message: 'First name, last name, and email are required' });
+      }
+
+      // Check if email is already taken by another user
+      const existingUser = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT id FROM users WHERE email = ? AND id != ?',
+          [email, customerId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email address already exists' });
+      }
+
+      // Update customer data
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, updated_at = datetime("now") WHERE id = ?',
+          [first_name, last_name, email, phone, customerId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      res.json({ 
+        message: 'Customer updated successfully',
+        customer: { id: customerId, first_name, last_name, email, phone }
+      });
+
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      res.status(500).json({ 
+        message: 'Internal server error', 
+        error: error.message 
+      });
     }
   }
 }

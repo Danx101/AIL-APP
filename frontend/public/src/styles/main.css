@@ -607,24 +607,9 @@ body {
     font-weight: 500;
 }
 
-.btn-primary::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left var(--transition-speed) ease;
-}
-
-.btn-primary:hover::before {
-    left: 100%;
-}
-
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(232, 121, 249, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(232, 121, 249, 0.3);
     color: white;
 }
 
@@ -640,27 +625,10 @@ body {
     border-width: 2px;
     background: transparent;
     transition: all var(--transition-speed) ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.btn-outline-primary::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 100%;
-    background: var(--gradient-purple);
-    transition: width var(--transition-speed) ease;
-    z-index: 0;
-}
-
-.btn-outline-primary:hover::before {
-    width: 100%;
 }
 
 .btn-outline-primary:hover {
+    background: var(--primary);
     color: white;
     border-color: var(--primary);
     transform: translateY(-1px);
@@ -722,6 +690,21 @@ body {
     transform: translateY(-4px);
     box-shadow: 0 12px 40px rgba(232, 121, 249, 0.2);
     background: rgba(255, 255, 255, 0.95);
+}
+
+.metric-card-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.metric-card-clickable:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 48px rgba(232, 121, 249, 0.3);
+    background: rgba(255, 255, 255, 1);
+}
+
+.metric-card-clickable:active {
+    transform: translateY(-2px);
 }
 
 .metric-card-content {
@@ -1020,6 +1003,12 @@ body {
     border: 1px solid rgba(236, 72, 153, 0.2);
 }
 
+.customer-status.active {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
 .customer-card:hover .customer-status {
     transform: scale(1.05);
 }
@@ -1064,23 +1053,6 @@ body {
     border-radius: var(--border-radius);
     font-weight: 500;
     transition: all var(--transition-speed) ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.details-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left var(--transition-speed) ease;
-}
-
-.details-btn:hover::before {
-    left: 100%;
 }
 
 .details-btn:hover {
@@ -1253,6 +1225,27 @@ body {
     background-color: var(--secondary-color);
     border-color: var(--secondary-color);
     color: white;
+}
+
+/* Dropdown z-index fix */
+.dropdown-menu {
+    z-index: 1055 !important;
+    position: relative;
+}
+
+.table .dropdown {
+    position: static;
+}
+
+.table .dropdown .dropdown-menu {
+    position: absolute;
+    z-index: 1055 !important;
+}
+
+/* Lead status dropdown specific fix */
+.lead-management .dropdown-menu {
+    z-index: 1060 !important;
+    margin-top: 0.25rem;
 }
 
 @media (max-width: 768px) {

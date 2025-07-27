@@ -106,6 +106,23 @@ router.get('/:id/customers',
   studioController.getCustomers
 );
 
+// Studio dashboard statistics
+router.get('/:id/dashboard-stats', 
+  authenticate, 
+  authorize(['studio_owner']), 
+  param('id').isInt().withMessage('Studio ID must be an integer'),
+  studioController.getDashboardStats
+);
+
+// Update customer data
+router.patch('/:studioId/customers/:customerId',
+  authenticate,
+  authorize(['studio_owner']),
+  param('studioId').isInt().withMessage('Studio ID must be an integer'),
+  param('customerId').isInt().withMessage('Customer ID must be an integer'),
+  studioController.updateCustomer
+);
+
 // Admin routes (if needed in future)
 router.get('/', 
   authenticate, 

@@ -749,7 +749,7 @@ class App {
         
         const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
                            'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-        const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
         
         const monthYearDisplay = document.getElementById('customerMonthYearDisplay');
         const calendarGrid = document.getElementById('customerCalendarGrid');
@@ -760,6 +760,8 @@ class App {
         
         // Calculate first day of month and number of days
         const firstDay = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1);
+        // Start from Monday: if firstDay.getDay() is 0 (Sunday), we want to go back 6 days, otherwise go back (firstDay.getDay() - 1) days
+        const dayOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
         
         let calendarHTML = `
             <table class="table table-bordered">
@@ -780,7 +782,7 @@ class App {
             
             for (let day = 0; day < 7; day++) {
                 const daysFromStart = (week * 7) + day;
-                const currentDate = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1 - firstDay.getDay() + daysFromStart);
+                const currentDate = new Date(this.customerCurrentDate.getFullYear(), this.customerCurrentDate.getMonth(), 1 - dayOffset + daysFromStart);
                 
                 const isCurrentMonth = currentDate.getMonth() === currentMonth;
                 const isToday = currentDate.toDateString() === today.toDateString();
@@ -1617,6 +1619,169 @@ class App {
     }
 
     /**
+     * Show today's appointments modal
+     */
+    async showTodayAppointmentsModal() {
+        console.log('showTodayAppointmentsModal called');
+        try {
+            // First get studio ID
+            if (!this.currentStudioId) {
+                console.log('Getting studio ID...');
+                this.currentStudioId = await this.getCurrentStudioId();
+                console.log('Studio ID:', this.currentStudioId);
+            }
+
+            // Fetch today's appointments
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch(`http://localhost:3001/api/v1/appointments/studio/${this.currentStudioId}?date=${today}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch appointments');
+            }
+
+            const data = await response.json();
+            const appointments = data.appointments || [];
+
+            // Filter only remaining/pending appointments
+            const remainingAppointments = appointments.filter(appointment => 
+                appointment.status === 'pending' || 
+                appointment.status === 'confirmed' || 
+                appointment.status === 'bestätigt'
+            );
+
+            const completedAppointments = appointments.filter(appointment => 
+                appointment.status === 'completed' || 
+                appointment.status === 'abgeschlossen'
+            );
+
+            // Create modal HTML
+            const modalHTML = `
+                <div class="modal fade" id="todayAppointmentsModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-calendar-day text-primary me-2"></i>
+                                    Heutige Termine
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <div class="text-center p-3 bg-primary bg-opacity-10 rounded">
+                                            <h4 class="text-primary mb-1">${remainingAppointments.length}</h4>
+                                            <small class="text-muted">Verbleibend</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center p-3 bg-success bg-opacity-10 rounded">
+                                            <h4 class="text-success mb-1">${completedAppointments.length}</h4>
+                                            <small class="text-muted">Abgeschlossen</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${remainingAppointments.length > 0 ? `
+                                    <h6 class="text-primary mb-3">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Verbleibende Termine
+                                    </h6>
+                                    <div class="list-group mb-4">
+                                        ${remainingAppointments.map(appointment => `
+                                            <div class="list-group-item">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">${appointment.customer_first_name} ${appointment.customer_last_name}</h6>
+                                                        <p class="mb-1">
+                                                            <i class="fas fa-clock me-1"></i>
+                                                            ${appointment.start_time} - ${appointment.end_time}
+                                                        </p>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-envelope me-1"></i>
+                                                            ${appointment.customer_email}
+                                                        </small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="badge bg-primary">${this.getStatusText(appointment.status)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : `
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Keine verbleibenden Termine für heute.
+                                    </div>
+                                `}
+
+                                ${completedAppointments.length > 0 ? `
+                                    <h6 class="text-success mb-3">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Abgeschlossene Termine
+                                    </h6>
+                                    <div class="list-group">
+                                        ${completedAppointments.map(appointment => `
+                                            <div class="list-group-item">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1 text-muted">${appointment.customer_first_name} ${appointment.customer_last_name}</h6>
+                                                        <p class="mb-1 text-muted">
+                                                            <i class="fas fa-clock me-1"></i>
+                                                            ${appointment.start_time} - ${appointment.end_time}
+                                                        </p>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-envelope me-1"></i>
+                                                            ${appointment.customer_email}
+                                                        </small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="badge bg-success">${this.getStatusText(appointment.status)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove existing modal if any
+            const existingModal = document.getElementById('todayAppointmentsModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add modal to DOM
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('todayAppointmentsModal'));
+            modal.show();
+
+            // Clean up modal after hiding
+            document.getElementById('todayAppointmentsModal').addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+
+        } catch (error) {
+            console.error('Error loading today\'s appointments:', error);
+            this.showErrorMessage('Fehler', 'Heutige Termine konnten nicht geladen werden.');
+        }
+    }
+
+    /**
      * Purchase session block for customer
      */
     async purchaseCustomerSessionBlock(sessionCount) {
@@ -2236,13 +2401,17 @@ class App {
         // Check if user has a studio and load metrics
         this.checkStudioStatus();
         this.loadDashboardMetrics();
+        
+        // Set up auto-refresh for dashboard metrics every 30 seconds
+        this.metricsRefreshInterval = setInterval(() => {
+            this.loadDashboardMetrics();
+        }, 30000);
     }
 
     createLoadingMetrics() {
         const metrics = [
             { title: 'Aktive Kunden', icon: 'fas fa-users', gradient: 'gradient-purple' },
             { title: 'Heutige Termine', icon: 'fas fa-calendar-day', gradient: 'gradient-blue' },
-            { title: 'Monats-Umsatz', icon: 'fas fa-euro-sign', gradient: 'gradient-green' },
             { title: 'Auslastung', icon: 'fas fa-chart-line', gradient: 'gradient-orange' }
         ];
 
@@ -2274,23 +2443,51 @@ class App {
     }
 
     async fetchStudioMetrics() {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Mock data - replace with real API calls
-        return {
-            activeCustomers: { value: 247, change: '+12 diese Woche', changeType: 'positive' },
-            todayAppointments: { value: 8, change: '2 ausstehend', changeType: 'neutral' },
-            monthlyRevenue: { value: '€3.240', change: '+18% vs. letzter Monat', changeType: 'positive' },
-            utilization: { value: '94%', change: 'Diese Woche', changeType: 'neutral' }
-        };
+        try {
+            // Get studio ID
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            let studioId = user.studio_id;
+            
+            if (!studioId) {
+                const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    studioId = data.studio.id;
+                }
+            }
+
+            if (!studioId) {
+                throw new Error('Studio ID not found');
+            }
+
+            // Fetch real dashboard statistics
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/dashboard-stats`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch dashboard stats');
+            }
+
+            const data = await response.json();
+            return data.stats;
+        } catch (error) {
+            console.error('Error fetching studio metrics:', error);
+            // Return default values on error
+            return this.getDefaultMetrics();
+        }
     }
 
     getDefaultMetrics() {
         return {
             activeCustomers: { value: 0, change: 'Keine Daten', changeType: 'neutral' },
             todayAppointments: { value: 0, change: 'Keine Termine', changeType: 'neutral' },
-            monthlyRevenue: { value: '€0', change: 'Noch keine Umsätze', changeType: 'neutral' },
             utilization: { value: '0%', change: 'Noch keine Auslastung', changeType: 'neutral' }
         };
     }
@@ -2313,12 +2510,6 @@ class App {
                 gradient: 'gradient-blue' 
             },
             { 
-                key: 'monthlyRevenue', 
-                title: 'Monats-Umsatz', 
-                icon: 'fas fa-euro-sign', 
-                gradient: 'gradient-green' 
-            },
-            { 
                 key: 'utilization', 
                 title: 'Auslastung', 
                 icon: 'fas fa-chart-line', 
@@ -2328,8 +2519,12 @@ class App {
 
         const metricCards = metricConfigs.map((config, index) => {
             const data = metrics[config.key];
+            const isClickable = config.key === 'todayAppointments';
+            const clickableClass = isClickable ? 'metric-card-clickable' : '';
+            const clickHandler = isClickable ? `onclick="showTodayAppointments()"` : '';
+            
             return `
-                <div class="metric-card" style="animation-delay: ${index * 0.1}s">
+                <div class="metric-card ${clickableClass}" style="animation-delay: ${index * 0.1}s" ${clickHandler}>
                     <div class="metric-card-content">
                         <div class="metric-info">
                             <div class="metric-value">${data.value}</div>
@@ -2379,37 +2574,20 @@ class App {
                 const studio = data.studio;
                 
                 statusDiv.innerHTML = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="glass-card p-3 mb-3">
-                                <h6 class="mb-3"><i class="fas fa-building me-2"></i>${studio.name}</h6>
-                                <div class="studio-info">
-                                    <div class="info-item mb-2">
-                                        <i class="fas fa-map-marker-alt text-primary me-2"></i>
-                                        <strong>Stadt:</strong> ${studio.city}
-                                    </div>
-                                    <div class="info-item mb-2">
-                                        <i class="fas fa-home text-primary me-2"></i>
-                                        <strong>Adresse:</strong> ${studio.address}
-                                    </div>
-                                    <div class="info-item">
-                                        <i class="fas fa-phone text-primary me-2"></i>
-                                        <strong>Telefon:</strong> ${studio.phone}
-                                    </div>
-                                </div>
+                    <div class="glass-card p-3 mb-3">
+                        <h6 class="mb-3"><i class="fas fa-building me-2"></i>${studio.name}</h6>
+                        <div class="studio-info">
+                            <div class="info-item mb-2">
+                                <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                <strong>Stadt:</strong> ${studio.city}
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="glass-card p-3 mb-3">
-                                <h6 class="mb-3">Heutige Termine</h6>
-                                <div id="todaysAppointments">
-                                    <div class="text-center">
-                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                            <span class="visually-hidden">Loading...</span>
-                                        </div>
-                                        <p class="mt-2 small text-muted">Lade heutige Termine...</p>
-                                    </div>
-                                </div>
+                            <div class="info-item mb-2">
+                                <i class="fas fa-home text-primary me-2"></i>
+                                <strong>Adresse:</strong> ${studio.address}
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-phone text-primary me-2"></i>
+                                <strong>Telefon:</strong> ${studio.phone}
                             </div>
                         </div>
                     </div>
@@ -2433,10 +2611,6 @@ class App {
                         </button>
                     `;
                 }
-                
-                
-                // Load today's appointments
-                this.loadTodaysAppointments(studio.id);
                 
             } else if (response.status === 404) {
                 statusDiv.innerHTML = `
@@ -3211,66 +3385,61 @@ class App {
     showAppointmentManagement(studioId) {
         const content = document.getElementById('content');
         content.innerHTML = `
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4>Termine verwalten</h4>
-                            <div>
-                                <button class="btn btn-primary" id="createAppointmentBtn">
-                                    Neuer Termin
-                                </button>
+            <div class="container-fluid p-4">
+                <!-- Header Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="glass-card p-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h1 class="h3 mb-1">
+                                        <i class="fas fa-calendar-alt text-primary me-2"></i>
+                                        Termine verwalten
+                                    </h1>
+                                    <p class="text-muted mb-0">Verwalten Sie Ihre Termine und buchen Sie neue Behandlungen</p>
+                                </div>
+                                <div>
+                                    <button class="btn btn-primary" id="createAppointmentBtn">
+                                        <i class="fas fa-plus me-2"></i>
+                                        Neuer Termin
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="card-body">
+                    </div>
+                </div>
+                
+                <!-- Main Content -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="glass-card p-4">
                             <div class="row">
                                 <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h6>Kalender</h6>
+                                    <div class="glass-card p-3 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="mb-0">Kalender</h6>
                                             <div class="btn-group btn-group-sm">
                                                 <button class="btn btn-outline-primary" id="prevMonthBtn">‹</button>
                                                 <button class="btn btn-outline-primary" id="nextMonthBtn">›</button>
                                             </div>
                                         </div>
-                                        <div class="card-body">
-                                            <div id="monthYearDisplay" class="text-center mb-3">
-                                                <strong>Januar 2025</strong>
-                                            </div>
-                                            <div id="calendarGrid">
-                                                <!-- Calendar will be generated here -->
-                                            </div>
-                                            <div class="mt-3">
-                                                <div class="mb-2">
-                                                    <label class="form-label">Status Filter</label>
-                                                    <select class="form-select form-select-sm" id="appointmentStatusFilter">
-                                                        <option value="">Alle</option>
-                                                                                    <option value="confirmed">Bestätigt</option>
-                                                        <option value="cancelled">Abgesagt</option>
-                                                        <option value="completed">Abgeschlossen</option>
-                                                        <option value="no_show">Nicht erschienen</option>
-                                                    </select>
-                                                </div>
-                                                <button class="btn btn-outline-primary btn-sm w-100" id="filterAppointmentsBtn">
-                                                    Filter anwenden
-                                                </button>
-                                            </div>
+                                        <div id="monthYearDisplay" class="text-center mb-3">
+                                            <strong>Januar 2025</strong>
+                                        </div>
+                                        <div id="calendarGrid">
+                                            <!-- Calendar will be generated here -->
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-8">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6 id="selectedDateHeader">Termine für heute</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="appointmentsList">
-                                                <div class="text-center">
-                                                    <div class="spinner-border" role="status">
-                                                        <span class="visually-hidden">Loading...</span>
-                                                    </div>
-                                                    <p class="mt-2">Lade Termine...</p>
+                                    <div class="glass-card p-3 mb-3">
+                                        <h6 id="selectedDateHeader" class="mb-3">Termine für heute</h6>
+                                        <div id="appointmentsList">
+                                            <div class="text-center">
+                                                <div class="spinner-border" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
                                                 </div>
+                                                <p class="mt-2">Lade Termine...</p>
                                             </div>
                                         </div>
                                     </div>
@@ -3292,9 +3461,6 @@ class App {
         });
 
 
-        document.getElementById('filterAppointmentsBtn').addEventListener('click', () => {
-            this.loadAppointments(studioId);
-        });
 
         document.getElementById('prevMonthBtn').addEventListener('click', () => {
             this.currentDate.setMonth(this.currentDate.getMonth() - 1);
@@ -3326,7 +3492,6 @@ class App {
         }
         
         const appointmentsDiv = document.getElementById('appointmentsList');
-        const statusFilter = document.getElementById('appointmentStatusFilter')?.value || '';
         
         // Use selectedDate if available, otherwise use today's date
         const selectedDate = this.selectedDate || new Date();
@@ -3337,7 +3502,6 @@ class App {
             let url = `http://localhost:3001/api/v1/appointments/studio/${studioId}`;
             const params = new URLSearchParams();
             params.append('date', selectedDateStr);
-            if (statusFilter) params.append('status', statusFilter);
             if (params.toString()) url += '?' + params.toString();
 
             const response = await fetch(url, {
@@ -3755,7 +3919,13 @@ class App {
     async loadCustomers(studioId) {
         const customerSelect = document.getElementById('customerId');
         
+        if (!customerSelect) {
+            console.error('Customer select element not found');
+            return;
+        }
+        
         try {
+            console.log('Loading customers for studio:', studioId);
             const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -3763,11 +3933,15 @@ class App {
             });
             
             if (!response.ok) {
-                throw new Error('Failed to load customers');
+                const errorText = await response.text();
+                console.error('Error loading customers:', response.status, errorText);
+                throw new Error(`Failed to load customers: ${response.status}`);
             }
             
             const data = await response.json();
             const customers = data.customers || [];
+            
+            console.log('Loaded customers:', customers.length);
             
             customerSelect.innerHTML = '<option value="">Kunde auswählen...</option>';
             customers.forEach(customer => {
@@ -3778,7 +3952,12 @@ class App {
                 `;
             });
             
+            if (customers.length === 0) {
+                customerSelect.innerHTML += '<option value="" disabled>Keine Kunden vorhanden</option>';
+            }
+            
         } catch (error) {
+            console.error('Error in loadCustomers:', error);
             customerSelect.innerHTML = '<option value="">Fehler beim Laden der Kunden</option>';
         }
     }
@@ -4576,8 +4755,8 @@ class App {
 
     async loadCustomersData(studioId) {
         try {
-            // Simulate API call - replace with real endpoint
-            const response = await fetch(`http://localhost:3001/api/v1/customers/studio/${studioId}`, {
+            // Fetch customers from real API endpoint
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4585,7 +4764,12 @@ class App {
 
             if (response.ok) {
                 const data = await response.json();
-                this.allCustomers = data.customers || [];
+                let customers = data.customers || [];
+                
+                // Enhance customers with session block data
+                customers = await this.enhanceCustomersWithSessionData(customers);
+                
+                this.allCustomers = customers;
             } else {
                 // Use mock data for now
                 this.allCustomers = this.getMockCustomers();
@@ -4596,6 +4780,50 @@ class App {
         }
 
         this.filterAndRenderCustomers();
+    }
+
+    async enhanceCustomersWithSessionData(customers) {
+        // Process customers in batches to avoid overwhelming the API
+        const enhancedCustomers = [];
+        
+        for (const customer of customers) {
+            try {
+                // Fetch session blocks for this customer
+                const sessionBlocks = await this.loadCustomerSessionBlocks(customer.id);
+                
+                // Calculate totals
+                const totalSessions = sessionBlocks.reduce((sum, block) => sum + (block.total_sessions || 0), 0);
+                const remainingSessions = sessionBlocks.reduce((sum, block) => sum + (block.remaining_sessions || 0), 0);
+                const completedSessions = totalSessions - remainingSessions;
+                
+                // Determine if customer is active (has remaining sessions)
+                const isActive = remainingSessions > 0;
+                
+                // Update customer object
+                const enhancedCustomer = {
+                    ...customer,
+                    total_sessions: totalSessions,
+                    remaining_sessions: remainingSessions,
+                    completed_sessions: completedSessions,
+                    is_active: isActive,
+                    status: isActive ? 'aktiv' : (customer.status || 'neu')
+                };
+                
+                enhancedCustomers.push(enhancedCustomer);
+            } catch (error) {
+                console.error(`Error loading session data for customer ${customer.id}:`, error);
+                // Add customer without session data if API fails
+                enhancedCustomers.push({
+                    ...customer,
+                    total_sessions: 0,
+                    remaining_sessions: 0,
+                    completed_sessions: 0,
+                    is_active: false
+                });
+            }
+        }
+        
+        return enhancedCustomers;
     }
 
     getMockCustomers() {
@@ -4649,11 +4877,17 @@ class App {
 
     filterAndRenderCustomers() {
         this.filteredCustomers = this.allCustomers.filter(customer => {
+            // Handle both camelCase (mock) and snake_case (database) field names
+            const firstName = (customer.first_name || customer.firstName || '').toLowerCase();
+            const lastName = (customer.last_name || customer.lastName || '').toLowerCase();
+            const email = (customer.email || '').toLowerCase();
+            const phone = customer.phone || '';
+            
             const matchesSearch = !this.searchTerm || 
-                customer.firstName.toLowerCase().includes(this.searchTerm) ||
-                customer.lastName.toLowerCase().includes(this.searchTerm) ||
-                customer.email.toLowerCase().includes(this.searchTerm) ||
-                (customer.phone && customer.phone.includes(this.searchTerm));
+                firstName.includes(this.searchTerm) ||
+                lastName.includes(this.searchTerm) ||
+                email.includes(this.searchTerm) ||
+                phone.includes(this.searchTerm);
 
             const matchesStatus = this.statusFilter === 'all' || 
                 customer.status === this.statusFilter;
@@ -4699,7 +4933,10 @@ class App {
     }
 
     createCustomerCard(customer, index) {
-        const initials = this.getCustomerInitials(customer.firstName, customer.lastName);
+        // Handle both camelCase (mock) and snake_case (database) field names
+        const firstName = customer.first_name || customer.firstName || '';
+        const lastName = customer.last_name || customer.lastName || '';
+        const initials = this.getCustomerInitials(firstName, lastName);
         const statusClass = this.getStatusClass(customer.status);
         const statusText = this.getStatusText(customer.status);
         
@@ -4710,7 +4947,7 @@ class App {
                         <span class="avatar-initials">${initials}</span>
                     </div>
                     <div class="customer-info">
-                        <h3 class="customer-name">${customer.firstName} ${customer.lastName}</h3>
+                        <h3 class="customer-name">${firstName} ${lastName}</h3>
                         <p class="customer-email">${customer.email}</p>
                     </div>
                     <span class="customer-status ${statusClass}">
@@ -4725,16 +4962,16 @@ class App {
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Behandlungen:</span>
-                        <span class="detail-value">${customer.sessionBalance || 0}</span>
+                        <span class="detail-value">${customer.completed_sessions || 0}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Letzter Termin:</span>
-                        <span class="detail-value">${this.formatDate(customer.lastAppointment) || 'Kein Termin'}</span>
+                        <span class="detail-label">Registriert:</span>
+                        <span class="detail-value">${this.formatDate(customer.created_at) || 'Unbekannt'}</span>
                     </div>
                 </div>
                 
                 <div class="customer-actions">
-                    <button class="btn btn-primary details-btn" onclick="app.showCustomerDetails(${customer.id})">
+                    <button class="btn btn-outline-primary details-btn" onclick="app.showCustomerDetails(${customer.id})">
                         <i class="fas fa-eye me-2"></i>
                         Details anzeigen
                     </button>
@@ -4774,17 +5011,19 @@ class App {
     }
 
     getStatusClass(status) {
-        return status || 'inactive';
+        const statusClasses = {
+            'neu': 'new',
+            'aktiv': 'active'
+        };
+        return statusClasses[status] || '';
     }
 
     getStatusText(status) {
         const statusMap = {
-            'active': 'Aktiv',
-            'inactive': 'Inaktiv',
-            'vip': 'VIP',
-            'new': 'Neu'
+            'neu': 'Neu',
+            'aktiv': 'Aktiv'
         };
-        return statusMap[status] || 'Unbekannt';
+        return statusMap[status] || '';
     }
 
     updateCustomerCount() {
@@ -4800,11 +5039,543 @@ class App {
         return date.toLocaleDateString('de-DE');
     }
 
-    showCustomerDetails(customerId) {
+    async showCustomerDetails(customerId) {
         const customer = this.allCustomers.find(c => c.id === customerId);
-        if (customer) {
-            alert(`Details für ${customer.firstName} ${customer.lastName}\n\nDiese Funktion wird in der nächsten Phase implementiert.`);
+        if (!customer) {
+            alert('Kunde nicht gefunden');
+            return;
         }
+
+        // Get customer's session blocks
+        const sessionBlocks = await this.loadCustomerSessionBlocks(customerId);
+        
+        // Ensure sessionBlocks is always an array
+        const safeSessionBlocks = Array.isArray(sessionBlocks) ? sessionBlocks : [];
+        
+        const firstName = customer.first_name || customer.firstName || '';
+        const lastName = customer.last_name || customer.lastName || '';
+        
+        const modalHTML = `
+            <div class="modal fade" id="customerDetailsModal" tabindex="-1" aria-labelledby="customerDetailsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="customerDetailsModalLabel">
+                                <i class="fas fa-user me-2"></i>
+                                ${firstName} ${lastName}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <!-- Customer Info -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Kundendaten</h6>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.toggleCustomerEdit(${customerId})">
+                                                <i class="fas fa-edit"></i> Bearbeiten
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="customerViewMode-${customerId}">
+                                                <p class="mb-2"><strong>Email:</strong> ${customer.email}</p>
+                                                <p class="mb-2"><strong>Telefon:</strong> ${customer.phone || 'Nicht angegeben'}</p>
+                                                <p class="mb-0"><strong>Registriert:</strong> ${this.formatDate(customer.created_at)}</p>
+                                                ${customer.status === 'neu' ? '<span class="badge bg-info mt-2">Neuer Kunde</span>' : ''}
+                                            </div>
+                                            <div id="customerEditMode-${customerId}" style="display: none;">
+                                                <form id="customerEditForm-${customerId}">
+                                                    <div class="mb-3">
+                                                        <label class="form-label"><strong>Vorname:</strong></label>
+                                                        <input type="text" class="form-control" id="editFirstName-${customerId}" value="${firstName}">
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label"><strong>Nachname:</strong></label>
+                                                        <input type="text" class="form-control" id="editLastName-${customerId}" value="${lastName}">
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label"><strong>Email:</strong></label>
+                                                        <input type="email" class="form-control" id="editEmail-${customerId}" value="${customer.email}">
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label"><strong>Telefon:</strong></label>
+                                                        <input type="text" class="form-control" id="editPhone-${customerId}" value="${customer.phone || ''}">
+                                                    </div>
+                                                    <div class="d-flex gap-2">
+                                                        <button type="button" class="btn btn-success btn-sm" onclick="app.saveCustomerEdit(${customerId})">
+                                                            <i class="fas fa-save"></i> Speichern
+                                                        </button>
+                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="app.cancelCustomerEdit(${customerId})">
+                                                            <i class="fas fa-times"></i> Abbrechen
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Statistiken</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="mb-2"><strong>Gesamte Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.total_sessions || 0), 0)}</p>
+                                            <p class="mb-2"><strong>Durchgeführte Behandlungen:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + ((block.total_sessions || 0) - (block.remaining_sessions || 0)), 0)}</p>
+                                            <p class="mb-2"><strong>Verbleibende Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.remaining_sessions || 0), 0)}</p>
+                                            <p class="mb-0"><strong>Aktive Blöcke:</strong> ${safeSessionBlocks.filter(block => block.is_active && block.remaining_sessions > 0).length}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Treatment Management -->
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0"><i class="fas fa-dumbbell me-2"></i>Behandlungen</h6>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 10)" title="10er Block hinzufügen">+10</button>
+                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 20)" title="20er Block hinzufügen">+20</button>
+                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 30)" title="30er Block hinzufügen">+30</button>
+                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 40)" title="40er Block hinzufügen">+40</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="sessionBlocksContainer">
+                                    ${this.renderTreatmentBlocks(safeSessionBlocks, customerId)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('customerDetailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
+        modal.show();
+    }
+
+    renderTreatmentBlocks(sessionBlocks, customerId) {
+        if (sessionBlocks.length === 0) {
+            return `
+                <div class="text-muted text-center py-4">
+                    <i class="fas fa-dumbbell fa-2x mb-2"></i>
+                    <p>Keine Behandlungsblöcke vorhanden</p>
+                    <p><small>Fügen Sie einen Block hinzu, um mit den Behandlungen zu beginnen</small></p>
+                </div>
+            `;
+        }
+
+        // Calculate totals for better overview
+        const totalSessions = sessionBlocks.reduce((sum, block) => sum + (block.total_sessions || 0), 0);
+        const usedSessions = sessionBlocks.reduce((sum, block) => sum + ((block.total_sessions || 0) - (block.remaining_sessions || 0)), 0);
+        const remainingSessions = sessionBlocks.reduce((sum, block) => sum + (block.remaining_sessions || 0), 0);
+
+        return `
+            <!-- Treatment Overview -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 mb-1 text-primary">${totalSessions}</div>
+                        <small class="text-muted">Gesamt gekauft</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 mb-1 text-success">${usedSessions}</div>
+                        <small class="text-muted">Durchgeführt</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 mb-1 text-warning">${remainingSessions}</div>
+                        <small class="text-muted">Verbleibend</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Treatment Blocks -->
+            ${sessionBlocks.map((block, index) => {
+                const isCurrentBlock = index === 0 && block.remaining_sessions > 0;
+                const isStarted = block.total_sessions > block.remaining_sessions;
+                const progressPercent = ((block.total_sessions - block.remaining_sessions) / block.total_sessions) * 100;
+                const blockType = block.total_sessions >= 40 ? 'XL' : block.total_sessions >= 30 ? 'L' : block.total_sessions >= 20 ? 'M' : 'S';
+                
+                return `
+                    <div class="card mb-3 ${isCurrentBlock ? 'border-primary' : ''}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">
+                                    <i class="fas fa-cube me-2"></i>
+                                    ${block.total_sessions}er Block (${blockType})
+                                    ${isCurrentBlock ? '<span class="badge bg-primary ms-2">Aktuell</span>' : ''}
+                                    ${!block.is_active ? '<span class="badge bg-secondary ms-2">Inaktiv</span>' : ''}
+                                </h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    Gekauft: ${this.formatDate(block.purchase_date)}
+                                </small>
+                            </div>
+                            <div class="btn-group">
+                                ${isStarted ? `
+                                    <button class="btn btn-sm btn-warning" onclick="app.editSessionBlock(${block.id}, ${block.remaining_sessions}, true)" title="Vorsicht: Block bereits gestartet">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><i class="fas fa-chart-pie me-1"></i>Behandlungsfortschritt:</span>
+                                        <span class="fw-bold">${block.total_sessions - block.remaining_sessions} / ${block.total_sessions}</span>
+                                    </div>
+                                    <div class="progress mb-3" style="height: 8px;">
+                                        <div class="progress-bar ${isCurrentBlock ? 'bg-primary' : 'bg-secondary'}" 
+                                             style="width: ${progressPercent}%"></div>
+                                    </div>
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Durchgeführt</small>
+                                            <span class="badge bg-success">${block.total_sessions - block.remaining_sessions}</span>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Offen</small>
+                                            <span class="badge bg-warning">${block.remaining_sessions}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h3 mb-1 ${remainingSessions > 0 ? 'text-primary' : 'text-muted'}">${block.remaining_sessions}</div>
+                                        <small class="text-muted">Sessions verfügbar</small>
+                                        ${block.remaining_sessions === 0 ? '<div class="mt-2"><span class="badge bg-success">Abgeschlossen</span></div>' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            ${block.notes ? `
+                                <div class="mt-3 p-2 bg-light rounded">
+                                    <small class="text-muted">
+                                        <strong><i class="fas fa-sticky-note me-1"></i>Notizen:</strong> ${block.notes}
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        `;
+    }
+
+    async loadCustomerSessionBlocks(customerId) {
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    // Customer has no session blocks yet
+                    return [];
+                }
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                throw new Error(`Failed to load session blocks: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return Array.isArray(data.sessions) ? data.sessions : [];
+        } catch (error) {
+            console.error('Error loading session blocks:', error);
+            // Return empty array as fallback
+            return [];
+        }
+    }
+
+    async addSessionBlock(customerId, sessionCount) {
+        try {
+            const studioId = await this.getCurrentStudioId();
+            if (!studioId) {
+                alert('Studio-ID konnte nicht ermittelt werden');
+                return;
+            }
+
+            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/topup`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    studio_id: studioId,
+                    total_sessions: sessionCount,
+                    notes: `${sessionCount}er Block hinzugefügt`
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Hinzufügen des Session-Blocks');
+            }
+
+            // Refresh customer details
+            await this.showCustomerDetails(customerId);
+        } catch (error) {
+            console.error('Error adding session block:', error);
+            alert(`Fehler beim Hinzufügen des Session-Blocks: ${error.message}`);
+        }
+    }
+
+    async editSessionBlock(blockId, currentRemaining, isStarted) {
+        const warningMessage = isStarted ? 
+            'WARNUNG: Dieser Block wurde bereits gestartet! Sind Sie sicher, dass Sie die verbleibenden Sessions ändern möchten?' : 
+            'Verbleibende Sessions für diesen Block ändern:';
+        
+        const newRemaining = prompt(`${warningMessage}\n\nAktuelle verbleibende Sessions: ${currentRemaining}`, currentRemaining);
+        
+        if (newRemaining === null) return; // User cancelled
+        
+        const newRemainingInt = parseInt(newRemaining);
+        if (isNaN(newRemainingInt) || newRemainingInt < 0) {
+            alert('Bitte geben Sie eine gültige Zahl ein (≥ 0)');
+            return;
+        }
+
+        if (isStarted && !confirm('Sind Sie sicher, dass Sie die verbleibenden Sessions ändern möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/sessions/${blockId}/edit`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    remaining_sessions: newRemainingInt
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Bearbeiten des Session-Blocks');
+            }
+
+            // Find customer ID and refresh details
+            const customerId = await this.getCustomerIdFromSessionBlock(blockId);
+            if (customerId) {
+                await this.showCustomerDetails(customerId);
+            }
+        } catch (error) {
+            console.error('Error editing session block:', error);
+            console.error('Block ID:', blockId, 'New remaining:', newRemainingInt);
+            alert(`Fehler beim Bearbeiten des Session-Blocks: ${error.message}`);
+        }
+    }
+
+    async deleteSessionBlock(blockId) {
+        if (!confirm('Sind Sie sicher, dass Sie diesen Session-Block löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3001/api/v1/sessions/${blockId}/deactivate`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    reason: 'Session block deleted by studio owner'
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Löschen des Session-Blocks');
+            }
+
+            // Find customer ID and refresh details
+            const customerId = await this.getCustomerIdFromSessionBlock(blockId);
+            if (customerId) {
+                await this.showCustomerDetails(customerId);
+            }
+        } catch (error) {
+            console.error('Error deleting session block:', error);
+            console.error('Block ID:', blockId);
+            alert(`Fehler beim Löschen des Session-Blocks: ${error.message}`);
+        }
+    }
+
+    async getCurrentStudioId() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        let studioId = user.studio_id;
+        
+        if (!studioId) {
+            const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                studioId = data.studio.id;
+            }
+        }
+        
+        return studioId;
+    }
+
+    async getCustomerIdFromSessionBlock(blockId) {
+        // This is a helper method to find the customer ID from a session block
+        // In practice, we could store this in the modal or make an API call
+        const modal = document.getElementById('customerDetailsModal');
+        if (modal) {
+            // Extract customer ID from the add session block buttons
+            const addButtons = modal.querySelectorAll('[onclick*="addSessionBlock"]');
+            if (addButtons.length > 0) {
+                const onclick = addButtons[0].getAttribute('onclick');
+                const match = onclick.match(/addSessionBlock\((\d+),/);
+                if (match) {
+                    return parseInt(match[1]);
+                }
+            }
+        }
+        return null;
+    }
+
+    toggleCustomerEdit(customerId) {
+        const viewMode = document.getElementById(`customerViewMode-${customerId}`);
+        const editMode = document.getElementById(`customerEditMode-${customerId}`);
+        
+        if (viewMode && editMode) {
+            if (viewMode.style.display === 'none') {
+                // Currently in edit mode, switch to view mode
+                viewMode.style.display = 'block';
+                editMode.style.display = 'none';
+            } else {
+                // Currently in view mode, switch to edit mode
+                viewMode.style.display = 'none';
+                editMode.style.display = 'block';
+            }
+        }
+    }
+
+    cancelCustomerEdit(customerId) {
+        const viewMode = document.getElementById(`customerViewMode-${customerId}`);
+        const editMode = document.getElementById(`customerEditMode-${customerId}`);
+        
+        if (viewMode && editMode) {
+            viewMode.style.display = 'block';
+            editMode.style.display = 'none';
+        }
+    }
+
+    async saveCustomerEdit(customerId) {
+        const firstName = document.getElementById(`editFirstName-${customerId}`).value.trim();
+        const lastName = document.getElementById(`editLastName-${customerId}`).value.trim();
+        const email = document.getElementById(`editEmail-${customerId}`).value.trim();
+        const phone = document.getElementById(`editPhone-${customerId}`).value.trim();
+
+        // Validation
+        if (!firstName || !lastName || !email) {
+            alert('Bitte füllen Sie alle Pflichtfelder aus (Vorname, Nachname, Email)');
+            return;
+        }
+
+        if (!this.isValidEmail(email)) {
+            alert('Bitte geben Sie eine gültige E-Mail-Adresse ein');
+            return;
+        }
+
+        try {
+            const studioId = await this.getCurrentStudioId();
+            if (!studioId) {
+                throw new Error('Studio-ID konnte nicht ermittelt werden');
+            }
+
+            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/customers/${customerId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email,
+                    phone: phone
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Aktualisieren der Kundendaten');
+            }
+
+            // Update customer in local array
+            const customerIndex = this.allCustomers.findIndex(c => c.id === customerId);
+            if (customerIndex !== -1) {
+                this.allCustomers[customerIndex] = {
+                    ...this.allCustomers[customerIndex],
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email,
+                    phone: phone
+                };
+            }
+
+            // Refresh customer details modal
+            await this.showCustomerDetails(customerId);
+            
+            // Show success message
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success alert-dismissible fade show';
+            successDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                Kundendaten erfolgreich aktualisiert!
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const modalBody = document.querySelector('#customerDetailsModal .modal-body');
+            if (modalBody) {
+                modalBody.insertBefore(successDiv, modalBody.firstChild);
+                setTimeout(() => successDiv.remove(), 3000);
+            }
+
+        } catch (error) {
+            console.error('Error updating customer:', error);
+            alert(`Fehler beim Aktualisieren der Kundendaten: ${error.message}`);
+        }
+    }
+
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
     }
 
     showAddCustomerModal() {
@@ -5007,14 +5778,8 @@ class App {
      * Load customer's session blocks in new format
      */
     async loadCustomerSessionBlocks(customerId, customerName) {
-        const sessionsDiv = document.getElementById('customerSessions');
-        
-        if (!sessionsDiv) {
-            console.error('customerSessions element not found');
-            return;
-        }
-        
         try {
+            console.log('Loading session blocks for customer:', customerId);
             const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/blocks`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -5022,100 +5787,21 @@ class App {
             });
             
             if (!response.ok) {
-                throw new Error('Failed to load customer session blocks');
+                console.error('Failed to load customer session blocks:', response.status, response.statusText);
+                return [];
             }
             
             const data = await response.json();
+            console.log('Session blocks API response:', data);
             const blocks = data.blocks || [];
-            const totalRemaining = data.totalRemainingSessions || 0;
+            console.log('Processed blocks:', blocks);
             
-            sessionsDiv.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6>Behandlungsblöcke für ${customerName}</h6>
-                    <div class="dropdown">
-                        <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-plus-circle me-2"></i>Block hinzufügen
-                        </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 10)">10 Behandlungen</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 20)">20 Behandlungen</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 30)">30 Behandlungen</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="window.app.addSessionBlock(${customerId}, 40)">40 Behandlungen</a></li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <!-- Summary Card -->
-                <div class="card mb-3 ${totalRemaining > 0 ? 'border-success' : 'border-warning'}">
-                    <div class="card-body text-center">
-                        <h4 class="mb-1 ${totalRemaining > 0 ? 'text-success' : 'text-warning'}">
-                            ${totalRemaining}
-                        </h4>
-                        <small class="text-muted">Verbleibende Behandlungen insgesamt</small>
-                    </div>
-                </div>
-                
-                <!-- Session Blocks -->
-                <div class="session-blocks">
-                    ${blocks.length === 0 ? 
-                        `<div class="text-center text-muted py-4">
-                            <i class="fas fa-dumbbell fa-2x mb-3"></i>
-                            <p>Noch keine Behandlungsblöcke</p>
-                            <small>Fügen Sie einen Block hinzu, um zu beginnen</small>
-                        </div>` :
-                        blocks.map((block, index) => `
-                            <div class="card mb-2 ${block.remaining_sessions > 0 ? '' : 'opacity-50'}">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <h6 class="card-title mb-1">
-                                                <i class="fas fa-cube me-2"></i>
-                                                Block ${block.block_order} 
-                                                <span class="badge ${block.remaining_sessions > 0 ? 'bg-primary' : 'bg-secondary'}">
-                                                    ${block.remaining_sessions > 0 ? 'Aktiv' : 'Verbraucht'}
-                                                </span>
-                                            </h6>
-                                            <p class="card-text mb-2">
-                                                <strong>${block.remaining_sessions}</strong> von <strong>${block.total_sessions}</strong> verbleibend
-                                            </p>
-                                            <div class="progress mb-2" style="height: 8px;">
-                                                <div class="progress-bar ${block.remaining_sessions > 5 ? 'bg-success' : block.remaining_sessions > 2 ? 'bg-warning' : 'bg-danger'}" 
-                                                     style="width: ${(block.remaining_sessions / block.total_sessions) * 100}%"></div>
-                                            </div>
-                                            <small class="text-muted">
-                                                <i class="fas fa-calendar me-1"></i>
-                                                Gekauft: ${new Date(block.purchase_date).toLocaleDateString('de-DE')}
-                                            </small>
-                                        </div>
-                                        <div class="dropdown">
-                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                <i class="fas fa-cog"></i>
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li><a class="dropdown-item" href="#" onclick="window.app.editSessionBlock(${block.id})">
-                                                    <i class="fas fa-edit me-2"></i>Bearbeiten
-                                                </a></li>
-                                                <li><a class="dropdown-item text-danger" href="#" onclick="window.app.deactivateSessionBlock(${block.id})">
-                                                    <i class="fas fa-times me-2"></i>Deaktivieren
-                                                </a></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    ${block.notes ? `<div class="mt-2"><small class="text-muted">${block.notes}</small></div>` : ''}
-                                </div>
-                            </div>
-                        `).join('')
-                    }
-                </div>
-            `;
+            // Return the blocks data for use in the modal
+            return blocks;
             
         } catch (error) {
-            sessionsDiv.innerHTML = `
-                <div class="alert alert-danger">
-                    <h6>Fehler beim Laden der Behandlungsblöcke</h6>
-                    <p>${error.message}</p>
-                </div>
-            `;
+            console.error('Error loading customer session blocks:', error);
+            return [];
         }
     }
 
@@ -5717,7 +6403,7 @@ class App {
         
         const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
                            'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-        const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
         
         const monthYearDisplay = document.getElementById('monthYearDisplay');
         const calendarGrid = document.getElementById('calendarGrid');
@@ -5731,7 +6417,9 @@ class App {
         const firstDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
         const lastDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
         const startDate = new Date(firstDay);
-        startDate.setDate(startDate.getDate() - firstDay.getDay()); // Start from Sunday
+        // Start from Monday: if firstDay.getDay() is 0 (Sunday), we want to go back 6 days, otherwise go back (firstDay.getDay() - 1) days
+        const dayOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+        startDate.setDate(startDate.getDate() - dayOffset);
         
         // Generate calendar HTML
         let calendarHTML = `
@@ -5755,7 +6443,7 @@ class App {
             for (let day = 0; day < 7; day++) {
                 // Fix: Calculate dates properly without mutation and timezone issues
                 const daysFromStart = (week * 7) + day;
-                const currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1 - firstDay.getDay() + daysFromStart);
+                const currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1 - dayOffset + daysFromStart);
                 
                 const isCurrentMonth = currentDate.getMonth() === currentMonth;
                 const isToday = currentDate.toDateString() === today.toDateString();
@@ -5887,23 +6575,23 @@ class App {
     }
 
     applyDensityStylesToCell(dayCell, density, isToday = false) {
-        const baseColor = '#a98dc1'; // Secondary brand color
+        const baseColor = '#e879f9'; // Softer primary brand color
         const fillHeight = Math.round(density * 100); // Percentage fill from bottom
         
-        // Create gradient background that fills from bottom
+        // Create softer, more transparent gradient background
         const backgroundGradient = `linear-gradient(to top, 
-            ${baseColor}${density > 0 ? 'CC' : '20'} 0%, 
-            ${baseColor}${density > 0 ? 'CC' : '20'} ${fillHeight}%, 
+            ${baseColor}${density > 0 ? '40' : '10'} 0%, 
+            ${baseColor}${density > 0 ? '40' : '10'} ${fillHeight}%, 
             transparent ${fillHeight}%, 
             transparent 100%)`;
         
         // Apply background gradient
         dayCell.style.background = backgroundGradient;
         
-        // Add gold border for today
+        // Add softer border for today
         if (isToday) {
-            dayCell.style.border = '3px solid #FFD700';
-            dayCell.style.boxShadow = '0 0 6px rgba(255, 215, 0, 0.6)';
+            dayCell.style.border = '2px solid rgba(232, 121, 249, 0.6)';
+            dayCell.style.boxShadow = '0 0 8px rgba(232, 121, 249, 0.3)';
         } else {
             // Reset border if not today
             dayCell.style.border = '1px solid #dee2e6';
@@ -6009,7 +6697,6 @@ class App {
                         { icon: 'fas fa-calendar-alt', text: 'Termine', section: 'termine' },
                         { icon: 'fas fa-users', text: 'Kunden', section: 'kunden' },
                         { icon: 'fas fa-user-plus', text: 'Lead Listen', section: 'leads' },
-                        { icon: 'fas fa-dumbbell', text: 'Behandlungen', section: 'behandlungen' },
                         { icon: 'fas fa-chart-bar', text: 'Berichte', section: 'berichte' }
                     ];
                     break;
@@ -6063,6 +6750,12 @@ class App {
     }
 
     navigateToSection(section) {
+        // Clear any existing intervals when navigating away from dashboard
+        if (this.metricsRefreshInterval) {
+            clearInterval(this.metricsRefreshInterval);
+            this.metricsRefreshInterval = null;
+        }
+        
         // This method will handle navigation to different sections
         switch (section) {
             case 'welcome':
@@ -6111,7 +6804,6 @@ class App {
                 this.showLeadsView();
                 break;
             case 'sessions':
-            case 'behandlungen':
                 if (this.currentStudioId) {
                     this.showSessionManagement(this.currentStudioId);
                 } else {
@@ -6182,26 +6874,57 @@ class App {
     }
 
     // Placeholder methods for missing navigation features
-    showLeadsView() {
+    async showLeadsView() {
         const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4><i class="fas fa-user-plus me-2"></i>Lead Listen</h4>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <strong>Coming Soon!</strong> Lead Listen Funktionalität wird bald verfügbar sein.
-                                <br><small>Hier werden Sie Ihre Leads verwalten und in Kunden konvertieren können.</small>
-                            </div>
-                        </div>
+        content.innerHTML = `<div id="lead-management-content"></div>`;
+        
+        // Initialize LeadManagement component
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.role !== 'studio_owner') {
+                content.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Zugriff verweigert: Studio-Besitzer-Berechtigung erforderlich.
                     </div>
+                `;
+                return;
+            }
+
+            // Get studio ID from user data or fetch from API
+            let studioId = user.studio_id;
+            if (!studioId) {
+                const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    studioId = data.studio.id;
+                }
+            }
+
+            if (studioId) {
+                const leadManagement = new LeadManagement();
+                await leadManagement.init(studioId);
+            } else {
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Fehler: Studio-ID konnte nicht ermittelt werden.
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading Lead Management:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Fehler beim Laden der Lead-Verwaltung: ${error.message}
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     showReportsView() {
@@ -6293,6 +7016,19 @@ class App {
     }
 
 }
+
+// Global helper functions
+function showTodayAppointments() {
+    console.log('Global showTodayAppointments called');
+    if (window.app && window.app.showTodayAppointmentsModal) {
+        window.app.showTodayAppointmentsModal();
+    } else {
+        console.error('App not ready or method not found');
+    }
+}
+
+// Attach to window for global access
+window.showTodayAppointments = showTodayAppointments;
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
