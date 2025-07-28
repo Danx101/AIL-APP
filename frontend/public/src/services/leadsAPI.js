@@ -242,13 +242,10 @@ class LeadsAPI {
     // Get status badge class
     getStatusBadgeClass(status) {
         const statusMap = {
-            'new': 'bg-primary',
-            'contacted': 'bg-info',
-            'qualified': 'bg-success',
-            'appointment_scheduled': 'bg-warning text-dark',
-            'converted': 'bg-success',
-            'not_interested': 'bg-secondary',
-            'invalid': 'bg-danger'
+            'neu': 'bg-primary',
+            'kontaktiert': 'bg-info',
+            'konvertiert': 'bg-success',
+            'nicht_interessiert': 'bg-secondary'
         };
         
         return statusMap[status] || 'bg-secondary';
@@ -257,13 +254,10 @@ class LeadsAPI {
     // Get status display name
     getStatusDisplayName(status) {
         const statusMap = {
-            'new': 'New',
-            'contacted': 'Contacted',
-            'qualified': 'Qualified',
-            'appointment_scheduled': 'Appointment Scheduled',
-            'converted': 'Converted',
-            'not_interested': 'Not Interested',
-            'invalid': 'Invalid'
+            'neu': 'Neu',
+            'kontaktiert': 'Kontaktiert',
+            'konvertiert': 'Konvertiert',
+            'nicht_interessiert': 'Nicht interessiert'
         };
         
         return statusMap[status] || status || 'Unknown';
@@ -272,13 +266,10 @@ class LeadsAPI {
     // Get available status options
     getAvailableStatuses() {
         return [
-            { value: 'new', label: 'New' },
-            { value: 'contacted', label: 'Contacted' },
-            { value: 'qualified', label: 'Qualified' },
-            { value: 'appointment_scheduled', label: 'Appointment Scheduled' },
-            { value: 'converted', label: 'Converted' },
-            { value: 'not_interested', label: 'Not Interested' },
-            { value: 'invalid', label: 'Invalid' }
+            { value: 'neu', label: 'Neu' },
+            { value: 'kontaktiert', label: 'Kontaktiert' },
+            { value: 'konvertiert', label: 'Konvertiert' },
+            { value: 'nicht_interessiert', label: 'Nicht interessiert' }
         ];
     }
 }

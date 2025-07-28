@@ -118,7 +118,7 @@ class LeadController {
         phone_number,
         email,
         source: source || 'manual',
-        status: status || 'new',
+        status: status || 'neu',
         notes,
         source_type: 'manual',
         created_by_user_id: req.user.userId

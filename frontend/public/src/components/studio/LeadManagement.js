@@ -160,14 +160,8 @@ class LeadManagement {
                                 <label for="filter-status" class="form-label fw-bold">Status</label>
                                 <select class="form-select" id="filter-status">
                                     <option value="">Alle Status</option>
-                                    <option value="new" ${this.filters.status === 'new' ? 'selected' : ''}>Neu</option>
-                                    <option value="contacted" ${this.filters.status === 'contacted' ? 'selected' : ''}>Kontaktiert</option>
-                                    <option value="qualified" ${this.filters.status === 'qualified' ? 'selected' : ''}>Qualifiziert</option>
-                                    <option value="interested" ${this.filters.status === 'interested' ? 'selected' : ''}>Interessiert</option>
-                                    <option value="not_interested" ${this.filters.status === 'not_interested' ? 'selected' : ''}>Nicht interessiert</option>
-                                    <option value="follow_up" ${this.filters.status === 'follow_up' ? 'selected' : ''}>Nachfass-Termin</option>
-                                    <option value="converted" ${this.filters.status === 'converted' ? 'selected' : ''}>Konvertiert</option>
-                                    <option value="lost" ${this.filters.status === 'lost' ? 'selected' : ''}>Verloren</option>
+                                    <option value="neu" ${this.filters.status === 'neu' ? 'selected' : ''}>Neu</option>
+                                    <option value="aktiv" ${this.filters.status === 'aktiv' ? 'selected' : ''}>Aktiv</option>
                                 </select>
                             </div>
                             <div class="col-lg-2">

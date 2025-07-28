@@ -429,8 +429,8 @@ class ManagerLeadController {
           COUNT(*) as total_leads,
           COUNT(CASE WHEN l.source_type = 'imported' THEN 1 END) as imported_leads,
           COUNT(CASE WHEN l.source_type = 'manual' THEN 1 END) as manual_leads,
-          COUNT(CASE WHEN l.status = 'new' THEN 1 END) as new_leads,
-          COUNT(CASE WHEN l.status = 'converted' THEN 1 END) as converted_leads,
+          COUNT(CASE WHEN l.status = 'neu' THEN 1 END) as new_leads,
+          COUNT(CASE WHEN l.status = 'konvertiert' THEN 1 END) as converted_leads,
           COUNT(DISTINCT l.studio_id) as studios_with_leads,
           COUNT(DISTINCT gsi.id) as active_integrations
         FROM leads l

@@ -1028,7 +1028,7 @@ class App {
                             <div class="card-body p-2">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <h6 class="mb-1">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                        <h6 class="mb-1">${appointment.appointment_type_name || 'Behandlung'}</h6>
                                         <p class="mb-1 small"><strong>Zeit:</strong> ${appointment.start_time} - ${appointment.end_time}</p>
                                         <p class="mb-0 small text-muted">${appointment.studio_name}</p>
                                     </div>
@@ -1150,7 +1150,7 @@ class App {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6>${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                    <h6>${appointment.appointment_type_name || 'Behandlung'}</h6>
                                     <p class="mb-1"><strong>Zeit:</strong> ${appointment.start_time} - ${appointment.end_time}</p>
                                     <p class="mb-1"><strong>Studio:</strong> ${appointment.studio_name}</p>
                                     <p class="mb-0"><small class="text-muted">Erstellt: ${new Date(appointment.created_at).toLocaleDateString('de-DE')}</small></p>
@@ -1318,7 +1318,7 @@ class App {
                     <div class="card-body ${isPast ? 'bg-light' : ''}">
                         <div class="row align-items-center">
                             <div class="col-md-8">
-                                <h6 class="mb-1 ${isPast ? 'text-muted' : ''}">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</h6>
+                                <h6 class="mb-1 ${isPast ? 'text-muted' : ''}">${appointment.appointment_type_name || 'Behandlung'}</h6>
                                 <p class="mb-1 ${isPast ? 'text-muted' : ''}">
                                     <i class="fas fa-calendar me-2"></i>
                                     ${appointmentDate.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -2113,13 +2113,13 @@ class App {
             typeSelect.innerHTML = `
                 <option value="">Bitte wählen...</option>
                 ${types.map(type => {
-                    const selected = type.name === 'Abnehmen Behandlung' ? 'selected' : '';
+                    const selected = type.name === 'Behandlung' ? 'selected' : '';
                     return `<option value="${type.id}" ${selected}>${type.name}${type.duration ? ` (${type.duration} Min.)` : ''}</option>`;
                 }).join('')}
             `;
             
-            // Auto-select "Abnehmen Behandlung" if found
-            const abnehmenType = types.find(type => type.name === 'Abnehmen Behandlung');
+            // Auto-select "Behandlung" if found
+            const abnehmenType = types.find(type => type.name === 'Behandlung');
             if (abnehmenType) {
                 typeSelect.value = abnehmenType.id;
             }
@@ -3692,7 +3692,7 @@ class App {
                         ${startTime} - ${endTime}
                     </div>
                     <div style="font-size: 10px; opacity: 0.8;">
-                        ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                        ${appointment.appointment_type_name || 'Behandlung'}
                     </div>
                 </div>
             `;
@@ -3809,7 +3809,7 @@ class App {
                      onclick="window.app.editAppointment(${appointment.id})"
                      title="Klicken für Details">
                     <div style="font-weight: bold; margin-bottom: 2px;">
-                        ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                        ${appointment.appointment_type_name || 'Behandlung'}
                     </div>
                     <div style="font-size: 10px; opacity: 0.9;">
                         ${startTime} - ${endTime}
@@ -3882,7 +3882,7 @@ class App {
                                     <select class="form-select" id="appointmentTypeId" required>
                                         <option value="">Typ auswählen...</option>
                                     </select>
-                                    <div class="form-text">Standard: Abnehmen Behandlung (60 Min)</div>
+                                    <div class="form-text">Standard: Behandlung (60 Min)</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="appointmentNotes" class="form-label">Notizen</label>
@@ -3983,19 +3983,19 @@ class App {
             let abnehmenType = null;
             
             types.forEach(type => {
-                const selected = type.name === 'Abnehmen Behandlung' ? 'selected' : '';
+                const selected = type.name === 'Behandlung' ? 'selected' : '';
                 typeSelect.innerHTML += `
                     <option value="${type.id}" ${selected}>
                         ${type.name} (${type.duration} Min)
                     </option>
                 `;
                 
-                if (type.name === 'Abnehmen Behandlung') {
+                if (type.name === 'Behandlung') {
                     abnehmenType = type;
                 }
             });
             
-            // Auto-select the first "Abnehmen Behandlung" type if found
+            // Auto-select the first "Behandlung" type if found
             if (abnehmenType) {
                 typeSelect.value = abnehmenType.id;
             }
@@ -4167,7 +4167,7 @@ class App {
                                 </div>
                                 <div class="col-md-6">
                                     <h6><i class="fas fa-cogs me-2"></i>Behandlungsart</h6>
-                                    <p class="mb-3">${appointment.appointment_type_name || 'Abnehmen Behandlung'}</p>
+                                    <p class="mb-3">${appointment.appointment_type_name || 'Behandlung'}</p>
                                     
                                     <h6><i class="fas fa-info-circle me-2"></i>Status</h6>
                                     <p class="mb-3">
@@ -4330,7 +4330,7 @@ class App {
                                         <div class="alert alert-info">
                                             <i class="fas fa-info-circle me-2"></i>
                                             <strong>Kunde:</strong> ${appointment.customer_first_name} ${appointment.customer_last_name}<br>
-                                            <strong>Behandlung:</strong> ${appointment.appointment_type_name || 'Abnehmen Behandlung'}
+                                            <strong>Behandlung:</strong> ${appointment.appointment_type_name || 'Behandlung'}
                                         </div>
                                     </div>
                                 </div>
@@ -5274,13 +5274,6 @@ class App {
                                     </div>
                                 </div>
                             </div>
-                            ${block.notes ? `
-                                <div class="mt-3 p-2 bg-light rounded">
-                                    <small class="text-muted">
-                                        <strong><i class="fas fa-sticky-note me-1"></i>Notizen:</strong> ${block.notes}
-                                    </small>
-                                </div>
-                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -5410,14 +5403,19 @@ class App {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify({
-                    reason: 'Session block deleted by studio owner'
+                    reason: 'Session block deleted by studio owner',
+                    notes: 'Deleted via customer details modal'
                 })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('Delete session block error:', errorData);
                 throw new Error(errorData.message || 'Fehler beim Löschen des Session-Blocks');
             }
+
+            const result = await response.json();
+            console.log('Session block deactivated successfully:', result);
 
             // Find customer ID and refresh details
             const customerId = await this.getCustomerIdFromSessionBlock(blockId);
@@ -5700,7 +5698,7 @@ class App {
                                         </span>
                                     </div>
                                     <p class="mb-1">${appointment.start_time} - ${appointment.end_time}</p>
-                                    <small>Abnehmen Behandlung</small>
+                                    <small>Behandlung</small>
                                     ${appointment.notes ? `<div class="mt-2"><small class="text-muted">Notizen: ${appointment.notes}</small></div>` : ''}
                                 </div>
                             `).join('')}
@@ -5721,7 +5719,7 @@ class App {
                                         </span>
                                     </div>
                                     <p class="mb-1">${appointment.start_time} - ${appointment.end_time}</p>
-                                    <small>Abnehmen Behandlung</small>
+                                    <small>Behandlung</small>
                                     ${appointment.notes ? `<div class="mt-2"><small class="text-muted">Notizen: ${appointment.notes}</small></div>` : ''}
                                 </div>
                             `).join('')}

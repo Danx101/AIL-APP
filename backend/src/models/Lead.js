@@ -8,7 +8,7 @@ class Lead {
     this.phone_number = data.phone_number;
     this.email = data.email;
     this.source = data.source || 'manual';
-    this.status = data.status || 'new';
+    this.status = data.status || 'neu';
     this.notes = data.notes;
     this.google_sheets_row_id = data.google_sheets_row_id;
     this.google_sheets_sync_id = data.google_sheets_sync_id;
@@ -26,14 +26,10 @@ class Lead {
   // Valid statuses for leads
   static get STATUSES() {
     return {
-      NEW: 'new',
-      CONTACTED: 'contacted',
-      QUALIFIED: 'qualified',
-      INTERESTED: 'interested',
-      NOT_INTERESTED: 'not_interested',
-      FOLLOW_UP: 'follow_up',
-      CONVERTED: 'converted',
-      LOST: 'lost'
+      NEW: 'neu',
+      CONTACTED: 'kontaktiert',
+      CONVERTED: 'konvertiert',
+      NOT_INTERESTED: 'nicht_interessiert'
     };
   }
 
@@ -229,10 +225,10 @@ class Lead {
       const sql = `
         SELECT 
           COUNT(*) as total_leads,
-          COUNT(CASE WHEN status = 'new' THEN 1 END) as new_leads,
-          COUNT(CASE WHEN status = 'contacted' THEN 1 END) as contacted_leads,
-          COUNT(CASE WHEN status = 'qualified' THEN 1 END) as qualified_leads,
-          COUNT(CASE WHEN status = 'converted' THEN 1 END) as converted_leads,
+          COUNT(CASE WHEN status = 'neu' THEN 1 END) as new_leads,
+          COUNT(CASE WHEN status = 'kontaktiert' THEN 1 END) as contacted_leads,
+          COUNT(CASE WHEN status = 'konvertiert' THEN 1 END) as qualified_leads,
+          COUNT(CASE WHEN status = 'konvertiert' THEN 1 END) as converted_leads,
           COUNT(CASE WHEN conversion_status = 'customer' THEN 1 END) as customers,
           AVG(lead_score) as avg_lead_score,
           COUNT(CASE WHEN source = 'google_sheets' THEN 1 END) as google_sheets_leads,
@@ -316,7 +312,7 @@ class Lead {
               phone_number: leadData.phone_number,
               email: leadData.email,
               source: 'google_sheets',
-              status: 'new',
+              status: 'neu',
               notes: leadData.notes,
               google_sheets_row_id: leadData.row_id,
               google_sheets_sync_id: syncId,

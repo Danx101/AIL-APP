@@ -110,13 +110,12 @@ async function runMigration() {
         }
 
         let completedInserts = 0;
-        const totalInserts = studios.length * 3; // 3 default types per studio
+        const totalInserts = studios.length * 2; // 2 default types per studio
 
         studios.forEach(studio => {
           const defaultTypes = [
-            { name: 'Abnehmen Behandlung', description: 'Standard Abnehmen im Liegen Behandlung', duration: 60, color: '#28a745' },
-            { name: 'Beratungstermin', description: 'Kostenlose Beratung und Aufklärung', duration: 30, color: '#17a2b8' },
-            { name: 'Nachbehandlung', description: 'Nachbehandlung und Kontrolle', duration: 45, color: '#ffc107' }
+            { name: 'Behandlung', description: 'Standard Abnehmen im Liegen Behandlung', duration: 60, color: '#28a745' },
+            { name: 'Beratung', description: 'Kostenlose Beratung und Aufklärung', duration: 30, color: '#17a2b8' }
           ];
 
           defaultTypes.forEach(type => {
