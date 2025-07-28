@@ -4,7 +4,7 @@ class LeadsAPI {
         // Dynamic API base URL based on environment
         this.baseURL = window.location.hostname === 'localhost' 
             ? 'http://localhost:3001/api/v1'
-            : 'https://your-railway-backend-url.railway.app/api/v1'; // Will be updated after Railway deployment
+            : 'https://ail-app-production.up.railway.app/api/v1';
     }
 
     // Get authentication headers
@@ -97,10 +97,16 @@ class LeadsAPI {
     // Update lead status
     async updateLeadStatus(leadId, status, notes = '') {
         try {
+            // Map UI status to database status
+            let dbStatus = status;
+            if (status === 'aktiv') {
+                dbStatus = 'kontaktiert'; // "aktiv" means contacted
+            }
+
             const response = await fetch(`${this.baseURL}/leads/${leadId}/status`, {
                 method: 'PATCH',
                 headers: this.getAuthHeaders(),
-                body: JSON.stringify({ status, notes })
+                body: JSON.stringify({ status: dbStatus, notes })
             });
 
             if (!response.ok) {
@@ -241,35 +247,30 @@ class LeadsAPI {
 
     // Get status badge class
     getStatusBadgeClass(status) {
-        const statusMap = {
-            'neu': 'bg-primary',
-            'kontaktiert': 'bg-info',
-            'konvertiert': 'bg-success',
-            'nicht_interessiert': 'bg-secondary'
-        };
-        
-        return statusMap[status] || 'bg-secondary';
+        if (status === 'neu') {
+            return 'bg-primary';
+        } else {
+            // All other statuses get "active" styling
+            return 'bg-success';
+        }
     }
 
     // Get status display name
     getStatusDisplayName(status) {
-        const statusMap = {
-            'neu': 'Neu',
-            'kontaktiert': 'Kontaktiert',
-            'konvertiert': 'Konvertiert',
-            'nicht_interessiert': 'Nicht interessiert'
-        };
-        
-        return statusMap[status] || status || 'Unknown';
+        if (status === 'neu') {
+            return 'Neu';
+        } else {
+            // All other statuses are displayed as "Aktiv"
+            return 'Aktiv';
+        }
     }
 
-    // Get available status options
+    // Get available status options (reduced to essential workflow statuses only)
     getAvailableStatuses() {
+        console.log('getAvailableStatuses called - returning only 2 options');
         return [
             { value: 'neu', label: 'Neu' },
-            { value: 'kontaktiert', label: 'Kontaktiert' },
-            { value: 'konvertiert', label: 'Konvertiert' },
-            { value: 'nicht_interessiert', label: 'Nicht interessiert' }
+            { value: 'aktiv', label: 'Aktiv' }
         ];
     }
 }

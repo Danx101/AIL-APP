@@ -4,7 +4,7 @@ class CustomerAPI {
         // Use environment variable for backend URL, fallback to localhost for development
         this.baseURL = window.location.hostname === 'localhost' 
             ? 'http://localhost:3001/api/v1'
-            : 'https://your-railway-backend-url.railway.app/api/v1'; // Will be updated after Railway deployment
+            : 'https://ail-app-production.up.railway.app/api/v1';
     }
 
     // Get authentication headers
