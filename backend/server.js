@@ -98,6 +98,10 @@ app.use('/api/v1', sessionRoutes);
 const leadRoutes = require('./src/routes/leads');
 app.use('/api/v1/leads', leadRoutes);
 
+// Debug routes (temporary)
+const debugRoutes = require('./src/routes/debugRoutes');
+app.use('/api/v1/debug', debugRoutes);
+
 // Twilio webhook routes
 const twilioRoutes = require('./src/routes/twilio');
 app.use('/api/v1/twilio', twilioRoutes);
