@@ -10,39 +10,47 @@ if (isProduction) {
   
   // MySQL wrapper with SQLite-like interface
   db = {
+    connection: null,
+    initialized: false,
+    
     // Initialize MySQL connection
     async init() {
-      await mysqlConnection.initializeDatabase();
-      this.connection = mysqlConnection.getConnection();
+      if (!this.initialized) {
+        await mysqlConnection.initializeDatabase();
+        this.connection = mysqlConnection.getConnection();
+        this.initialized = true;
+      }
     },
     
     // SQLite-like get method for MySQL
     async get(query, params = []) {
-      if (!this.connection) await this.init();
+      if (!this.initialized) await this.init();
       
       try {
         const [rows] = await this.connection.execute(query, params);
         return rows[0] || null;
       } catch (error) {
+        console.error('MySQL get error:', error);
         throw error;
       }
     },
     
     // SQLite-like all method for MySQL
     async all(query, params = []) {
-      if (!this.connection) await this.init();
+      if (!this.initialized) await this.init();
       
       try {
         const [rows] = await this.connection.execute(query, params);
         return rows;
       } catch (error) {
+        console.error('MySQL all error:', error);
         throw error;
       }
     },
     
     // SQLite-like run method for MySQL
     async run(query, params = []) {
-      if (!this.connection) await this.init();
+      if (!this.initialized) await this.init();
       
       try {
         const [result] = await this.connection.execute(query, params);
@@ -51,6 +59,7 @@ if (isProduction) {
           changes: result.affectedRows
         };
       } catch (error) {
+        console.error('MySQL run error:', error);
         throw error;
       }
     },

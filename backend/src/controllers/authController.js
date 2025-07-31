@@ -173,6 +173,10 @@ class AuthController {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
+      // Debug: Log user object structure
+      console.log('User object from database:', JSON.stringify(user, null, 2));
+      console.log('Password hash field:', user.password_hash);
+
       // Check password
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
