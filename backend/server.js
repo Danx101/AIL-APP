@@ -70,6 +70,10 @@ app.get('/api/v1/status', (req, res) => {
   });
 });
 
+// Debug routes (temporary - before auth middleware)
+const debugRoutes = require('./src/routes/debugRoutes');
+app.use('/api/v1/debug', debugRoutes);
+
 // Authentication routes
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
@@ -97,10 +101,6 @@ app.use('/api/v1', sessionRoutes);
 // Lead routes
 const leadRoutes = require('./src/routes/leads');
 app.use('/api/v1/leads', leadRoutes);
-
-// Debug routes (temporary)
-const debugRoutes = require('./src/routes/debugRoutes');
-app.use('/api/v1/debug', debugRoutes);
 
 // Twilio webhook routes
 const twilioRoutes = require('./src/routes/twilio');
