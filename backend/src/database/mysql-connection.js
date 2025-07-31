@@ -3,13 +3,13 @@ require('dotenv').config();
 
 let connection = null;
 
-// Support both Railway's MYSQL_ prefixed vars and our custom DB_ prefixed vars
+// Support Railway's MySQL vars (no underscore) and our custom DB_ prefixed vars
 const dbConfig = {
-  host: process.env.DB_HOST || process.env.MYSQL_HOST || 'localhost',
-  port: process.env.DB_PORT || process.env.MYSQL_PORT || 3306,
-  user: process.env.DB_USER || process.env.MYSQL_USER || 'root',
-  password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '',
-  database: process.env.DB_NAME || process.env.MYSQL_DATABASE || 'abnehmen_app',
+  host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST || 'localhost',
+  port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT || 3306,
+  user: process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER || 'root',
+  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || '',
+  database: process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'abnehmen_app',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   timezone: 'Z'
 };
