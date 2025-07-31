@@ -1,4 +1,6 @@
-// Studio Owner Lead Management Component
+// Studio Owner Lead Management Component - LOADED AT: 1753731733
+console.log('🚀 LOADING LeadManagement.js at timestamp:', new Date().toISOString());
+
 class LeadManagement {
     constructor() {
         this.leads = [];
@@ -163,6 +165,7 @@ class LeadManagement {
                                     <option value="neu" ${this.filters.status === 'neu' ? 'selected' : ''}>Neu</option>
                                     <option value="aktiv" ${this.filters.status === 'aktiv' ? 'selected' : ''}>Aktiv</option>
                                 </select>
+                                <!-- HARDCODED: Only 2 status options + "Alle Status" -->
                             </div>
                             <div class="col-lg-2">
                                 <label for="filter-source" class="form-label fw-bold">Quelle</label>
@@ -292,6 +295,7 @@ class LeadManagement {
             if (element) {
                 element.addEventListener('change', (e) => {
                     this.filters[filter] = e.target.value;
+                    this.applyFilters();
                 });
             }
         });
@@ -389,7 +393,10 @@ class LeadManagement {
                             ${window.leadsAPI.getStatusDisplayName(lead.status)}
                         </button>
                         <ul class="dropdown-menu">
-                            ${window.leadsAPI.getAvailableStatuses().map(status => `
+                            ${(() => {
+                                const statuses = window.leadsAPI.getAvailableStatuses();
+                                console.log('🔍 Row dropdown generating with statuses:', statuses);
+                                return statuses.map(status => `
                                 <li>
                                     <a class="dropdown-item ${lead.status === status.value ? 'active' : ''}" 
                                        href="#" 
@@ -397,7 +404,8 @@ class LeadManagement {
                                         ${status.label}
                                     </a>
                                 </li>
-                            `).join('')}
+                            `);
+                            })().join('')}
                         </ul>
                     </div>
                 </td>

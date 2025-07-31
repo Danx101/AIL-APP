@@ -595,7 +595,11 @@ class SessionController {
         remaining_sessions: remaining_sessions !== undefined ? remaining_sessions : session.remaining_sessions,
         purchase_date: session.purchase_date,
         notes: notes !== undefined ? notes : session.notes,
-        is_active: session.is_active
+        is_active: session.is_active,
+        block_order: session.block_order,
+        block_type: session.block_type,
+        created_at: session.created_at,
+        updated_at: session.updated_at
       });
 
       await updatedSession.update();
@@ -671,7 +675,11 @@ class SessionController {
         remaining_sessions: session.remaining_sessions,
         purchase_date: session.purchase_date,
         notes: `DEACTIVATED: ${reason}${notes ? ` - ${notes}` : ''}`,
-        is_active: false
+        is_active: false,
+        block_order: session.block_order,
+        block_type: session.block_type,
+        created_at: session.created_at,
+        updated_at: session.updated_at
       });
 
       await deactivatedSession.update();
@@ -699,7 +707,14 @@ class SessionController {
 
     } catch (error) {
       console.error('Error deactivating session:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      console.error('Session ID:', id);
+      console.error('User:', req.user);
+      console.error('Request body:', req.body);
+      res.status(500).json({ 
+        message: 'Internal server error', 
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   }
 

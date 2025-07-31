@@ -151,6 +151,22 @@ async function createTables() {
   }
   
   console.log('✅ Database tables initialized');
+  
+  // Create sync tracking tables
+  try {
+    const { createMySQLSyncTables } = require('./migrations/add_sync_tracking');
+    await createMySQLSyncTables(connection);
+  } catch (error) {
+    console.error('Error creating sync tracking tables:', error.message);
+  }
+  
+  // Add missing timestamps to existing tables
+  try {
+    const { addMySQLTimestamps } = require('./migrations/add_missing_timestamps');
+    await addMySQLTimestamps(connection);
+  } catch (error) {
+    console.error('Error adding missing timestamps:', error.message);
+  }
 }
 
 function getConnection() {

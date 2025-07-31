@@ -102,39 +102,40 @@
 
 ## Progress Tracking:
 
-### ✅ Completed Tasks:
+### ✅ **ACTUALLY WORKING** (Confirmed by User):
 - [x] **Remove Notes Field** - Successfully removed notes display from treatment blocks interface
-- [x] **Lead Status Filter Dropdown** - Updated to show only 'neu' and 'aktiv' statuses
-- [x] **Lead Status Change Functionality** - Fixed to support German statuses after database update
-- [x] **Lead Default Status** - Changed from 'new' to 'neu' with database migration
-- [x] **Behandlungsblöcke Deletion** - Fixed with proper database migrations
-- [x] **Appointment Types** - Updated migration executed successfully  
-- [x] **Leads Duplication Fix** - Migration executed with unique constraint added
-- [x] **Database Migrations** - All necessary migrations have been run
+- [x] **Lead Duplication Fix** - Fixed with unique constraint (only showing 2 leads now)
+- [x] **Appointment Types** - Cleaned up to show only "Behandlung" and "Beratung"
+- [x] **Instant Block Update** - Blocks are added instantly (but not smoothly)
 
-### ✅ Issues Resolved:
-1. **German Status Mismatch**: ✅ RESOLVED - Updated database records from English to German status values
-2. **Database Migration**: ✅ RESOLVED - All migrations executed successfully
-3. **Status Validation**: ✅ RESOLVED - Backend validation now works with German status values
-4. **Session Block Deletion**: ✅ RESOLVED - Database tables properly created and accessible
+### ❌ **STILL NOT WORKING** (User Testing Results):
+- [ ] **Lead Status Change Functionality** - Still not working
+- [ ] **Lead Status Filter Dropdown (top filter)** - Customer search by status not working
+- [ ] **Lead Status Dropdown (in rows)** - Dropdown covered by other leads below + missing "konvertiert" status + too many statuses showing
+- [ ] **Behandlungsblöcke Deletion** - Still not working
+- [ ] **Behandlungsblöcke Edit** - Still not working (needs "Hinweis: Bearbeitungsfunktion wird noch implementiert" message)
 
-### 🔄 Additional Tasks Completed:
-- [x] **Database Status Updates** - Migrated all lead statuses from English to German values
-- [x] **Appointment Types Cleanup** - Removed duplicate/old appointment types, keeping only "Behandlung" and "Beratung"
-- [x] **Database Migrations Complete** - All session, lead, and appointment migrations executed successfully
+### ⚠️ **NEW ISSUES IDENTIFIED**:
+- [ ] **App Freezing** - App freezes when closing customer details after adding blocks, requires reload
+- [ ] **UI Smoothness** - Block addition is instant but not smooth
+- [ ] **Dropdown Z-Index** - Lead status dropdown is covered by leads below it in the list
+- [ ] **Missing Status** - "konvertiert" status missing from dropdown options
+- [ ] **Too Many Statuses** - Dropdown still showing too many status options instead of just the required ones
 
-### ✅ **IMPLEMENTATION COMPLETE**
+### 🔧 **ROOT CAUSE ANALYSIS NEEDED**:
+1. **Previous fixes didn't work** - Authorization, session block operations, and status filtering still failing
+2. **UI/UX Issues** - Dropdown positioning, smooth animations, app freezing on modal close
+3. **Status System** - Need to properly implement the correct status options with proper filtering
 
-All major issues have been resolved:
+### 🎯 **REVISED PLAN - ACTUAL ISSUES TO FIX**:
+**Priority 1**: Fix lead status dropdown positioning and options (add "konvertiert", reduce total options, fix z-index)
+**Priority 2**: Fix app freezing when closing customer details modal after adding blocks
+**Priority 3**: Add "Hinweis: Bearbeitungsfunktion wird noch implementiert" message for block edit
+**Priority 4**: Investigate why session block deletion/edit still not working despite code changes
+**Priority 5**: Fix customer search by status functionality
+**Priority 6**: Improve UI smoothness for block addition
 
-1. **✅ Lead Management System**: Status filter shows only "neu" and "aktiv", status changes work with German values
-2. **✅ Treatment Blocks (Behandlungsblöcke)**: Deletion functionality restored, notes field removed, database properly configured
-3. **✅ Appointment Types**: Cleaned up to show only "Behandlung" and "Beratung" per studio
-4. **✅ Lead Duplication**: Fixed with unique constraints on phone_number + studio_id
-5. **✅ Database Consistency**: All tables created, status values standardized to German
-6. **✅ Backend Validation**: Properly configured to work with German status values
-
-**Status**: All requested fixes have been implemented and database issues resolved. The application should now function as requested.
+**Status**: 4/9 issues actually resolved. Need to debug why backend fixes didn't work and address new UI issues.
 
 ---
 

@@ -546,6 +546,34 @@ body {
     animation: gradientShift 15s ease infinite;
 }
 
+/* Session Block Animations */
+.session-block {
+    transition: all 0.3s ease;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.session-block-enter {
+    opacity: 0;
+    transform: translateY(-20px);
+    animation: sessionBlockSlideIn 0.4s ease forwards;
+}
+
+@keyframes sessionBlockSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.session-block-container {
+    transition: height 0.3s ease;
+}
+
 @keyframes gradientShift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }

@@ -1,4 +1,6 @@
-// Studio Owner Leads API Service
+// Studio Owner Leads API Service - LOADED AT: 1753731733
+console.log('🚀 LOADING leadsAPI.js at timestamp:', new Date().toISOString());
+
 class LeadsAPI {
     constructor() {
         // Dynamic API base URL based on environment
@@ -102,6 +104,7 @@ class LeadsAPI {
             if (status === 'aktiv') {
                 dbStatus = 'kontaktiert'; // "aktiv" means contacted
             }
+            console.log('🔄 Updating lead status:', leadId, 'from UI status:', status, 'to DB status:', dbStatus);
 
             const response = await fetch(`${this.baseURL}/leads/${leadId}/status`, {
                 method: 'PATCH',
@@ -267,13 +270,17 @@ class LeadsAPI {
 
     // Get available status options (reduced to essential workflow statuses only)
     getAvailableStatuses() {
-        console.log('getAvailableStatuses called - returning only 2 options');
-        return [
+        const options = [
             { value: 'neu', label: 'Neu' },
             { value: 'aktiv', label: 'Aktiv' }
         ];
+        console.log('🎯 getAvailableStatuses() called - returning ONLY 2 options:', options);
+        console.log('🎯 Options count:', options.length);
+        return options;
     }
 }
 
 // Global instance
 window.leadsAPI = new LeadsAPI();
+console.log('✅ window.leadsAPI created:', window.leadsAPI);
+console.log('✅ getAvailableStatuses available:', typeof window.leadsAPI.getAvailableStatuses === 'function');

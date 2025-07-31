@@ -209,8 +209,13 @@ class App {
     async checkAPIStatus() {
         const statusElement = document.getElementById('apiStatus');
         
+        // Use dynamic API URL like other services
+        const apiUrl = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001/api/v1/status'
+            : 'https://ail-app-production.up.railway.app/api/v1/status';
+        
         try {
-            const response = await fetch('http://localhost:3001/api/v1/status');
+            const response = await fetch(apiUrl);
             const data = await response.json();
             
             if (response.ok) {
@@ -4675,10 +4680,8 @@ class App {
                                 <div class="flex-1">
                                     <select class="filter-select" id="statusFilter">
                                         <option value="all">Alle Status</option>
-                                        <option value="active">Aktiv</option>
-                                        <option value="inactive">Inaktiv</option>
-                                        <option value="vip">VIP</option>
-                                        <option value="new">Neu</option>
+                                        <option value="neu">Neu</option>
+                                        <option value="aktiv">Aktiv</option>
                                     </select>
                                 </div>
                                 <div class="text-muted small" id="customerCount">
@@ -5046,6 +5049,9 @@ class App {
             return;
         }
 
+        // Store current customer ID for session operations
+        this.currentCustomerId = customerId;
+
         // Get customer's session blocks
         const sessionBlocks = await this.loadCustomerSessionBlocks(customerId);
         
@@ -5055,96 +5061,45 @@ class App {
         const firstName = customer.first_name || customer.firstName || '';
         const lastName = customer.last_name || customer.lastName || '';
         
-        const modalHTML = `
+        // Check if modal already exists
+        let existingModal = document.getElementById('customerDetailsModal');
+        let modal;
+        
+        if (existingModal) {
+            // Update existing modal content
+            this.updateCustomerModalContent(customer, safeSessionBlocks, customerId);
+            modal = bootstrap.Modal.getInstance(existingModal);
+            if (!modal) {
+                modal = new bootstrap.Modal(existingModal);
+            }
+        } else {
+            // Create new modal
+            const modalHTML = this.createCustomerModalHTML(customer, safeSessionBlocks, customerId);
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
+        }
+
+        // Show modal
+        modal.show();
+    }
+
+    createCustomerModalHTML(customer, safeSessionBlocks, customerId) {
+        const firstName = customer.first_name || customer.firstName || '';
+        const lastName = customer.last_name || customer.lastName || '';
+        
+        return `
             <div class="modal fade" id="customerDetailsModal" tabindex="-1" aria-labelledby="customerDetailsModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="customerDetailsModalLabel">
                                 <i class="fas fa-user me-2"></i>
-                                ${firstName} ${lastName}
+                                <span id="customerModalName">${firstName} ${lastName}</span>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body">
-                            <!-- Customer Info -->
-                            <div class="row mb-4">
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Kundendaten</h6>
-                                            <button class="btn btn-sm btn-outline-primary" onclick="app.toggleCustomerEdit(${customerId})">
-                                                <i class="fas fa-edit"></i> Bearbeiten
-                                            </button>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="customerViewMode-${customerId}">
-                                                <p class="mb-2"><strong>Email:</strong> ${customer.email}</p>
-                                                <p class="mb-2"><strong>Telefon:</strong> ${customer.phone || 'Nicht angegeben'}</p>
-                                                <p class="mb-0"><strong>Registriert:</strong> ${this.formatDate(customer.created_at)}</p>
-                                                ${customer.status === 'neu' ? '<span class="badge bg-info mt-2">Neuer Kunde</span>' : ''}
-                                            </div>
-                                            <div id="customerEditMode-${customerId}" style="display: none;">
-                                                <form id="customerEditForm-${customerId}">
-                                                    <div class="mb-3">
-                                                        <label class="form-label"><strong>Vorname:</strong></label>
-                                                        <input type="text" class="form-control" id="editFirstName-${customerId}" value="${firstName}">
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label"><strong>Nachname:</strong></label>
-                                                        <input type="text" class="form-control" id="editLastName-${customerId}" value="${lastName}">
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label"><strong>Email:</strong></label>
-                                                        <input type="email" class="form-control" id="editEmail-${customerId}" value="${customer.email}">
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label"><strong>Telefon:</strong></label>
-                                                        <input type="text" class="form-control" id="editPhone-${customerId}" value="${customer.phone || ''}">
-                                                    </div>
-                                                    <div class="d-flex gap-2">
-                                                        <button type="button" class="btn btn-success btn-sm" onclick="app.saveCustomerEdit(${customerId})">
-                                                            <i class="fas fa-save"></i> Speichern
-                                                        </button>
-                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="app.cancelCustomerEdit(${customerId})">
-                                                            <i class="fas fa-times"></i> Abbrechen
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Statistiken</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <p class="mb-2"><strong>Gesamte Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.total_sessions || 0), 0)}</p>
-                                            <p class="mb-2"><strong>Durchgeführte Behandlungen:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + ((block.total_sessions || 0) - (block.remaining_sessions || 0)), 0)}</p>
-                                            <p class="mb-2"><strong>Verbleibende Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.remaining_sessions || 0), 0)}</p>
-                                            <p class="mb-0"><strong>Aktive Blöcke:</strong> ${safeSessionBlocks.filter(block => block.is_active && block.remaining_sessions > 0).length}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Treatment Management -->
-                            <div class="card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0"><i class="fas fa-dumbbell me-2"></i>Behandlungen</h6>
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 10)" title="10er Block hinzufügen">+10</button>
-                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 20)" title="20er Block hinzufügen">+20</button>
-                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 30)" title="30er Block hinzufügen">+30</button>
-                                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 40)" title="40er Block hinzufügen">+40</button>
-                                    </div>
-                                </div>
-                                <div class="card-body" id="sessionBlocksContainer">
-                                    ${this.renderTreatmentBlocks(safeSessionBlocks, customerId)}
-                                </div>
-                            </div>
+                        <div class="modal-body" id="customerModalBody">
+                            ${this.createCustomerModalBodyContent(customer, safeSessionBlocks, customerId)}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
@@ -5153,19 +5108,109 @@ class App {
                 </div>
             </div>
         `;
+    }
 
-        // Remove existing modal if present
-        const existingModal = document.getElementById('customerDetailsModal');
-        if (existingModal) {
-            existingModal.remove();
+    createCustomerModalBodyContent(customer, safeSessionBlocks, customerId) {
+        const firstName = customer.first_name || customer.firstName || '';
+        const lastName = customer.last_name || customer.lastName || '';
+        
+        return `
+            <!-- Customer Info -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Kundendaten</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="app.toggleCustomerEdit(${customerId})">
+                                <i class="fas fa-edit"></i> Bearbeiten
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="customerViewMode-${customerId}">
+                                <p class="mb-2"><strong>Email:</strong> ${customer.email}</p>
+                                <p class="mb-2"><strong>Telefon:</strong> ${customer.phone || 'Nicht angegeben'}</p>
+                                <p class="mb-0"><strong>Registriert:</strong> ${this.formatDate(customer.created_at)}</p>
+                                ${customer.status === 'neu' ? '<span class="badge bg-info mt-2">Neuer Kunde</span>' : ''}
+                            </div>
+                            <div id="customerEditMode-${customerId}" style="display: none;">
+                                <form id="customerEditForm-${customerId}">
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Vorname:</strong></label>
+                                        <input type="text" class="form-control" id="editFirstName-${customerId}" value="${firstName}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Nachname:</strong></label>
+                                        <input type="text" class="form-control" id="editLastName-${customerId}" value="${lastName}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Email:</strong></label>
+                                        <input type="email" class="form-control" id="editEmail-${customerId}" value="${customer.email}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Telefon:</strong></label>
+                                        <input type="text" class="form-control" id="editPhone-${customerId}" value="${customer.phone || ''}">
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-success btn-sm" onclick="app.saveCustomerEdit(${customerId})">
+                                            <i class="fas fa-save"></i> Speichern
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="app.cancelCustomerEdit(${customerId})">
+                                            <i class="fas fa-times"></i> Abbrechen
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Statistiken</h6>
+                        </div>
+                        <div class="card-body" id="customerStatsContent">
+                            <p class="mb-2"><strong>Gesamte Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.total_sessions || 0), 0)}</p>
+                            <p class="mb-2"><strong>Durchgeführte Behandlungen:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + ((block.total_sessions || 0) - (block.remaining_sessions || 0)), 0)}</p>
+                            <p class="mb-2"><strong>Verbleibende Sessions:</strong> ${safeSessionBlocks.reduce((sum, block) => sum + (block.remaining_sessions || 0), 0)}</p>
+                            <p class="mb-0"><strong>Aktive Blöcke:</strong> ${safeSessionBlocks.filter(block => block.is_active && block.remaining_sessions > 0).length}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Treatment Management -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-dumbbell me-2"></i>Behandlungen</h6>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 10)" title="10er Block hinzufügen">+10</button>
+                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 20)" title="20er Block hinzufügen">+20</button>
+                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 30)" title="30er Block hinzufügen">+30</button>
+                        <button class="btn btn-sm btn-success" onclick="app.addSessionBlock(${customerId}, 40)" title="40er Block hinzufügen">+40</button>
+                    </div>
+                </div>
+                <div class="card-body" id="sessionBlocksContainer">
+                    ${this.renderTreatmentBlocks(safeSessionBlocks, customerId)}
+                </div>
+            </div>
+        `;
+    }
+
+    updateCustomerModalContent(customer, safeSessionBlocks, customerId) {
+        const firstName = customer.first_name || customer.firstName || '';
+        const lastName = customer.last_name || customer.lastName || '';
+        
+        // Update modal title
+        const modalName = document.getElementById('customerModalName');
+        if (modalName) {
+            modalName.textContent = `${firstName} ${lastName}`;
         }
-
-        // Add modal to DOM
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
-        modal.show();
+        
+        // Update modal body content
+        const modalBody = document.getElementById('customerModalBody');
+        if (modalBody) {
+            modalBody.innerHTML = this.createCustomerModalBodyContent(customer, safeSessionBlocks, customerId);
+        }
     }
 
     renderTreatmentBlocks(sessionBlocks, customerId) {
@@ -5215,7 +5260,7 @@ class App {
                 const blockType = block.total_sessions >= 40 ? 'XL' : block.total_sessions >= 30 ? 'L' : block.total_sessions >= 20 ? 'M' : 'S';
                 
                 return `
-                    <div class="card mb-3 ${isCurrentBlock ? 'border-primary' : ''}">
+                    <div class="card mb-3 session-block ${isCurrentBlock ? 'border-primary' : ''}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="mb-0">
@@ -5323,9 +5368,8 @@ class App {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify({
-                    studio_id: studioId,
-                    total_sessions: sessionCount,
-                    notes: `${sessionCount}er Block hinzugefügt`
+                    sessionCount: sessionCount,
+                    notes: `${sessionCount} Behandlungsblock hinzugefügt`
                 })
             });
 
@@ -5334,8 +5378,22 @@ class App {
                 throw new Error(errorData.message || 'Fehler beim Hinzufügen des Session-Blocks');
             }
 
-            // Refresh customer details
+            // Refresh customer details with animation
             await this.showCustomerDetails(customerId);
+            
+            // Add animation to new session blocks
+            setTimeout(() => {
+                const sessionBlocks = document.querySelectorAll('.session-block');
+                if (sessionBlocks.length > 0) {
+                    const newestBlock = sessionBlocks[sessionBlocks.length - 1];
+                    newestBlock.classList.add('session-block-enter');
+                    
+                    // Remove animation class after animation completes
+                    setTimeout(() => {
+                        newestBlock.classList.remove('session-block-enter');
+                    }, 400);
+                }
+            }, 100);
         } catch (error) {
             console.error('Error adding session block:', error);
             alert(`Fehler beim Hinzufügen des Session-Blocks: ${error.message}`);
@@ -5343,51 +5401,7 @@ class App {
     }
 
     async editSessionBlock(blockId, currentRemaining, isStarted) {
-        const warningMessage = isStarted ? 
-            'WARNUNG: Dieser Block wurde bereits gestartet! Sind Sie sicher, dass Sie die verbleibenden Sessions ändern möchten?' : 
-            'Verbleibende Sessions für diesen Block ändern:';
-        
-        const newRemaining = prompt(`${warningMessage}\n\nAktuelle verbleibende Sessions: ${currentRemaining}`, currentRemaining);
-        
-        if (newRemaining === null) return; // User cancelled
-        
-        const newRemainingInt = parseInt(newRemaining);
-        if (isNaN(newRemainingInt) || newRemainingInt < 0) {
-            alert('Bitte geben Sie eine gültige Zahl ein (≥ 0)');
-            return;
-        }
-
-        if (isStarted && !confirm('Sind Sie sicher, dass Sie die verbleibenden Sessions ändern möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`http://localhost:3001/api/v1/sessions/${blockId}/edit`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({
-                    remaining_sessions: newRemainingInt
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Fehler beim Bearbeiten des Session-Blocks');
-            }
-
-            // Find customer ID and refresh details
-            const customerId = await this.getCustomerIdFromSessionBlock(blockId);
-            if (customerId) {
-                await this.showCustomerDetails(customerId);
-            }
-        } catch (error) {
-            console.error('Error editing session block:', error);
-            console.error('Block ID:', blockId, 'New remaining:', newRemainingInt);
-            alert(`Fehler beim Bearbeiten des Session-Blocks: ${error.message}`);
-        }
+        alert('Hinweis: Bearbeitungsfunktion wird noch implementiert');
     }
 
     async deleteSessionBlock(blockId) {
@@ -5417,10 +5431,9 @@ class App {
             const result = await response.json();
             console.log('Session block deactivated successfully:', result);
 
-            // Find customer ID and refresh details
-            const customerId = await this.getCustomerIdFromSessionBlock(blockId);
-            if (customerId) {
-                await this.showCustomerDetails(customerId);
+            // Refresh details using stored customer ID
+            if (this.currentCustomerId) {
+                await this.showCustomerDetails(this.currentCustomerId);
             }
         } catch (error) {
             console.error('Error deleting session block:', error);
@@ -5806,37 +5819,6 @@ class App {
     /**
      * Add new session block to customer
      */
-    async addSessionBlock(customerId, sessionCount) {
-        try {
-            const response = await fetch(`http://localhost:3001/api/v1/customers/${customerId}/sessions/topup`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sessionCount: sessionCount,
-                    notes: `${sessionCount} Behandlungsblock hinzugefügt`
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || 'Fehler beim Hinzufügen des Blocks');
-            }
-            
-            // Show success message
-            this.showSuccessMessage('Erfolg', `${sessionCount} Behandlungen erfolgreich hinzugefügt`);
-            
-            // Reload session blocks
-            this.loadCustomerSessionBlocks(customerId, this.currentCustomerName);
-            
-        } catch (error) {
-            console.error('Error adding session block:', error);
-            this.showErrorMessage('Fehler beim Hinzufügen', error.message);
-        }
-    }
 
     /**
      * Edit session block

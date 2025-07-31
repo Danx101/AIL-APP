@@ -153,8 +153,19 @@ class Lead {
 
       // Add filters
       if (options.status) {
-        sql += ' AND l.status = ?';
-        params.push(options.status);
+        console.log('🔍 BACKEND: Filtering by status:', options.status);
+        if (options.status === 'aktiv') {
+          // "aktiv" means all leads that are not "neu" (being worked on)
+          console.log('🔍 BACKEND: Using aktiv filter - selecting all leads that are NOT neu');
+          sql += ' AND l.status != ?';
+          params.push('neu');
+        } else {
+          console.log('🔍 BACKEND: Using exact status filter:', options.status);
+          sql += ' AND l.status = ?';
+          params.push(options.status);
+        }
+        console.log('🔍 BACKEND: SQL after status filter:', sql);
+        console.log('🔍 BACKEND: Params:', params);
       }
       
       if (options.source) {

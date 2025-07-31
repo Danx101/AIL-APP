@@ -26,7 +26,8 @@ const corsOptions = {
       'http://localhost:53288',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:51124',
-      'http://127.0.0.1:53288'
+      'http://127.0.0.1:53288',
+      'https://ail-app.vercel.app'
     ];
     
     // Add production frontend URL

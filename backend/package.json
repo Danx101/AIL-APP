@@ -9,7 +9,15 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "db:export": "node scripts/export-sqlite-data.js",
+    "db:import": "node scripts/import-to-mysql.js", 
+    "db:migrate": "node scripts/migrate-sqlite-to-mysql.js",
+    "db:sync": "node scripts/sync-database.js sync",
+    "db:preview": "node scripts/sync-database.js preview",
+    "db:test": "node scripts/sync-database.js test",
+    "db:status": "node scripts/sync-database.js status",
+    "db:rollback": "node scripts/sync-database.js rollback"
   },
   "keywords": [
     "api",

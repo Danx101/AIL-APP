@@ -250,8 +250,23 @@ class LeadController {
       }
 
       // Authorization check
-      if (req.user.role !== 'manager' && req.user.studioId !== lead.studio_id) {
-        return res.status(403).json({ message: 'Access denied' });
+      if (req.user.role === 'manager') {
+        // Managers have access to all leads
+      } else if (req.user.role === 'studio_owner') {
+        // Studio owners can only update leads from their studio
+        const db = require('../database/connection');
+        const studio = await new Promise((resolve, reject) => {
+          db.get('SELECT * FROM studios WHERE owner_id = ?', [req.user.userId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+        
+        if (!studio || studio.id !== lead.studio_id) {
+          return res.status(403).json({ message: 'Access denied - can only update leads from your studio' });
+        }
+      } else {
+        return res.status(403).json({ message: 'Access denied - insufficient permissions' });
       }
 
       // Validate status

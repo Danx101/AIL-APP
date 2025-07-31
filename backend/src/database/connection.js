@@ -34,6 +34,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
     const managerAuthMigration = require('./migrations/update_manager_authorization');
     managerAuthMigration.up(db).catch(console.error);
     
+    // Run sync tracking migration (adds sync_tracking and sync_checkpoints tables)
+    const syncTrackingMigration = require('./migrations/add_sync_tracking');
+    syncTrackingMigration.runMigration().catch(console.error);
+    
+    // Run missing timestamps migration (adds updated_at where missing)
+    const timestampsMigration = require('./migrations/add_missing_timestamps');
+    timestampsMigration.runMigration().catch(console.error);
+    
     // Session transaction types migration - commented out as it's already been run
     // const { runMigration: runSessionTransactionTypesMigration } = require('./migrations/update_session_transaction_types');
     // runSessionTransactionTypesMigration().catch(console.error);
