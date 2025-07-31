@@ -43,6 +43,30 @@ router.get('/check-user/:email', async (req, res) => {
   }
 });
 
+// Check environment variables
+router.get('/check-env', async (req, res) => {
+  const mysqlVars = {
+    NODE_ENV: process.env.NODE_ENV,
+    // Railway MySQL vars
+    MYSQL_PUBLIC_URL: process.env.MYSQL_PUBLIC_URL ? 'SET (hidden)' : 'NOT SET',
+    MYSQL_URL: process.env.MYSQL_URL ? 'SET (hidden)' : 'NOT SET',
+    MYSQL_DATABASE: process.env.MYSQL_DATABASE || 'NOT SET',
+    MYSQLDATABASE: process.env.MYSQLDATABASE || 'NOT SET',
+    MYSQLHOST: process.env.MYSQLHOST || 'NOT SET',
+    MYSQLPORT: process.env.MYSQLPORT || 'NOT SET',
+    MYSQLUSER: process.env.MYSQLUSER || 'NOT SET',
+    MYSQLPASSWORD: process.env.MYSQLPASSWORD ? 'SET (hidden)' : 'NOT SET',
+    // Custom DB vars
+    DB_HOST: process.env.DB_HOST || 'NOT SET',
+    DB_PORT: process.env.DB_PORT || 'NOT SET',
+    DB_NAME: process.env.DB_NAME || 'NOT SET',
+    DB_USER: process.env.DB_USER || 'NOT SET',
+    DB_PASSWORD: process.env.DB_PASSWORD ? 'SET (hidden)' : 'NOT SET',
+  };
+  
+  res.json({ mysqlVars });
+});
+
 // Check database tables
 router.get('/check-tables', async (req, res) => {
   try {
