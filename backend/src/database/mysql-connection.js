@@ -1,15 +1,36 @@
 const mysql = require('mysql2/promise');
-require('dotenv').config();
+// Only load .env in development - Railway provides env vars in production
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 let connection = null;
 
+// Parse Railway's MYSQL_PUBLIC_URL if available
+let parsedConfig = {};
+if (process.env.MYSQL_PUBLIC_URL) {
+  try {
+    const url = new URL(process.env.MYSQL_PUBLIC_URL);
+    parsedConfig = {
+      host: url.hostname,
+      port: parseInt(url.port) || 3306,
+      user: url.username,
+      password: url.password,
+      database: url.pathname.slice(1) // Remove leading /
+    };
+    console.log('Parsed MYSQL_PUBLIC_URL successfully');
+  } catch (e) {
+    console.error('Failed to parse MYSQL_PUBLIC_URL:', e.message);
+  }
+}
+
 // Support Railway's MySQL vars (no underscore) and our custom DB_ prefixed vars
 const dbConfig = {
-  host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST || 'localhost',
-  port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT || 3306,
-  user: process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER || 'root',
-  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || '',
-  database: process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'abnehmen_app',
+  host: parsedConfig.host || process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST || 'localhost',
+  port: parsedConfig.port || process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT || 3306,
+  user: parsedConfig.user || process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER || 'root',
+  password: parsedConfig.password || process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || '',
+  database: parsedConfig.database || process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'abnehmen_app',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   timezone: 'Z'
 };
