@@ -4,10 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
 
-// Initialize database connection
-const db = process.env.NODE_ENV === 'production' 
-  ? require('./src/database/mysql-connection')
-  : require('./src/database/connection');
+// Initialize database connection with unified interface
+const db = require('./src/database/database-wrapper');
 
 // Initialize services
 const schedulerService = require('./src/services/schedulerService');

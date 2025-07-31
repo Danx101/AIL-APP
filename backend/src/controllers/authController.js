@@ -16,12 +16,7 @@ class AuthController {
       const { email, password, firstName, lastName, phone, activationCode, managerCode, role = 'customer' } = req.body;
 
       // Check if user already exists
-      const existingUser = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const existingUser = await db.get('SELECT * FROM users WHERE email = ?', [email]);
 
       if (existingUser) {
         return res.status(400).json({ message: 'User already exists' });
@@ -172,12 +167,7 @@ class AuthController {
       const { email, password } = req.body;
 
       // Find user
-      const user = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE email = ? AND is_active = 1', [email], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const user = await db.get('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
 
       if (!user) {
         return res.status(401).json({ message: 'Invalid credentials' });
