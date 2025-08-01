@@ -176,9 +176,33 @@ class AuthController {
       // Debug: Log user object structure
       console.log('User object from database:', JSON.stringify(user, null, 2));
       console.log('Password hash field:', user.password_hash);
+      console.log('Password hash type:', typeof user.password_hash);
+      console.log('Password hash value:', user.password_hash ? 'exists' : 'undefined/null');
+      console.log('Input password:', password);
+      console.log('Input password type:', typeof password);
 
       // Check password
-      const isValidPassword = await bcrypt.compare(password, user.password_hash);
+      let isValidPassword = false;
+      try {
+        isValidPassword = await bcrypt.compare(password, user.password_hash);
+      } catch (bcryptError) {
+        console.error('Bcrypt compare error:', bcryptError);
+        console.error('Bcrypt error details:', {
+          message: bcryptError.message,
+          passwordProvided: !!password,
+          hashProvided: !!user.password_hash,
+          hashValue: user.password_hash
+        });
+        return res.status(500).json({ 
+          message: 'Password validation error',
+          error: bcryptError.message,
+          debug: {
+            passwordProvided: !!password,
+            hashProvided: !!user.password_hash
+          }
+        });
+      }
+      
       if (!isValidPassword) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
