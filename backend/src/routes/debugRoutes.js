@@ -350,7 +350,51 @@ router.post('/create-test-data/:email', async (req, res) => {
     // Check if user already has a studio
     const existingStudio = await db.get('SELECT * FROM studios WHERE owner_id = ?', [user.id]);
     if (existingStudio) {
-      return res.json({ message: 'User already has test data', studio: existingStudio });
+      // Studio exists, check if we need to add leads/appointments
+      const leadCount = await db.get('SELECT COUNT(*) as count FROM leads WHERE studio_id = ?', [existingStudio.id]);
+      const appointmentCount = await db.get('SELECT COUNT(*) as count FROM appointments WHERE studio_id = ?', [existingStudio.id]);
+      
+      let created = { studio: 0, leads: 0, appointments: 0 };
+      
+      if (leadCount.count === 0) {
+        // Add leads
+        const leads = [
+          ['Anna Schmidt', '+49 30 11111111', 'anna.schmidt@email.com', 'Google Ads'],
+          ['Thomas Müller', '+49 30 22222222', 'thomas.mueller@email.com', 'Facebook'],
+          ['Lisa Weber', '+49 30 33333333', 'lisa.weber@email.com', 'Referral']
+        ];
+        
+        for (const [name, phone, email, source] of leads) {
+          await db.run(`
+            INSERT INTO leads (name, phone, email, studio_id, status, source, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'new', ?, NOW(), NOW())
+          `, [name, phone, email, existingStudio.id, source]);
+          created.leads++;
+        }
+      }
+      
+      if (appointmentCount.count === 0) {
+        // Add appointments
+        const appointments = [
+          ['2025-08-05', '10:00:00', 'scheduled'],
+          ['2025-08-06', '14:00:00', 'confirmed'],
+          ['2025-08-07', '16:00:00', 'scheduled']
+        ];
+        
+        for (const [date, time, status] of appointments) {
+          await db.run(`
+            INSERT INTO appointments (customer_id, studio_id, appointment_date, appointment_time, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+          `, [user.id, existingStudio.id, date, time, status]);
+          created.appointments++;
+        }
+      }
+      
+      return res.json({ 
+        message: 'Added missing test data to existing studio', 
+        studio: existingStudio,
+        created: created
+      });
     }
     
     // Create studio
