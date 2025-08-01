@@ -22,46 +22,88 @@ if (isProduction) {
       }
     },
     
-    // SQLite-like get method for MySQL
-    async get(query, params = []) {
-      if (!this.initialized) await this.init();
-      
-      try {
-        const [rows] = await this.connection.execute(query, params);
-        return rows[0] || null;
-      } catch (error) {
-        console.error('MySQL get error:', error);
-        throw error;
+    // SQLite-like get method for MySQL (supports both callback and promise)
+    get(query, params = [], callback) {
+      if (typeof params === 'function') {
+        callback = params;
+        params = [];
       }
+      
+      const promise = (async () => {
+        if (!this.initialized) await this.init();
+        
+        try {
+          const [rows] = await this.connection.execute(query, params);
+          return rows[0] || null;
+        } catch (error) {
+          console.error('MySQL get error:', error);
+          throw error;
+        }
+      })();
+      
+      if (callback) {
+        promise.then(result => callback(null, result)).catch(err => callback(err));
+        return;
+      }
+      
+      return promise;
     },
     
-    // SQLite-like all method for MySQL
-    async all(query, params = []) {
-      if (!this.initialized) await this.init();
-      
-      try {
-        const [rows] = await this.connection.execute(query, params);
-        return rows;
-      } catch (error) {
-        console.error('MySQL all error:', error);
-        throw error;
+    // SQLite-like all method for MySQL (supports both callback and promise)
+    all(query, params = [], callback) {
+      if (typeof params === 'function') {
+        callback = params;
+        params = [];
       }
+      
+      const promise = (async () => {
+        if (!this.initialized) await this.init();
+        
+        try {
+          const [rows] = await this.connection.execute(query, params);
+          return rows;
+        } catch (error) {
+          console.error('MySQL all error:', error);
+          throw error;
+        }
+      })();
+      
+      if (callback) {
+        promise.then(result => callback(null, result)).catch(err => callback(err));
+        return;
+      }
+      
+      return promise;
     },
     
-    // SQLite-like run method for MySQL
-    async run(query, params = []) {
-      if (!this.initialized) await this.init();
-      
-      try {
-        const [result] = await this.connection.execute(query, params);
-        return {
-          lastID: result.insertId,
-          changes: result.affectedRows
-        };
-      } catch (error) {
-        console.error('MySQL run error:', error);
-        throw error;
+    // SQLite-like run method for MySQL (supports both callback and promise)
+    run(query, params = [], callback) {
+      if (typeof params === 'function') {
+        callback = params;
+        params = [];
       }
+      
+      const promise = (async () => {
+        if (!this.initialized) await this.init();
+        
+        try {
+          const [result] = await this.connection.execute(query, params);
+          return {
+            lastID: result.insertId,
+            changes: result.affectedRows
+          };
+        } catch (error) {
+          console.error('MySQL run error:', error);
+          throw error;
+        }
+      })();
+      
+      if (callback) {
+        promise.then(result => callback.call(result, null)).catch(err => callback(err));
+        return;
+      }
+      
+      return promise;
     },
     
     // Close connection
