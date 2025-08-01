@@ -378,11 +378,11 @@ router.post('/create-test-data/:email', async (req, res) => {
     ];
     
     let leadCount = 0;
-    for (const lead of leads) {
+    for (const [name, phone, email, source] of leads) {
       await db.run(`
         INSERT INTO leads (name, phone, email, studio_id, status, source, created_at, updated_at)
         VALUES (?, ?, ?, ?, 'new', ?, NOW(), NOW())
-      `, [...lead, studioId]);
+      `, [name, phone, email, studioId, source]);
       leadCount++;
     }
     
