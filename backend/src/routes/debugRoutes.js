@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/database-wrapper');
+const bcrypt = require('bcryptjs');
 
 // Debug endpoint to check database connection and user data
 router.get('/check-user/:email', async (req, res) => {
@@ -62,6 +63,9 @@ router.get('/check-env', async (req, res) => {
     DB_NAME: process.env.DB_NAME || 'NOT SET',
     DB_USER: process.env.DB_USER || 'NOT SET',
     DB_PASSWORD: process.env.DB_PASSWORD ? 'SET (hidden)' : 'NOT SET',
+    // JWT vars
+    JWT_SECRET: process.env.JWT_SECRET ? 'SET (hidden)' : 'NOT SET',
+    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || 'NOT SET'
   };
   
   res.json({ mysqlVars });
@@ -193,6 +197,97 @@ router.get('/test-user-query/:email', async (req, res) => {
     res.status(500).json({ 
       error: error.message,
       stack: error.stack 
+    });
+  }
+});
+
+// Test login simulation
+router.post('/test-login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    // Exact same query as login
+    const user = await db.get('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+    
+    if (!user) {
+      return res.json({ 
+        message: 'User not found',
+        email: email 
+      });
+    }
+    
+    // Debug info
+    const debugInfo = {
+      userFound: true,
+      email: user.email,
+      hasPasswordHash: !!user.password_hash,
+      passwordHashType: typeof user.password_hash,
+      passwordHashValue: user.password_hash,
+      allFields: Object.keys(user),
+      userObject: JSON.stringify(user)
+    };
+    
+    // Try bcrypt compare
+    let bcryptResult = null;
+    let bcryptError = null;
+    
+    try {
+      bcryptResult = await bcrypt.compare(password, user.password_hash);
+    } catch (err) {
+      bcryptError = {
+        message: err.message,
+        stack: err.stack
+      };
+    }
+    
+    res.json({
+      debugInfo,
+      bcryptResult,
+      bcryptError
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Test database connection
+router.get('/test-connection', async (req, res) => {
+  try {
+    // Test simple query
+    const result = await db.get('SELECT 1 as test');
+    
+    // Test user count
+    const userCount = await db.get('SELECT COUNT(*) as count FROM users');
+    
+    // Get connection status
+    const mysqlConnection = require('../database/mysql-connection');
+    const conn = mysqlConnection.getConnection();
+    
+    res.json({
+      connectionTest: result,
+      userCount: userCount,
+      connectionState: conn.state || 'unknown',
+      isProduction: process.env.NODE_ENV === 'production'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack,
+      config: {
+        DB_HOST: process.env.DB_HOST || 'NOT SET',
+        DB_PORT: process.env.DB_PORT || 'NOT SET',
+        DB_NAME: process.env.DB_NAME || 'NOT SET',
+        DB_USER: process.env.DB_USER || 'NOT SET'
+      }
     });
   }
 });
