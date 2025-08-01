@@ -335,4 +335,90 @@ router.get('/check-user-data/:email', async (req, res) => {
   }
 });
 
+// Create test data for user
+router.post('/create-test-data/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    // Get user
+    const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if user already has a studio
+    const existingStudio = await db.get('SELECT * FROM studios WHERE owner_id = ?', [user.id]);
+    if (existingStudio) {
+      return res.json({ message: 'User already has test data', studio: existingStudio });
+    }
+    
+    // Create studio
+    const studioResult = await db.run(`
+      INSERT INTO studios (name, owner_id, address, phone, email, city, business_hours, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `, [
+      `${user.first_name}'s Studio`,
+      user.id,
+      'Musterstraße 123, 12345 Berlin',
+      '+49 30 12345678',
+      user.email,
+      'Berlin',
+      'Mo-Fr: 9:00-18:00',
+      1
+    ]);
+    
+    const studioId = studioResult.lastID;
+    
+    // Create some test leads
+    const leads = [
+      ['Anna Schmidt', '+49 30 11111111', 'anna.schmidt@email.com', 'Google Ads'],
+      ['Thomas Müller', '+49 30 22222222', 'thomas.mueller@email.com', 'Facebook'],
+      ['Lisa Weber', '+49 30 33333333', 'lisa.weber@email.com', 'Referral']
+    ];
+    
+    let leadCount = 0;
+    for (const lead of leads) {
+      await db.run(`
+        INSERT INTO leads (name, phone, email, studio_id, status, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'new', ?, NOW(), NOW())
+      `, [...lead, studioId]);
+      leadCount++;
+    }
+    
+    // Create some test appointments  
+    const appointments = [
+      ['2025-08-05', '10:00:00', 'scheduled'],
+      ['2025-08-06', '14:00:00', 'confirmed'],
+      ['2025-08-07', '16:00:00', 'scheduled']
+    ];
+    
+    let appointmentCount = 0;
+    for (const [date, time, status] of appointments) {
+      await db.run(`
+        INSERT INTO appointments (customer_id, studio_id, appointment_date, appointment_time, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+      `, [user.id, studioId, date, time, status]);
+      appointmentCount++;
+    }
+    
+    res.json({
+      message: 'Test data created successfully',
+      created: {
+        studio: 1,
+        leads: leadCount,
+        appointments: appointmentCount
+      },
+      studioId: studioId
+    });
+    
+  } catch (error) {
+    console.error('Error creating test data:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
