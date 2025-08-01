@@ -154,4 +154,47 @@ router.get('/check-sample-user', async (req, res) => {
   }
 });
 
+// Test raw MySQL query
+router.get('/test-user-query/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    // Test the exact query used in login
+    const user = await db.get('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+    
+    // Also test without is_active filter
+    const userNoFilter = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    
+    // Test selecting specific columns
+    const userSpecific = await db.get('SELECT id, email, password_hash FROM users WHERE email = ?', [email]);
+    
+    res.json({
+      queryWithIsActive: {
+        found: !!user,
+        fields: user ? Object.keys(user) : [],
+        passwordHashExists: user ? !!user.password_hash : false,
+        allData: user
+      },
+      queryWithoutIsActive: {
+        found: !!userNoFilter,
+        fields: userNoFilter ? Object.keys(userNoFilter) : [],
+        passwordHashExists: userNoFilter ? !!userNoFilter.password_hash : false,
+        isActive: userNoFilter ? userNoFilter.is_active : null
+      },
+      querySpecificColumns: {
+        found: !!userSpecific,
+        fields: userSpecific ? Object.keys(userSpecific) : [],
+        passwordHashExists: userSpecific ? !!userSpecific.password_hash : false,
+        data: userSpecific
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
