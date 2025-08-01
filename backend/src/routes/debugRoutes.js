@@ -93,4 +93,65 @@ router.get('/check-tables', async (req, res) => {
   }
 });
 
+// Check users table structure
+router.get('/check-users-table', async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      // MySQL query to describe table
+      const columns = await db.all("DESCRIBE users");
+      res.json({ 
+        database: 'MySQL',
+        columns: columns 
+      });
+    } else {
+      // SQLite query to show table structure
+      const columns = await db.all("PRAGMA table_info(users)");
+      res.json({ 
+        database: 'SQLite',
+        columns: columns 
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Get sample user (first user in database)
+router.get('/check-sample-user', async (req, res) => {
+  try {
+    const user = await db.get('SELECT * FROM users LIMIT 1');
+    
+    if (!user) {
+      return res.json({ 
+        message: 'No users in database'
+      });
+    }
+    
+    // Return all fields and their values (except password)
+    const userFields = {};
+    for (const [key, value] of Object.entries(user)) {
+      if (key.toLowerCase().includes('password')) {
+        userFields[key] = value ? 'HAS_VALUE' : 'NULL';
+      } else {
+        userFields[key] = value;
+      }
+    }
+    
+    res.json({
+      message: 'Sample user structure',
+      fields: userFields,
+      fieldNames: Object.keys(user)
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
