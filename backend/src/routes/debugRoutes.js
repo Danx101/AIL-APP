@@ -65,10 +65,23 @@ router.get('/check-env', async (req, res) => {
     DB_PASSWORD: process.env.DB_PASSWORD ? 'SET (hidden)' : 'NOT SET',
     // JWT vars
     JWT_SECRET: process.env.JWT_SECRET ? 'SET (hidden)' : 'NOT SET',
-    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || 'NOT SET'
+    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || 'NOT SET',
+    // CORS vars
+    FRONTEND_URL: process.env.FRONTEND_URL || 'NOT SET'
   };
   
   res.json({ mysqlVars });
+});
+
+// CORS debug endpoint
+router.get('/cors-debug', (req, res) => {
+  res.json({
+    message: 'CORS test successful',
+    origin: req.get('Origin') || 'no-origin',
+    userAgent: req.get('User-Agent'),
+    host: req.get('Host'),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Check database tables

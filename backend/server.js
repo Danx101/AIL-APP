@@ -28,7 +28,16 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:51124',
       'http://127.0.0.1:53288',
-      'https://ail-app.vercel.app'
+      'https://ail-app.vercel.app',
+      'https://ail-app-frontend.vercel.app',
+      'https://abnehmen-app.vercel.app',
+      // Add common development ports
+      'http://localhost:3001',
+      'http://localhost:5000',
+      'http://localhost:8080',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:5000',
+      'http://127.0.0.1:8080'
     ];
     
     // Add production frontend URL
@@ -39,10 +48,14 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
+    // Log the origin for debugging
+    console.log('CORS request from origin:', origin);
+    
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('CORS blocked origin:', origin);
+      callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
   credentials: true,
