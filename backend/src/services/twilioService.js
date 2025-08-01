@@ -185,7 +185,7 @@ class TwilioService {
    */
   async handleVoiceWebhook(req, res) {
     try {
-      const { leadId, callLogId } = req.query;
+      const { leadId, callLogId, callType = 'appointment_booking' } = req.query;
       const { CallSid, CallStatus, From, To } = req.body;
 
       console.log(`📞 Voice webhook: ${CallSid} - ${CallStatus}`);
@@ -200,13 +200,34 @@ class TwilioService {
         }
       }
 
-      // Generate TwiML response based on lead and call context
+      // Generate TwiML response based on call type
+      const callMessages = {
+        'cold_calling': {
+          message: 'Guten Tag! Hier ist Abnehmen im Liegen. Wir haben gesehen, dass Sie sich für unsere Behandlung interessieren. Möchten Sie mehr erfahren?',
+          prompt: 'Drücken Sie 1 wenn Sie interessiert sind, oder sprechen Sie nach dem Ton.'
+        },
+        'appointment_booking': {
+          message: 'Guten Tag! Hier ist Abnehmen im Liegen. Möchten Sie einen Termin vereinbaren?',
+          prompt: 'Drücken Sie 1 für einen Termin oder sprechen Sie Ihren Wunschtermin nach dem Ton.'
+        }
+      };
+
+      const messageConfig = callMessages[callType] || callMessages['appointment_booking'];
+      
       const twimlResponse = this.generateTwiML({
-        message: 'Hallo! Dies ist ein Anruf von Abnehmen im Liegen. Wie kann ich Ihnen helfen?',
+        message: messageConfig.message,
         gatherInput: {
-          prompt: 'Drücken Sie 1 für einen Rückruf oder sprechen Sie Ihre Nachricht nach dem Ton.'
+          prompt: messageConfig.prompt
         }
       });
+      
+      // TODO: Enhanced TwiML with Dialogflow when configured
+      // if (useDialogflow) {
+      //   const enhancedTwiML = await this.generateDialogflowTwiML(callType, leadId);
+      //   res.type('text/xml');
+      //   res.send(enhancedTwiML);
+      //   return;
+      // }
 
       res.type('text/xml');
       res.send(twimlResponse);

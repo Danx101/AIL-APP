@@ -1,27 +1,44 @@
 const express = require('express');
 const twilioService = require('../services/twilioService');
-const twilioDialogflowBridge = require('../dialogflow/webhooks/twilioDialogflowBridge');
-const dialogflowConfig = require('../dialogflow/config/dialogflowConfig');
+
+// TODO: Dialogflow integration temporarily disabled
+// Uncomment when Dialogflow is properly configured
+// const twilioDialogflowBridge = require('../dialogflow/webhooks/twilioDialogflowBridge');
+// const dialogflowConfig = require('../dialogflow/config/dialogflowConfig');
 
 const router = express.Router();
 
 // Twilio webhook routes (no authentication required for webhooks)
 
 /**
- * Twilio Voice webhook endpoint with Dialogflow integration
- * POST /api/v1/twilio/voice/webhook
+ * Twilio Voice webhook endpoint with enhanced call type support
+ * POST /api/v1/twilio/voice/webhook?leadId=123&callLogId=456&callType=appointment_booking
  */
 router.post('/voice/webhook', async (req, res) => {
   try {
-    // Check if Dialogflow is configured and enabled
-    if (dialogflowConfig.isConfigured() && process.env.ENABLE_DIALOGFLOW !== 'false') {
-      // Use Dialogflow integration for intelligent conversation
-      await twilioDialogflowBridge.handleVoiceWebhook(req, res);
-    } else {
-      // Fallback to basic Twilio service
-      console.log('📞 Using basic Twilio service (Dialogflow not configured)');
-      await twilioService.handleVoiceWebhook(req, res);
-    }
+    const { leadId, callLogId, callType = 'appointment_booking', useDialogflow } = req.query;
+    
+    console.log(`📞 Voice webhook called:`, {
+      leadId,
+      callLogId,
+      callType,
+      useDialogflow,
+      from: req.body.From,
+      to: req.body.To
+    });
+
+    // TODO: Uncomment when Dialogflow is configured
+    // if (useDialogflow && dialogflowConfig.isConfigured() && process.env.ENABLE_DIALOGFLOW !== 'false') {
+    //   // Use Dialogflow integration for intelligent conversation
+    //   console.log('📞 Using Dialogflow integration');
+    //   await twilioDialogflowBridge.handleVoiceWebhook(req, res);
+    //   return;
+    // }
+
+    // Enhanced basic Twilio service with call type awareness
+    console.log(`📞 Using basic Twilio service for ${callType} call`);
+    await twilioService.handleVoiceWebhook(req, res);
+    
   } catch (error) {
     console.error('Error in voice webhook:', error);
     
@@ -118,14 +135,29 @@ router.post('/recording/callback', async (req, res) => {
 
 /**
  * Test TwiML generation endpoint (for development)
- * GET /api/v1/twilio/test-twiml
+ * GET /api/v1/twilio/test-twiml?callType=cold_calling
  */
 router.get('/test-twiml', (req, res) => {
   try {
+    const { callType = 'appointment_booking' } = req.query;
+    
+    const callMessages = {
+      'cold_calling': {
+        message: 'Test: Cold Calling - Guten Tag! Wir haben gesehen, dass Sie sich für unsere Behandlung interessieren.',
+        prompt: 'Drücken Sie 1 wenn Sie interessiert sind.'
+      },
+      'appointment_booking': {
+        message: 'Test: Appointment Booking - Guten Tag! Möchten Sie einen Termin vereinbaren?',
+        prompt: 'Drücken Sie 1 für einen Termin.'
+      }
+    };
+
+    const messageConfig = callMessages[callType] || callMessages['appointment_booking'];
+    
     const twimlResponse = twilioService.generateTwiML({
-      message: 'Dies ist ein Test der Twilio-Integration. Hallo von Abnehmen im Liegen!',
+      message: messageConfig.message,
       gatherInput: {
-        prompt: 'Drücken Sie eine beliebige Taste zum Fortfahren.'
+        prompt: messageConfig.prompt
       }
     });
 
@@ -134,6 +166,30 @@ router.get('/test-twiml', (req, res) => {
 
   } catch (error) {
     console.error('Error generating test TwiML:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * Test outbound call status endpoint (for development)
+ * GET /api/v1/twilio/test-call-status
+ */
+router.get('/test-call-status', (req, res) => {
+  try {
+    res.json({
+      message: 'Outbound calling system ready',
+      features: {
+        callTypes: ['cold_calling', 'appointment_booking'],
+        dialogflowReady: false, // Set to true when Dialogflow is configured
+        basicTwilioReady: true
+      },
+      testEndpoints: {
+        testTwiML: '/api/v1/twilio/test-twiml?callType=cold_calling',
+        initiateCall: 'POST /api/v1/leads/:id/call'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting call status:', error);
     res.status(500).send('Internal Server Error');
   }
 });

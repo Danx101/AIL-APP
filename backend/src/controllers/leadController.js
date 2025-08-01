@@ -5,6 +5,11 @@ const Studio = require('../models/Studio');
 const twilioService = require('../services/twilioService');
 const googleSheetsService = require('../services/googleSheetsService');
 
+// TODO: Dialogflow integration temporarily disabled
+// Uncomment when Dialogflow is properly configured
+// const twilioDialogflowBridge = require('../dialogflow/webhooks/twilioDialogflowBridge');
+// const dialogflowConfig = require('../dialogflow/config/dialogflowConfig');
+
 class LeadController {
   /**
    * Get all leads for a studio
@@ -294,11 +299,17 @@ class LeadController {
   /**
    * Initiate a call to a lead
    * POST /api/v1/leads/:id/call
+   * Body: { scheduled_at?, notes?, callType?, useDialogflow? }
    */
   async initiateCall(req, res) {
     try {
       const { id } = req.params;
-      const { scheduled_at, notes } = req.body;
+      const { 
+        scheduled_at, 
+        notes, 
+        callType = 'appointment_booking',  // 'cold_calling' or 'appointment_booking'
+        useDialogflow = false  // Enable when Dialogflow is configured
+      } = req.body;
 
       const lead = await Lead.findById(id);
       if (!lead) {
@@ -310,7 +321,7 @@ class LeadController {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      // Create call log entry
+      // Create call log entry with call type
       const callLog = new LeadCallLog({
         lead_id: lead.id,
         studio_id: lead.studio_id,
@@ -318,7 +329,7 @@ class LeadController {
         call_status: scheduled_at ? 'scheduled' : 'initiated',
         call_direction: 'outbound',
         scheduled_at,
-        notes
+        notes: notes || `${callType} call initiated by ${req.user.firstName || 'user'}`
       });
 
       const callLogId = await callLog.save();
@@ -326,10 +337,21 @@ class LeadController {
       // If not scheduled, initiate the call immediately
       if (!scheduled_at) {
         try {
+          // TODO: Enhanced webhook URL with call type when Dialogflow is ready
+          const webhookUrl = `${process.env.BASE_URL || 'http://localhost:3001'}/api/v1/twilio/voice/webhook`;
+          
+          // TODO: Uncomment when Dialogflow is configured
+          // const enhancedWebhookUrl = useDialogflow && dialogflowConfig.isConfigured() 
+          //   ? `${webhookUrl}?leadId=${lead.id}&callLogId=${callLogId}&callType=${callType}&useDialogflow=true`
+          //   : `${webhookUrl}?leadId=${lead.id}&callLogId=${callLogId}&callType=${callType}`;
+
+          const basicWebhookUrl = `${webhookUrl}?leadId=${lead.id}&callLogId=${callLogId}&callType=${callType}`;
+
           const twilioCall = await twilioService.initiateCall({
             to: lead.phone_number,
             leadId: lead.id,
-            callLogId: callLogId
+            callLogId: callLogId,
+            twimlUrl: basicWebhookUrl  // Use enhanced URL when Dialogflow is ready
           });
 
           // Update call log with Twilio SID
@@ -340,9 +362,13 @@ class LeadController {
           await createdCallLog.save();
 
           res.json({
-            message: 'Call initiated successfully',
+            message: `${callType === 'cold_calling' ? 'Cold calling' : 'Appointment booking'} call initiated successfully`,
             callLog: createdCallLog,
-            twilioCallSid: twilioCall.sid
+            twilioCallSid: twilioCall.sid,
+            callType: callType,
+            useDialogflow: useDialogflow,
+            // TODO: Add when Dialogflow is ready
+            // dialogflowEnabled: useDialogflow && dialogflowConfig.isConfigured()
           });
 
         } catch (twilioError) {

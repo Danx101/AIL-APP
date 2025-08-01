@@ -292,4 +292,47 @@ router.get('/test-connection', async (req, res) => {
   }
 });
 
+// Check data counts for specific user
+router.get('/check-user-data/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    // Get user
+    const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    
+    if (!user) {
+      return res.json({ message: 'User not found' });
+    }
+    
+    // Count related data
+    const studioCount = await db.get('SELECT COUNT(*) as count FROM studios WHERE owner_id = ?', [user.id]);
+    const appointmentCount = await db.get('SELECT COUNT(*) as count FROM appointments WHERE studio_id IN (SELECT id FROM studios WHERE owner_id = ?)', [user.id]);
+    const leadCount = await db.get('SELECT COUNT(*) as count FROM leads WHERE studio_id IN (SELECT id FROM studios WHERE owner_id = ?)', [user.id]);
+    
+    // Get specific studio info
+    const studios = await db.all('SELECT * FROM studios WHERE owner_id = ?', [user.id]);
+    
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: `${user.first_name} ${user.last_name}`
+      },
+      counts: {
+        studios: studioCount.count,
+        appointments: appointmentCount.count,
+        leads: leadCount.count
+      },
+      studios: studios
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
