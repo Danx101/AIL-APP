@@ -109,6 +109,10 @@ app.use('/api/v1/leads', leadRoutes);
 const twilioRoutes = require('./src/routes/twilio');
 app.use('/api/v1/twilio', twilioRoutes);
 
+// Dialogflow routes
+const dialogflowRoutes = require('./src/routes/dialogflow');
+app.use('/api/v1/dialogflow', dialogflowRoutes);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const Studio = require('../models/Studio');
 const activationCodeService = require('../services/activationCodeService');
-const db = require('../database/connection');
+const db = require('../database/database-wrapper');
 
 class StudioController {
   /**

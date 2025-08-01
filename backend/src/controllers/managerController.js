@@ -1,5 +1,5 @@
 const { validationResult } = require('express-validator');
-const db = require('../database/connection');
+const db = require('../database/database-wrapper');
 
 class ManagerController {
   /**

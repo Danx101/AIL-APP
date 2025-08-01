@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "db:export": "node scripts/export-sqlite-data.js",
-    "db:import": "node scripts/import-to-mysql.js", 
+    "db:import": "node scripts/import-to-mysql.js",
     "db:migrate": "node scripts/migrate-sqlite-to-mysql.js",
     "db:sync": "node scripts/sync-database.js sync",
     "db:preview": "node scripts/sync-database.js preview",
@@ -28,6 +28,7 @@
   "license": "MIT",
   "dependencies": {
     "@google-cloud/dialogflow": "^7.2.0",
+    "@google-cloud/dialogflow-cx": "^5.3.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -39,9 +40,11 @@
     "morgan": "^1.10.0",
     "mysql2": "^3.6.5",
     "node-cron": "^4.2.1",
+    "pb-util": "^1.0.3",
     "socket.io": "^4.8.1",
     "sqlite3": "^5.1.6",
-    "twilio": "^5.8.0"
+    "twilio": "^5.8.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "eslint": "^8.54.0",

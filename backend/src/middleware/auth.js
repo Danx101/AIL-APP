@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db = require('../database/connection');
+const db = require('../database/database-wrapper');
 
 // Authentication middleware
 const authenticate = async (req, res, next) => {
@@ -17,12 +17,7 @@ const authenticate = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       
       // Verify user still exists and is active
-      const user = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [decoded.userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const user = await db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [decoded.userId]);
 
       if (!user) {
         return res.status(401).json({ message: 'Invalid token - user not found' });
@@ -72,12 +67,7 @@ const authorizeStudioOwner = async (req, res, next) => {
     const studioId = req.params.studioId || req.body.studioId;
     
     if (studioId) {
-      const studio = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [studioId, req.user.userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const studio = await db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [studioId, req.user.userId]);
 
       if (!studio) {
         return res.status(403).json({ message: 'Studio access denied' });
@@ -134,12 +124,7 @@ const optionalAuth = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       
-      const user = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [decoded.userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const user = await db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [decoded.userId]);
 
       if (user) {
         req.user = {
