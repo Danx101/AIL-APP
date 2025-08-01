@@ -1,7 +1,7 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const Lead = require('../models/Lead');
-const db = require('../database/connection');
+const db = require("../database/database-wrapper");
 
 class GoogleSheetsService {
   constructor() {

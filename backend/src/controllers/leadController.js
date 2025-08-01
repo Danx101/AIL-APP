@@ -254,7 +254,7 @@ class LeadController {
         // Managers have access to all leads
       } else if (req.user.role === 'studio_owner') {
         // Studio owners can only update leads from their studio
-        const db = require('../database/connection');
+        const db = require("../database/database-wrapper");
         const studio = await new Promise((resolve, reject) => {
           db.get('SELECT * FROM studios WHERE owner_id = ?', [req.user.userId], (err, row) => {
             if (err) reject(err);

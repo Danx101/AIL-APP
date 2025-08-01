@@ -136,7 +136,7 @@ class SchedulerService {
    * Perform daily cleanup tasks
    */
   async performDailyCleanup() {
-    const db = require('../database/connection');
+    const db = require("../database/database-wrapper");
     
     return new Promise((resolve, reject) => {
       db.serialize(() => {
@@ -191,7 +191,7 @@ class SchedulerService {
    * Check for lead follow-up reminders
    */
   async checkLeadReminders() {
-    const db = require('../database/connection');
+    const db = require("../database/database-wrapper");
     
     return new Promise((resolve, reject) => {
       const sql = `

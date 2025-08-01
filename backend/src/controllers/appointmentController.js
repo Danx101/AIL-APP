@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator');
 const Appointment = require('../models/Appointment');
-const db = require('../database/connection');
+const db = require("../database/database-wrapper");
 
 class AppointmentController {
   /**

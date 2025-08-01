@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const googleSheetsService = require('../services/googleSheetsService');
 const Lead = require('../models/Lead');
-const db = require('../database/connection');
+const db = require("../database/database-wrapper");
 
 class ManagerLeadController {
   /**

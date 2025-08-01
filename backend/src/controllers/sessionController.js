@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const CustomerSession = require('../models/CustomerSession');
 const SessionTransaction = require('../models/SessionTransaction');
-const db = require('../database/connection');
+const db = require("../database/database-wrapper");
 
 class SessionController {
   /**

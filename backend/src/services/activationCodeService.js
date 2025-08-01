@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const db = require('../database/connection');
+const db = require("../database/database-wrapper");
 
 class ActivationCodeService {
   // Generate a secure activation code
