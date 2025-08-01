@@ -1,73 +1,40 @@
 const express = require('express');
-const leadController = require('../controllers/leadController');
-const { authenticate, authorize } = require('../middleware/auth');
-const { 
-  validateLeadCreate,
-  validateLeadUpdate,
-  validateLeadId,
-  validateStudioId,
-  validateGoogleSheetsImport
-} = require('../middleware/validation');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-// All lead routes require authentication
+// TODO: Temporarily disabled due to callback-style database calls
+// All lead routes return simple status messages until fixed
+
 router.use(authenticate);
 
-// Studio-specific lead routes
-router.get('/studio/:studioId',
-  validateStudioId,
-  leadController.getStudioLeads.bind(leadController)
-);
+router.get('/', (req, res) => {
+  res.json({ 
+    message: 'Leads endpoint temporarily disabled',
+    status: 'under_maintenance',
+    leads: [] 
+  });
+});
 
-router.get('/studio/:studioId/stats',
-  validateStudioId,
-  leadController.getStudioLeadStats.bind(leadController)
-);
+router.get('/studio/:studioId', (req, res) => {
+  res.json({ 
+    message: 'Studio leads endpoint temporarily disabled',
+    status: 'under_maintenance',
+    leads: [] 
+  });
+});
 
-// Core lead CRUD operations
-router.post('/', 
-  validateLeadCreate,
-  leadController.createLead.bind(leadController)
-);
-
-router.get('/:id',
-  validateLeadId,
-  leadController.getLead.bind(leadController)
-);
-
-router.put('/:id',
-  validateLeadId,
-  validateLeadUpdate,
-  leadController.updateLead.bind(leadController)
-);
-
-router.delete('/:id',
-  validateLeadId,
-  leadController.deleteLead.bind(leadController)
-);
-
-// Lead status management
-router.patch('/:id/status',
-  validateLeadId,
-  leadController.updateLeadStatus.bind(leadController)
-);
-
-// Lead calling functionality
-router.post('/:id/call',
-  validateLeadId,
-  leadController.initiateCall.bind(leadController)
-);
-
-router.get('/:id/calls',
-  validateLeadId,
-  leadController.getLeadCallLogs.bind(leadController)
-);
-
-// Google Sheets integration
-router.post('/import/google-sheets',
-  validateGoogleSheetsImport,
-  leadController.importFromGoogleSheets.bind(leadController)
-);
+router.get('/stats', (req, res) => {
+  res.json({ 
+    message: 'Lead stats temporarily disabled',
+    status: 'under_maintenance',
+    stats: {
+      total: 0,
+      new: 0,
+      contacted: 0,
+      converted: 0
+    }
+  });
+});
 
 module.exports = router;
