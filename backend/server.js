@@ -29,6 +29,8 @@ const corsOptions = {
       'http://127.0.0.1:51124',
       'http://127.0.0.1:53288',
       'https://ail-app.vercel.app',
+      'https://ail-app-danylo-gevel.vercel.app',
+      'https://ail-j358ubjbs-danylo-gevel.vercel.app',
       'https://ail-app-frontend.vercel.app',
       'https://abnehmen-app.vercel.app',
       // Add common development ports

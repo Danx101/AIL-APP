@@ -1,5 +1,8 @@
 // Main application initialization
-const API_BASE_URL = 'http://localhost:3001';
+// Dynamic API base URL based on environment
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001'
+  : 'https://ail-app-production.up.railway.app';
 
 class App {
     constructor() {
@@ -483,7 +486,7 @@ class App {
         const statusDiv = document.getElementById('studioStatus');
         
         try {
-            const response = await fetch('http://localhost:3001/api/v1/studios/my-studio', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -611,7 +614,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/activation-codes`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -682,7 +685,7 @@ class App {
         const codesDiv = document.getElementById('activationCodesList');
         
         try {
-            const response = await fetch(`http://localhost:3001/api/v1/studios/${studioId}/activation-codes`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -995,7 +998,7 @@ class App {
         const statsDiv = document.getElementById('managerStats');
         
         try {
-            const response = await fetch('http://localhost:3001/api/v1/manager/stats', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/manager/stats`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -1142,7 +1145,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch('http://localhost:3001/api/v1/manager/studio-owner-codes', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/manager/studio-owner-codes`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1275,7 +1278,7 @@ class App {
         const preFillDiv = document.getElementById('preFillInfo');
         
         try {
-            const response = await fetch('http://localhost:3001/api/v1/studios/prefill-info', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/studios/prefill-info`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -1330,7 +1333,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch('http://localhost:3001/api/v1/studios', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/studios`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
