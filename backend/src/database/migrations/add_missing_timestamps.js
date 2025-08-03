@@ -20,7 +20,7 @@ const timestampUpdates = [
 
 async function runMigration() {
   return new Promise((resolve, reject) => {
-    const dbPath = path.join(__dirname, '../../database/abnehmen_app.db');
+    const dbPath = path.join(__dirname, '../../../../database.sqlite');
     const db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         reject(new Error(`Failed to open database: ${err.message}`));

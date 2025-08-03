@@ -129,7 +129,7 @@
 
 ### 🎯 **REVISED PLAN - ACTUAL ISSUES TO FIX**:
 **Priority 1**: Fix lead status dropdown positioning and options (add "konvertiert", reduce total options, fix z-index)
-**Priority 2**: Fix app freezing when closing customer details modal after adding blocks
+
 **Priority 3**: Add "Hinweis: Bearbeitungsfunktion wird noch implementiert" message for block edit
 **Priority 4**: Investigate why session block deletion/edit still not working despite code changes
 **Priority 5**: Fix customer search by status functionality

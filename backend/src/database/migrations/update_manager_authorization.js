@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Database path
-const dbPath = path.join(__dirname, '..', 'abnehmen_app.db');
+const dbPath = path.join(__dirname, '../../../../database.sqlite');
 
 const migration = {
   up: (db) => {

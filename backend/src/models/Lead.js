@@ -5,7 +5,8 @@ class Lead {
     this.id = data.id;
     this.studio_id = data.studio_id;
     this.name = data.name;
-    this.phone_number = data.phone_number;
+    // Handle both phone_number (SQLite) and phone (MySQL) columns
+    this.phone_number = data.phone_number || data.phone;
     this.email = data.email;
     this.source = data.source || 'manual';
     this.status = data.status || 'neu';
@@ -238,7 +239,6 @@ class Lead {
           COUNT(*) as total_leads,
           COUNT(CASE WHEN status = 'neu' THEN 1 END) as new_leads,
           COUNT(CASE WHEN status = 'kontaktiert' THEN 1 END) as contacted_leads,
-          COUNT(CASE WHEN status = 'konvertiert' THEN 1 END) as qualified_leads,
           COUNT(CASE WHEN status = 'konvertiert' THEN 1 END) as converted_leads,
           COUNT(CASE WHEN conversion_status = 'customer' THEN 1 END) as customers,
           AVG(lead_score) as avg_lead_score,

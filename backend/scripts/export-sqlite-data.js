@@ -18,7 +18,10 @@ const TABLES_TO_EXPORT = [
   'leads',
   'lead_call_logs',
   'google_sheets_integrations',
-  'dialogflow_conversations'
+  'dialogflow_conversations',
+  'customer_sessions',
+  'session_blocks',
+  'session_transactions'
 ];
 
 class SQLiteExporter {

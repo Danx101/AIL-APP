@@ -47,7 +47,7 @@ class DatabaseMigrator {
   }
 
   async checkSQLiteDatabase() {
-    const dbPath = path.join(__dirname, '../src/database/abnehmen_app.db');
+    const dbPath = path.join(__dirname, '../database.sqlite');
     
     try {
       const stats = await fs.stat(dbPath);

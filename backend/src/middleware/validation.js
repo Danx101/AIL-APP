@@ -347,7 +347,7 @@ const validateLeadCreate = [
   
   body('status')
     .optional()
-    .isIn(['new', 'contacted', 'qualified', 'interested', 'not_interested', 'follow_up', 'converted', 'lost'])
+    .isIn(['neu', 'kontaktiert', 'konvertiert'])
     .withMessage('Invalid status'),
   
   body('notes')
@@ -383,7 +383,7 @@ const validateLeadUpdate = [
   
   body('status')
     .optional()
-    .isIn(['new', 'contacted', 'qualified', 'interested', 'not_interested', 'follow_up', 'converted', 'lost'])
+    .isIn(['neu', 'kontaktiert', 'konvertiert'])
     .withMessage('Invalid status'),
   
   body('notes')

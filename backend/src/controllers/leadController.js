@@ -104,8 +104,13 @@ class LeadController {
 
       const { studio_id, name, phone_number, email, source, status, notes } = req.body;
 
-      // Authorization check
-      if (req.user.role !== 'manager' && req.user.studioId !== studio_id) {
+      // Authorization check - verify studio ownership
+      const studio = await Studio.findById(studio_id);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (req.user.role !== 'manager' && studio.owner_id !== req.user.userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
