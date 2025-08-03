@@ -144,7 +144,7 @@ router.post('/create-default-appointment-types', async (req, res) => {
     for (const type of defaultTypes) {
       await db.run(
         `INSERT INTO appointment_types (name, duration, description, studio_id, color, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, 3, ?, 1, datetime('now'), datetime('now'))`,
+         VALUES (?, ?, ?, 3, ?, 1, NOW(), NOW())`,
         [type.name, type.duration, type.description, type.color]
       );
       created++;
@@ -179,7 +179,7 @@ router.post('/reset-appointment-types', async (req, res) => {
     for (const type of requiredTypes) {
       await db.run(
         `INSERT INTO appointment_types (name, duration, description, studio_id, color, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, 3, ?, 1, datetime('now'), datetime('now'))`,
+         VALUES (?, ?, ?, 3, ?, 1, NOW(), NOW())`,
         [type.name, type.duration, type.description, type.color]
       );
       created++;

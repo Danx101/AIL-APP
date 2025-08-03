@@ -55,7 +55,7 @@ router.post('/:studioId/appointment-types', async (req, res) => {
     // Create appointment type
     const result = await db.run(
       `INSERT INTO appointment_types (name, duration, description, studio_id, color, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())`,
       [name, duration || 60, description || '', studioId, color || '#007bff']
     );
     
@@ -116,7 +116,7 @@ router.post('/:studioId/blocks', async (req, res) => {
     // Create session block
     const result = await db.run(
       `INSERT INTO session_blocks (studio_id, name, sessions, price, display_order, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())`,
       [studioId, name, sessions, price, display_order || 0]
     );
     
