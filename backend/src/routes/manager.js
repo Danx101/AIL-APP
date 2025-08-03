@@ -39,10 +39,14 @@ router.get('/studio-owner-codes',
 
 // Manager statistics and overview
 router.get('/stats', 
+  authenticate,
+  authorize(['manager']),
   managerController.getStatistics
 );
 
 router.get('/studios', 
+  authenticate,
+  authorize(['manager']),
   query('city').optional().isString(),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
@@ -50,6 +54,8 @@ router.get('/studios',
 );
 
 router.get('/cities', 
+  authenticate,
+  authorize(['manager']),
   managerController.getCitiesOverview
 );
 

@@ -124,20 +124,40 @@ class StudioController {
   }
 
   /**
-   * Get current user's studio
+   * Get current user's studio(s)
    * GET /api/v1/studios/my-studio
    */
   async getMyStudio(req, res) {
     try {
-      const studio = await Studio.findByOwnerId(req.user.userId);
+      // Get all studios owned by the user
+      const studios = await new Promise((resolve, reject) => {
+        db.all(
+          'SELECT * FROM studios WHERE owner_id = ? AND is_active = 1',
+          [req.user.userId],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
 
-      if (!studio) {
+      if (!studios || studios.length === 0) {
         return res.status(404).json({ message: 'No studio found for this user' });
       }
 
-      res.json({ studio });
+      // For backward compatibility, if only one studio, return as 'studio'
+      // Otherwise return as 'studios' array
+      if (studios.length === 1) {
+        res.json({ studio: studios[0] });
+      } else {
+        // Return first studio as primary for compatibility
+        res.json({ 
+          studio: studios[0],
+          studios: studios 
+        });
+      }
     } catch (error) {
-      console.error('Error fetching user studio:', error);
+      console.error('Error fetching user studios:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
