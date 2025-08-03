@@ -104,6 +104,10 @@ app.use('/api/v1/auth', authRoutes);
 const studioRoutes = require('./src/routes/studios');
 app.use('/api/v1/studios', studioRoutes);
 
+// Studio appointment and block routes
+const studioAppointmentRoutes = require('./src/routes/studioAppointments');
+app.use('/api/v1/studios', studioAppointmentRoutes);
+
 // Manager routes
 const managerRoutes = require('./src/routes/manager');
 app.use('/api/v1/manager', managerRoutes);

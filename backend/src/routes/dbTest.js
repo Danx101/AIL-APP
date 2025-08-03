@@ -163,4 +163,39 @@ router.post('/create-default-appointment-types', async (req, res) => {
   }
 });
 
+// Clear and recreate appointment types with correct names
+router.post('/reset-appointment-types', async (req, res) => {
+  try {
+    // Delete existing appointment types for studio 3
+    await db.run('DELETE FROM appointment_types WHERE studio_id = 3');
+    
+    // Create the two required appointment types
+    const requiredTypes = [
+      { name: 'Behandlung', duration: 60, description: 'Standard Behandlung', color: '#007bff' },
+      { name: 'Beratung', duration: 30, description: 'Beratungsgespräch', color: '#28a745' }
+    ];
+    
+    let created = 0;
+    for (const type of requiredTypes) {
+      await db.run(
+        `INSERT INTO appointment_types (name, duration, description, studio_id, color, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, 3, ?, 1, datetime('now'), datetime('now'))`,
+        [type.name, type.duration, type.description, type.color]
+      );
+      created++;
+    }
+    
+    res.json({ 
+      message: 'Appointment types reset successfully',
+      created: created 
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
