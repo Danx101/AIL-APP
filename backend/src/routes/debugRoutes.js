@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/database-wrapper');
 const bcrypt = require('bcryptjs');
+const { authenticate, authorize } = require('../middleware/auth');
 
 // Debug endpoint to check database connection and user data
 router.get('/check-user/:email', async (req, res) => {
