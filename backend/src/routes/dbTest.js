@@ -69,4 +69,55 @@ router.get('/test', async (req, res) => {
   }
 });
 
+// Test customers for specific studio
+router.get('/test-customers/:studioId', async (req, res) => {
+  try {
+    const { studioId } = req.params;
+    const results = {};
+    
+    // Get studio info
+    try {
+      const studio = await db.get('SELECT * FROM studios WHERE id = ?', [studioId]);
+      results.studio = studio;
+    } catch (err) {
+      results.studioError = err.message;
+    }
+    
+    // Get customers query - test the exact query used in getCustomers
+    try {
+      const customers = await db.all(
+        `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
+         FROM users u
+         JOIN activation_codes ac ON u.id = ac.used_by_user_id
+         WHERE ac.studio_id = ? AND u.role = 'customer'
+         ORDER BY u.created_at DESC`,
+        [studioId]
+      );
+      results.customerCount = customers.length;
+      results.customers = customers;
+    } catch (err) {
+      results.customersError = err.message;
+      results.customersErrorStack = err.stack;
+    }
+    
+    // Also check activation codes for this studio
+    try {
+      const codes = await db.all(
+        'SELECT * FROM activation_codes WHERE studio_id = ?',
+        [studioId]
+      );
+      results.activationCodes = codes;
+    } catch (err) {
+      results.codesError = err.message;
+    }
+    
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
