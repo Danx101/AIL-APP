@@ -1,7 +1,7 @@
 // Main application initialization
 // Dynamic API base URL based on environment
 const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? `${API_BASE_URL}`
+  ? 'http://localhost:3001'
   : 'https://ail-app-production.up.railway.app';
 
 class App {
