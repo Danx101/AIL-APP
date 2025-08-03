@@ -37,6 +37,8 @@ if (isProduction) {
           return rows[0] || null;
         } catch (error) {
           console.error('MySQL get error:', error);
+          console.error('Query:', query);
+          console.error('Params:', params);
           throw error;
         }
       })();
@@ -64,6 +66,8 @@ if (isProduction) {
           return rows;
         } catch (error) {
           console.error('MySQL all error:', error);
+          console.error('Query:', query);
+          console.error('Params:', params);
           throw error;
         }
       })();

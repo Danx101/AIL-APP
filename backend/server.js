@@ -92,6 +92,10 @@ app.get('/api/v1/status', (req, res) => {
 const debugRoutes = require('./src/routes/debugRoutes');
 app.use('/api/v1/debug', debugRoutes);
 
+// Database test route (temporary)
+const dbTestRoutes = require('./src/routes/dbTest');
+app.use('/api/v1/db', dbTestRoutes);
+
 // Authentication routes
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
