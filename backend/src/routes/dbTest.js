@@ -120,4 +120,47 @@ router.get('/test-customers/:studioId', async (req, res) => {
   }
 });
 
+// Create default appointment types
+router.post('/create-default-appointment-types', async (req, res) => {
+  try {
+    // Check if appointment types already exist for studio 3
+    const existing = await db.all('SELECT COUNT(*) as count FROM appointment_types WHERE studio_id = 3');
+    
+    if (existing[0].count > 0) {
+      return res.json({ 
+        message: 'Appointment types already exist',
+        count: existing[0].count 
+      });
+    }
+    
+    // Create default appointment types
+    const defaultTypes = [
+      { name: 'Erstbehandlung', duration: 90, description: 'Erste Behandlung für neue Kunden', color: '#007bff' },
+      { name: 'Folgebehandlung', duration: 60, description: 'Reguläre Folgebehandlung', color: '#28a745' },
+      { name: 'Beratungsgespräch', duration: 30, description: 'Kostenloses Beratungsgespräch', color: '#ffc107' }
+    ];
+    
+    let created = 0;
+    for (const type of defaultTypes) {
+      await db.run(
+        `INSERT INTO appointment_types (name, duration, description, studio_id, color, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, 3, ?, 1, datetime('now'), datetime('now'))`,
+        [type.name, type.duration, type.description, type.color]
+      );
+      created++;
+    }
+    
+    res.json({ 
+      message: 'Default appointment types created',
+      created: created 
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;
