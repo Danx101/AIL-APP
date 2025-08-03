@@ -5267,13 +5267,13 @@ class App {
                 const blockType = block.total_sessions >= 40 ? 'XL' : block.total_sessions >= 30 ? 'L' : block.total_sessions >= 20 ? 'M' : 'S';
                 
                 return `
-                    <div class="card mb-3 session-block ${isCurrentBlock ? 'border-primary' : ''}">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card mb-3 session-block ${isCurrentBlock ? 'border-primary border-2' : ''}">
+                        <div class="card-header d-flex justify-content-between align-items-center ${isCurrentBlock ? 'bg-primary bg-opacity-10' : ''}">
                             <div>
                                 <h6 class="mb-0">
                                     <i class="fas fa-cube me-2"></i>
                                     ${block.total_sessions}er Block (${blockType})
-                                    ${isCurrentBlock ? '<span class="badge bg-primary ms-2">Aktuell</span>' : ''}
+                                    ${isCurrentBlock ? '<span class="badge bg-primary ms-2"><i class="fas fa-play-circle me-1"></i>Aktiv</span>' : ''}
                                     ${!block.is_active ? '<span class="badge bg-secondary ms-2">Inaktiv</span>' : ''}
                                 </h6>
                                 <small class="text-muted">
@@ -5282,8 +5282,8 @@ class App {
                                 </small>
                             </div>
                             <div class="btn-group">
-                                ${isStarted ? `
-                                    <button class="btn btn-sm btn-warning" onclick="app.editSessionBlock(${block.id}, ${block.remaining_sessions}, true)" title="Vorsicht: Block bereits gestartet">
+                                ${isCurrentBlock ? `
+                                    <button class="btn btn-sm btn-primary" onclick="app.showEditSessionModal(${block.id}, ${block.remaining_sessions}, ${block.total_sessions})" title="Verbleibende Behandlungen bearbeiten">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
@@ -5407,9 +5407,6 @@ class App {
         }
     }
 
-    async editSessionBlock(blockId, currentRemaining, isStarted) {
-        alert('Hinweis: Bearbeitungsfunktion wird noch implementiert');
-    }
 
     async deleteSessionBlock(blockId) {
         if (!confirm('Sind Sie sicher, dass Sie diesen Session-Block löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
@@ -5827,15 +5824,6 @@ class App {
      * Add new session block to customer
      */
 
-    /**
-     * Edit session block
-     */
-    async editSessionBlock(sessionId) {
-        // Implementation for editing session blocks
-        // This would open a modal with edit form
-        console.log('Edit session block:', sessionId);
-        this.showErrorMessage('Hinweis', 'Bearbeitungsfunktion wird noch implementiert');
-    }
 
     /**
      * Deactivate session block
@@ -6188,7 +6176,7 @@ class App {
         }
     }
 
-    showEditSessionModal(sessionId, currentRemaining, currentNotes) {
+    showEditSessionModal(sessionId, currentRemaining, totalSessions) {
         const modalHTML = `
             <div class="modal fade" id="editSessionModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -6201,12 +6189,12 @@ class App {
                             <div class="mb-3">
                                 <label for="editRemainingTreatments" class="form-label">Verbleibende Behandlungen</label>
                                 <input type="number" class="form-control" id="editRemainingTreatments" 
-                                       value="${currentRemaining}" min="0" max="50">
-                                <div class="form-text">Aktuelle Anzahl der verbleibenden Behandlungen.</div>
+                                       value="${currentRemaining}" min="0" max="${totalSessions}">
+                                <div class="form-text">Aktuelle Anzahl: ${currentRemaining} von ${totalSessions} Behandlungen</div>
                             </div>
                             <div class="mb-3">
-                                <label for="editSessionNotes" class="form-label">Notizen</label>
-                                <textarea class="form-control" id="editSessionNotes" rows="3">${currentNotes}</textarea>
+                                <label for="editSessionNotes" class="form-label">Notizen (optional)</label>
+                                <textarea class="form-control" id="editSessionNotes" rows="3" placeholder="Grund für die Änderung..."></textarea>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -6230,7 +6218,7 @@ class App {
         
         // Set up event listener
         document.getElementById('confirmEditBtn').addEventListener('click', () => {
-            this.performSessionEdit(sessionId, currentRemaining);
+            this.performSessionEdit(sessionId, currentRemaining, totalSessions);
         });
         
         // Show modal
@@ -6238,17 +6226,25 @@ class App {
         modal.show();
     }
 
-    async performSessionEdit(sessionId, originalRemaining) {
+    async performSessionEdit(sessionId, originalRemaining, totalSessions) {
         const confirmBtn = document.getElementById('confirmEditBtn');
         const newRemaining = parseInt(document.getElementById('editRemainingTreatments').value);
         const newNotes = document.getElementById('editSessionNotes').value;
         
+        // Validation
+        if (isNaN(newRemaining) || newRemaining < 0) {
+            this.showErrorMessage('Fehler', 'Bitte geben Sie eine gültige Anzahl an Behandlungen ein (mindestens 0).');
+            return;
+        }
+        
+        if (newRemaining > totalSessions) {
+            this.showErrorMessage('Fehler', `Die Anzahl kann nicht größer als ${totalSessions} (Gesamtanzahl) sein.`);
+            return;
+        }
+        
         try {
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gespeichert...';
-            
-            // Calculate the difference to determine if we're adding or removing treatments
-            const difference = newRemaining - originalRemaining;
             
             const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${sessionId}/edit`, {
                 method: 'PATCH',
@@ -6258,13 +6254,14 @@ class App {
                 },
                 body: JSON.stringify({
                     remaining_sessions: newRemaining,
-                    notes: newNotes,
-                    adjustment_amount: difference
+                    notes: newNotes || `Behandlungen von ${originalRemaining} auf ${newRemaining} geändert`
                 })
             });
+
+            const result = await response.json();
             
             if (!response.ok) {
-                throw new Error('Failed to update session');
+                throw new Error(result.message || 'Failed to update session');
             }
             
             // Close modal
@@ -6272,14 +6269,20 @@ class App {
             modal.hide();
             
             // Refresh the view
-            const currentCustomerId = this.currentCustomerId; // We need to store this
+            const currentCustomerId = this.currentCustomerId;
             if (currentCustomerId) {
                 this.loadCustomerSessionDetails(currentCustomerId);
                 this.loadSessionCustomersList(this.currentStudioId);
             }
             
-            // Show success message
-            this.showSuccessMessage('Erfolgreich', 'Behandlungspaket wurde erfolgreich aktualisiert.');
+            // Show success message with details
+            const difference = newRemaining - originalRemaining;
+            const changeText = difference > 0 ? `${difference} Behandlungen hinzugefügt` : 
+                              difference < 0 ? `${Math.abs(difference)} Behandlungen entfernt` : 
+                              'Keine Änderung';
+            
+            this.showSuccessMessage('Behandlungspaket aktualisiert', 
+                `Verbleibende Behandlungen: ${originalRemaining} → ${newRemaining}${difference !== 0 ? ` (${changeText})` : ''}`);
             
         } catch (error) {
             confirmBtn.disabled = false;
@@ -6893,8 +6896,8 @@ class App {
             }
 
             if (studioId) {
-                const leadManagement = new LeadManagement();
-                await leadManagement.init(studioId);
+                window.leadManagement = new LeadManagement();
+                await window.leadManagement.init(studioId);
             } else {
                 content.innerHTML = `
                     <div class="alert alert-danger">

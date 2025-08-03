@@ -579,8 +579,39 @@ class SessionController {
         return res.status(403).json({ message: 'Only studio owners can edit session packages' });
       }
 
-      // Validate remaining sessions doesn't exceed total
-      if (remaining_sessions !== undefined && remaining_sessions > session.total_sessions) {
+      // Check if this is the current active block (first block with remaining sessions > 0)
+      const activeBlock = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT * FROM customer_sessions 
+          WHERE customer_id = ? AND studio_id = ? AND is_active = 1 AND remaining_sessions > 0
+          ORDER BY block_order ASC
+          LIMIT 1
+        `, [session.customer_id, session.studio_id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!activeBlock || activeBlock.id !== session.id) {
+        return res.status(400).json({ 
+          message: 'Only the current active block can be edited' 
+        });
+      }
+
+      // Validate remaining sessions
+      if (remaining_sessions === undefined || remaining_sessions === null) {
+        return res.status(400).json({ 
+          message: 'Remaining sessions value is required' 
+        });
+      }
+
+      if (remaining_sessions < 0) {
+        return res.status(400).json({ 
+          message: 'Remaining sessions cannot be negative' 
+        });
+      }
+
+      if (remaining_sessions > session.total_sessions) {
         return res.status(400).json({ 
           message: 'Remaining sessions cannot exceed total sessions' 
         });
@@ -592,7 +623,7 @@ class SessionController {
         customer_id: session.customer_id,
         studio_id: session.studio_id,
         total_sessions: session.total_sessions,
-        remaining_sessions: remaining_sessions !== undefined ? remaining_sessions : session.remaining_sessions,
+        remaining_sessions: remaining_sessions,
         purchase_date: session.purchase_date,
         notes: notes !== undefined ? notes : session.notes,
         is_active: session.is_active,
@@ -609,9 +640,9 @@ class SessionController {
       const transaction = new SessionTransaction({
         customer_session_id: parseInt(id),
         transaction_type: 'edit',
-        amount: remaining_sessions !== undefined ? (remaining_sessions - session.remaining_sessions) : 0,
+        amount: remaining_sessions - session.remaining_sessions,
         created_by_user_id: req.user.userId,
-        notes: `Session package edited: ${notes || 'Sessions updated'}`
+        notes: `Session package edited: ${notes || `Remaining sessions changed from ${session.remaining_sessions} to ${remaining_sessions}`}`
       });
 
       await transaction.create();
@@ -621,7 +652,9 @@ class SessionController {
 
       res.json({
         message: 'Session package updated successfully',
-        session: finalSession
+        session: finalSession,
+        previousRemaining: session.remaining_sessions,
+        newRemaining: remaining_sessions
       });
 
     } catch (error) {

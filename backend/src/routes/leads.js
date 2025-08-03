@@ -1,40 +1,71 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
+const leadController = require('../controllers/leadController');
+const { 
+  validateLeadCreate,
+  validateLeadUpdate,
+  validateLeadId,
+  validateStudioId
+} = require('../middleware/validation');
 
 const router = express.Router();
 
-// TODO: Temporarily disabled due to callback-style database calls
-// All lead routes return simple status messages until fixed
-
+// All lead routes require authentication
 router.use(authenticate);
 
-router.get('/', (req, res) => {
-  res.json({ 
-    message: 'Leads endpoint temporarily disabled',
-    status: 'under_maintenance',
-    leads: [] 
-  });
-});
+// Get all leads for a studio
+router.get('/studio/:studioId', 
+  validateStudioId,
+  leadController.getStudioLeads
+);
 
-router.get('/studio/:studioId', (req, res) => {
-  res.json({ 
-    message: 'Studio leads endpoint temporarily disabled',
-    status: 'under_maintenance',
-    leads: [] 
-  });
-});
+// Get lead statistics for a studio
+router.get('/studio/:studioId/stats', 
+  validateStudioId,
+  leadController.getStudioLeadStats
+);
 
-router.get('/stats', (req, res) => {
-  res.json({ 
-    message: 'Lead stats temporarily disabled',
-    status: 'under_maintenance',
-    stats: {
-      total: 0,
-      new: 0,
-      contacted: 0,
-      converted: 0
-    }
-  });
-});
+// Create a new lead
+router.post('/', 
+  validateLeadCreate,
+  leadController.createLead
+);
+
+// Get a specific lead
+router.get('/:id', 
+  validateLeadId,
+  leadController.getLead
+);
+
+// Update a lead
+router.put('/:id', 
+  validateLeadId,
+  validateLeadUpdate,
+  leadController.updateLead
+);
+
+// Update lead status
+router.patch('/:id/status', 
+  validateLeadId,
+  leadController.updateLeadStatus
+);
+
+// Delete a lead
+router.delete('/:id', 
+  validateLeadId,
+  leadController.deleteLead
+);
+
+// Initiate call to lead
+router.post('/:id/call', 
+  validateLeadId,
+  leadController.initiateCall
+);
+
+// Get call history for a lead
+router.get('/:id/calls', 
+  validateLeadId,
+  leadController.getLeadCallLogs
+);
 
 module.exports = router;

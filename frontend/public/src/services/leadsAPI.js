@@ -99,12 +99,9 @@ class LeadsAPI {
     // Update lead status
     async updateLeadStatus(leadId, status, notes = '') {
         try {
-            // Map UI status to database status
-            let dbStatus = status;
-            if (status === 'aktiv') {
-                dbStatus = 'kontaktiert'; // "aktiv" means contacted
-            }
-            console.log('🔄 Updating lead status:', leadId, 'from UI status:', status, 'to DB status:', dbStatus);
+            // Status values now match directly with database
+            const dbStatus = status;
+            console.log('🔄 Updating lead status:', leadId, 'to status:', dbStatus);
 
             const response = await fetch(`${this.baseURL}/leads/${leadId}/status`, {
                 method: 'PATCH',
@@ -250,32 +247,32 @@ class LeadsAPI {
 
     // Get status badge class
     getStatusBadgeClass(status) {
-        if (status === 'neu') {
-            return 'bg-primary';
-        } else {
-            // All other statuses get "active" styling
-            return 'bg-success';
-        }
+        const statusClasses = {
+            'neu': 'bg-primary',
+            'kontaktiert': 'bg-warning text-dark',
+            'konvertiert': 'bg-success'
+        };
+        return statusClasses[status] || 'bg-secondary';
     }
 
     // Get status display name
     getStatusDisplayName(status) {
-        if (status === 'neu') {
-            return 'Neu';
-        } else {
-            // All other statuses are displayed as "Aktiv"
-            return 'Aktiv';
-        }
+        const statusNames = {
+            'neu': 'Neu',
+            'kontaktiert': 'Kontaktiert',
+            'konvertiert': 'Konvertiert'
+        };
+        return statusNames[status] || status || 'Unbekannt';
     }
 
-    // Get available status options (reduced to essential workflow statuses only)
+    // Get available status options
     getAvailableStatuses() {
         const options = [
             { value: 'neu', label: 'Neu' },
-            { value: 'aktiv', label: 'Aktiv' }
+            { value: 'kontaktiert', label: 'Kontaktiert' },
+            { value: 'konvertiert', label: 'Konvertiert' }
         ];
-        console.log('🎯 getAvailableStatuses() called - returning ONLY 2 options:', options);
-        console.log('🎯 Options count:', options.length);
+        console.log('🎯 getAvailableStatuses() called - returning 3 options:', options);
         return options;
     }
 }
