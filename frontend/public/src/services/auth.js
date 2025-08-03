@@ -1,7 +1,9 @@
 // Dynamic API base URL based on environment
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001'
-  : 'https://ail-app-production.up.railway.app';
+if (typeof API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001'
+    : 'https://ail-app-production.up.railway.app';
+}
 
 class AuthService {
   constructor() {
@@ -12,7 +14,7 @@ class AuthService {
   // Register new user
   async register(userData) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,7 +44,7 @@ class AuthService {
   // Login user
   async login(email, password) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +78,7 @@ class AuthService {
   async logout() {
     try {
       if (this.token) {
-        await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+        await fetch(`${window.API_BASE_URL}/api/v1/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.token}`,
@@ -102,7 +104,7 @@ class AuthService {
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/profile`, {
         headers: {
           'Authorization': `Bearer ${this.token}`,
         },
@@ -134,7 +136,7 @@ class AuthService {
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

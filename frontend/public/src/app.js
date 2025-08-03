@@ -1,8 +1,10 @@
 // Main application initialization
 // Dynamic API base URL based on environment
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001'
-  : 'https://ail-app-production.up.railway.app';
+if (typeof API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001'
+    : 'https://ail-app-production.up.railway.app';
+}
 
 class App {
     constructor() {
@@ -216,7 +218,7 @@ class App {
         
         // Use dynamic API URL like other services
         const apiUrl = window.location.hostname === 'localhost' 
-            ? `${API_BASE_URL}/api/v1/status`
+            ? `${window.API_BASE_URL}/api/v1/status`
             : 'https://ail-app-production.up.railway.app/api/v1/status';
         
         try {
@@ -1643,7 +1645,7 @@ class App {
 
             // Fetch today's appointments
             const today = new Date().toISOString().split('T')[0];
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?date=${today}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?date=${today}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -1933,7 +1935,7 @@ class App {
     async showAppointmentRequestForm(preselectedDate = null) {
         // Check session availability first
         try {
-            const sessionResponse = await fetch(`${API_BASE_URL}/api/v1/customers/me/sessions`, {
+            const sessionResponse = await fetch(`${window.API_BASE_URL}/api/v1/customers/me/sessions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2159,7 +2161,7 @@ class App {
         
         // Final session availability check
         try {
-            const sessionResponse = await fetch(`${API_BASE_URL}/api/v1/customers/me/sessions`, {
+            const sessionResponse = await fetch(`${window.API_BASE_URL}/api/v1/customers/me/sessions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2232,7 +2234,7 @@ class App {
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}/cancel`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/cancel`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -2278,7 +2280,7 @@ class App {
     async rescheduleAppointment(appointmentId) {
         try {
             // First check if appointment can be postponed
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}/can-postpone`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/can-postpone`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2459,7 +2461,7 @@ class App {
             let studioId = user.studio_id;
             
             if (!studioId) {
-                const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+                const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                     }
@@ -2475,7 +2477,7 @@ class App {
             }
 
             // Fetch real dashboard statistics
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/dashboard-stats`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/dashboard-stats`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2573,7 +2575,7 @@ class App {
         const statusDiv = document.getElementById('studioStatus');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -2736,7 +2738,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2804,7 +2806,7 @@ class App {
         const codesDiv = document.getElementById('activationCodesList');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/activation-codes`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -3172,7 +3174,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/manager/studio-owner-codes`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/manager/studio-owner-codes`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3305,7 +3307,7 @@ class App {
         const preFillDiv = document.getElementById('preFillInfo');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/prefill-info`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/prefill-info`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -3360,7 +3362,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3509,7 +3511,7 @@ class App {
         const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
         
         try {
-            let url = `${API_BASE_URL}/api/v1/appointments/studio/${studioId}`;
+            let url = `${window.API_BASE_URL}/api/v1/appointments/studio/${studioId}`;
             const params = new URLSearchParams();
             params.append('date', selectedDateStr);
             if (params.toString()) url += '?' + params.toString();
@@ -3936,7 +3938,7 @@ class App {
         
         try {
             console.log('Loading customers for studio:', studioId);
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -3976,7 +3978,7 @@ class App {
         const typeSelect = document.getElementById('appointmentTypeId');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/studio/${studioId}/appointment-types`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/studio/${studioId}/appointment-types`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4042,7 +4044,7 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4089,7 +4091,7 @@ class App {
 
     async updateAppointmentStatus(appointmentId, status) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4107,7 +4109,7 @@ class App {
             const appointmentsList = document.getElementById('appointmentsList');
             if (appointmentsList) {
                 // Find the studio ID from the current context
-                const studioResponse = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+                const studioResponse = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                     }
@@ -4127,7 +4129,7 @@ class App {
     async editAppointment(appointmentId) {
         try {
             // Fetch appointment details
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4238,7 +4240,7 @@ class App {
     async editAppointmentDetails(appointmentId) {
         try {
             // First, fetch the appointment details
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4400,7 +4402,7 @@ class App {
             };
 
             // Send update request
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4440,7 +4442,7 @@ class App {
     async changeAppointmentStatus(appointmentId) {
         try {
             // First, fetch current appointment status
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4542,7 +4544,7 @@ class App {
             const newStatus = document.getElementById('newStatus').value;
 
             // Send status update request
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4596,7 +4598,7 @@ class App {
         
         try {
             const today = new Date().toISOString().split('T')[0];
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/studio/${studioId}?date=${today}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/studio/${studioId}?date=${today}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -4764,7 +4766,7 @@ class App {
     async loadCustomersData(studioId) {
         try {
             // Fetch customers from real API endpoint
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5333,7 +5335,7 @@ class App {
 
     async loadCustomerSessionBlocks(customerId) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5366,7 +5368,7 @@ class App {
                 return;
             }
 
-            const response = await fetch(`${API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5415,7 +5417,7 @@ class App {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${blockId}/deactivate`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${blockId}/deactivate`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5452,7 +5454,7 @@ class App {
         let studioId = user.studio_id;
         
         if (!studioId) {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5534,7 +5536,7 @@ class App {
                 throw new Error('Studio-ID konnte nicht ermittelt werden');
             }
 
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/customers/${customerId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers/${customerId}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5602,7 +5604,7 @@ class App {
         const customersDiv = document.getElementById('customersList');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5672,7 +5674,7 @@ class App {
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/customer/${customerId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/customer/${customerId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5796,7 +5798,7 @@ class App {
     async loadCustomerSessionBlocks(customerId, customerName) {
         try {
             console.log('Loading session blocks for customer:', customerId);
-            const response = await fetch(`${API_BASE_URL}/api/v1/customers/${customerId}/sessions/blocks`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/blocks`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -5847,7 +5849,7 @@ class App {
             const reason = prompt('Grund für Deaktivierung:', 'Vom Studio-Besitzer deaktiviert');
             if (!reason) return;
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/deactivate`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${sessionId}/deactivate`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -5938,7 +5940,7 @@ class App {
         const customersDiv = document.getElementById('sessionCustomersList');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/${studioId}/customers/sessions`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers/sessions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -6007,7 +6009,7 @@ class App {
                 </div>
             `;
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -6152,7 +6154,7 @@ class App {
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird hinzugefügt...';
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -6248,7 +6250,7 @@ class App {
             // Calculate the difference to determine if we're adding or removing treatments
             const difference = newRemaining - originalRemaining;
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/edit`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${sessionId}/edit`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -6344,7 +6346,7 @@ class App {
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird deaktiviert...';
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/deactivate`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${sessionId}/deactivate`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -6508,7 +6510,7 @@ class App {
             const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
             const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDateStr}&to_date=${endDateStr}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDateStr}&to_date=${endDateStr}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -6841,7 +6843,7 @@ class App {
         if (this.currentStudioId) return this.currentStudioId;
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -6879,7 +6881,7 @@ class App {
             // Get studio ID from user data or fetch from API
             let studioId = user.studio_id;
             if (!studioId) {
-                const response = await fetch(`${API_BASE_URL}/api/v1/studios/my-studio`, {
+                const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                     }
