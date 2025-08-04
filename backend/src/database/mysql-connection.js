@@ -31,7 +31,7 @@ const dbConfig = {
   user: parsedConfig.user || process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER || 'root',
   password: parsedConfig.password || process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || '',
   database: parsedConfig.database || process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'abnehmen_app',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.MYSQL_SSL === 'true' ? { rejectUnauthorized: false } : false,
   timezone: 'Z'
 };
 

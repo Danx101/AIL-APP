@@ -23,9 +23,9 @@ router.get('/:studioId/appointment-types', async (req, res) => {
       return res.status(404).json({ message: 'Studio not found or access denied' });
     }
     
-    // Get appointment types
+    // Get appointment types (map duration_minutes to duration for frontend compatibility)
     const appointmentTypes = await db.all(
-      'SELECT * FROM appointment_types WHERE studio_id = ? AND is_active = 1 ORDER BY name',
+      'SELECT id, studio_id, name, duration_minutes as duration, consumes_session, is_probebehandlung, max_per_customer, description, color, is_active, created_at, updated_at FROM appointment_types WHERE studio_id = ? AND is_active = 1 ORDER BY name',
       [studioId]
     );
     
@@ -69,7 +69,7 @@ router.post('/:studioId/appointment-types', async (req, res) => {
   }
 });
 
-// Get session blocks for a studio
+// Get customer session blocks for a studio (updated for new schema)
 router.get('/:studioId/blocks', async (req, res) => {
   try {
     const { studioId } = req.params;
@@ -84,24 +84,45 @@ router.get('/:studioId/blocks', async (req, res) => {
       return res.status(404).json({ message: 'Studio not found or access denied' });
     }
     
-    // Get session blocks
-    const blocks = await db.all(
-      'SELECT * FROM session_blocks WHERE studio_id = ? AND is_active = 1 ORDER BY display_order, name',
-      [studioId]
-    );
+    // Get customer session blocks (updated for new schema)
+    const blocks = await db.all(`
+      SELECT 
+        cs.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        cs.total_sessions as sessions,
+        cs.remaining_sessions,
+        cs.is_active,
+        cs.purchase_date,
+        cs.notes,
+        cs.created_at,
+        cs.updated_at,
+        CASE 
+          WHEN cs.total_sessions = 10 THEN '10er Block'
+          WHEN cs.total_sessions = 20 THEN '20er Block'
+          WHEN cs.total_sessions = 30 THEN '30er Block'
+          WHEN cs.total_sessions = 40 THEN '40er Block'
+          ELSE CONCAT(cs.total_sessions, 'er Block')
+        END as name
+      FROM customer_sessions cs
+      JOIN users u ON cs.customer_id = u.id
+      WHERE cs.studio_id = ?
+      ORDER BY cs.is_active DESC, cs.created_at DESC
+    `, [studioId]);
     
     res.json({ blocks });
   } catch (error) {
-    console.error('Error fetching session blocks:', error);
+    console.error('Error fetching customer session blocks:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Create session block
+// Create customer session block (add sessions to a customer)
 router.post('/:studioId/blocks', async (req, res) => {
   try {
     const { studioId } = req.params;
-    const { name, sessions, price, display_order } = req.body;
+    const { customer_id, sessions, notes } = req.body;
     
     // Verify user owns this studio
     const studio = await db.get(
@@ -113,19 +134,46 @@ router.post('/:studioId/blocks', async (req, res) => {
       return res.status(404).json({ message: 'Studio not found or access denied' });
     }
     
-    // Create session block
+    // Verify customer exists and belongs to this studio
+    const customer = await db.get(
+      'SELECT * FROM customers WHERE user_id = ? AND studio_id = ?',
+      [customer_id, studioId]
+    );
+    
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found for this studio' });
+    }
+    
+    // Get current queue position
+    const maxPosition = await db.get(
+      'SELECT COALESCE(MAX(queue_position), -1) as max_pos FROM customer_sessions WHERE customer_id = ? AND studio_id = ?',
+      [customer_id, studioId]
+    );
+    
+    const queuePosition = (maxPosition.max_pos || -1) + 1;
+    
+    // Check if customer has no active sessions (first block should be active)
+    const activeBlock = await db.get(
+      'SELECT * FROM customer_sessions WHERE customer_id = ? AND studio_id = ? AND is_active = 1',
+      [customer_id, studioId]
+    );
+    
+    const isActive = !activeBlock;
+    
+    // Create session block for customer
     const result = await db.run(
-      `INSERT INTO session_blocks (studio_id, name, sessions, price, display_order, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())`,
-      [studioId, name, sessions, price, display_order || 0]
+      `INSERT INTO customer_sessions (customer_id, studio_id, total_sessions, remaining_sessions, is_active, queue_position, purchase_date, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, DATE('now'), ?, datetime('now'), datetime('now'))`,
+      [customer_id, studioId, sessions, sessions, isActive, queuePosition, notes || '']
     );
     
     res.status(201).json({ 
-      message: 'Session block created',
-      id: result.lastID 
+      message: 'Session block added to customer',
+      id: result.lastID,
+      is_active: isActive
     });
   } catch (error) {
-    console.error('Error creating session block:', error);
+    console.error('Error creating customer session block:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

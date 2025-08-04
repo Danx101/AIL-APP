@@ -124,8 +124,8 @@ app.use('/api/v1/appointments', appointmentRoutes);
 const sessionRoutes = require('./src/routes/sessions');
 app.use('/api/v1', sessionRoutes);
 
-// Lead routes
-const leadRoutes = require('./src/routes/leads');
+// Lead routes (simplified for new schema)
+const leadRoutes = require('./src/routes/leadsSimple');
 app.use('/api/v1/leads', leadRoutes);
 
 // Twilio webhook routes
