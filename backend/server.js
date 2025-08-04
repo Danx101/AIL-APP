@@ -128,6 +128,10 @@ app.use('/api/v1/manager', managerLeadRoutes);
 const appointmentRoutes = require('./src/routes/appointments');
 app.use('/api/v1/appointments', appointmentRoutes);
 
+// Customer session routes (simplified for new schema) - must come before general session routes
+const customerSessionsSimple = require('./src/routes/customerSessionsSimple');
+app.use('/api/v1', customerSessionsSimple);
+
 // Session routes
 const sessionRoutes = require('./src/routes/sessions');
 app.use('/api/v1', sessionRoutes);
