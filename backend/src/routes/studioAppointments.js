@@ -103,7 +103,7 @@ router.get('/:studioId/blocks', async (req, res) => {
           WHEN cs.total_sessions = 20 THEN '20er Block'
           WHEN cs.total_sessions = 30 THEN '30er Block'
           WHEN cs.total_sessions = 40 THEN '40er Block'
-          ELSE CONCAT(cs.total_sessions, 'er Block')
+          ELSE CONCAT(CAST(cs.total_sessions AS CHAR), 'er Block')
         END as name
       FROM customer_sessions cs
       JOIN users u ON cs.customer_id = u.id
