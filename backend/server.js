@@ -111,6 +111,9 @@ app.use('/api/v1/studios', studioAppointmentRoutes);
 // Simple appointment types routes (no studio ID needed)
 const appointmentTypesSimple = require('./src/routes/appointmentTypesSimple');
 app.use('/api/v1/appointment-types', appointmentTypesSimple);
+// Alternative appointment types routes for frontend compatibility
+app.use('/api/v1/appointments/types', appointmentTypesSimple);
+app.use('/api/v1/appointments/appointment-types', appointmentTypesSimple);
 
 // Simple blocks routes (no studio ID needed)
 const blocksSimple = require('./src/routes/blocksSimple');

@@ -67,11 +67,16 @@ router.get('/customers/:customerId/sessions/blocks', async (req, res) => {
 router.post('/customers/:customerId/sessions/topup', async (req, res) => {
   try {
     const { customerId } = req.params;
-    const { sessions, notes } = req.body;
+    // Handle both 'sessions' and 'amount' field names
+    const sessions = req.body.sessions || req.body.amount || req.body.session_count || req.body.count;
+    const notes = req.body.notes || req.body.note || '';
+    
+    console.log('Topup request body:', req.body);
+    console.log('Sessions to add:', sessions);
     
     // Validate sessions
     if (!sessions || sessions < 1) {
-      return res.status(400).json({ message: 'Invalid session count' });
+      return res.status(400).json({ message: 'Invalid session count', received: req.body });
     }
     
     // Get user's studio
