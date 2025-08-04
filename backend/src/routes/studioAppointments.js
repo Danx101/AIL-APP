@@ -163,8 +163,8 @@ router.post('/:studioId/blocks', async (req, res) => {
     // Create session block for customer
     const result = await db.run(
       `INSERT INTO customer_sessions (customer_id, studio_id, total_sessions, remaining_sessions, is_active, queue_position, purchase_date, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, DATE('now'), ?, datetime('now'), datetime('now'))`,
-      [customer_id, studioId, sessions, sessions, isActive, queuePosition, notes || '']
+       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, NOW(), NOW())`,
+      [customer_id, studioId, sessions, sessions, isActive ? 1 : 0, queuePosition, notes || '']
     );
     
     res.status(201).json({ 
