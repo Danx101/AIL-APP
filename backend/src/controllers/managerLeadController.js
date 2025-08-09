@@ -335,6 +335,127 @@ class ManagerLeadController {
     }
   }
 
+  /**
+   * Get all leads for a specific studio (Manager Only)
+   * GET /api/v1/manager/studios/:studioId/leads
+   */
+  async getStudioLeads(req, res) {
+    try {
+      // Manager-only authorization
+      if (req.user.role !== 'manager') {
+        return res.status(403).json({ 
+          message: 'Access denied. Only managers can view studio leads.' 
+        });
+      }
+
+      const { studioId } = req.params;
+      const { status, source_type, search, page = 1, limit = 50 } = req.query;
+
+      // Verify manager has access to this studio
+      const studioAccess = await this.verifyManagerStudioAccess(req.user.userId, studioId);
+      if (!studioAccess) {
+        return res.status(403).json({ 
+          message: 'Access denied. You do not manage this studio.' 
+        });
+      }
+
+      // Build query
+      let sql = `
+        SELECT 
+          l.*,
+          s.name as studio_name,
+          s.city as studio_city,
+          gsi.sheet_name as google_sheet_name,
+          gsi.last_sync_at as last_import_date
+        FROM leads l
+        LEFT JOIN studios s ON l.studio_id = s.id
+        LEFT JOIN google_sheets_integrations gsi ON l.studio_id = gsi.studio_id 
+          AND l.google_sheets_sync_id IS NOT NULL
+        WHERE l.studio_id = ?
+      `;
+      const params = [studioId];
+
+      // Add filters
+      if (status) {
+        sql += ' AND l.status = ?';
+        params.push(status);
+      }
+
+      if (source_type) {
+        sql += ' AND l.source_type = ?';
+        params.push(source_type);
+      }
+
+      if (search) {
+        sql += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR l.email LIKE ?)';
+        const searchPattern = `%${search}%`;
+        params.push(searchPattern, searchPattern, searchPattern);
+      }
+
+      // Add pagination
+      const offset = (page - 1) * limit;
+      sql += ` ORDER BY l.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+
+      // Get leads
+      const leads = await db.all(sql, params);
+
+      // Get total count for pagination
+      let countSql = `
+        SELECT COUNT(*) as total
+        FROM leads l
+        WHERE l.studio_id = ?
+      `;
+      const countParams = [studioId];
+
+      if (status) {
+        countSql += ' AND l.status = ?';
+        countParams.push(status);
+      }
+
+      if (source_type) {
+        countSql += ' AND l.source_type = ?';
+        countParams.push(source_type);
+      }
+
+      if (search) {
+        countSql += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR l.email LIKE ?)';
+        const searchPattern = `%${search}%`;
+        countParams.push(searchPattern, searchPattern, searchPattern);
+      }
+
+      const { total } = await db.get(countSql, countParams);
+
+      // Get summary statistics
+      const stats = await db.get(`
+        SELECT 
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN source_type = 'imported' THEN 1 END) as imported_leads,
+          COUNT(CASE WHEN source_type = 'manual' THEN 1 END) as manual_leads,
+          COUNT(CASE WHEN status = 'neu' THEN 1 END) as new_leads,
+          COUNT(CASE WHEN status = 'kontaktiert' THEN 1 END) as contacted_leads,
+          COUNT(CASE WHEN status = 'konvertiert' THEN 1 END) as converted_leads
+        FROM leads
+        WHERE studio_id = ?
+      `, [studioId]);
+
+      res.json({
+        leads,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        },
+        stats,
+        studio: studioAccess
+      });
+
+    } catch (error) {
+      console.error('Error getting studio leads:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
   // Helper methods
 
   async saveGoogleSheetsIntegration(data) {
@@ -365,27 +486,19 @@ class ManagerLeadController {
   }
 
   async getAllIntegrations(managerId) {
-    return new Promise((resolve, reject) => {
-      const sql = `
-        SELECT gsi.*, s.name as studio_name, s.city
-        FROM google_sheets_integrations gsi
-        LEFT JOIN studios s ON gsi.studio_id = s.id
-        WHERE gsi.manager_id = ?
-        ORDER BY gsi.updated_at DESC
-      `;
-      
-      db.all(sql, [managerId], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          const integrations = rows.map(row => ({
-            ...row,
-            column_mapping: JSON.parse(row.column_mapping)
-          }));
-          resolve(integrations);
-        }
-      });
-    });
+    const sql = `
+      SELECT gsi.*, s.name as studio_name, s.city
+      FROM google_sheets_integrations gsi
+      LEFT JOIN studios s ON gsi.studio_id = s.id
+      WHERE gsi.manager_id = ?
+      ORDER BY gsi.updated_at DESC
+    `;
+    
+    const rows = await db.all(sql, [managerId]);
+    return rows.map(row => ({
+      ...row,
+      column_mapping: row.column_mapping ? JSON.parse(row.column_mapping) : null
+    }));
   }
 
   async updateIntegration(id, updates) {
@@ -423,33 +536,49 @@ class ManagerLeadController {
   }
 
   async getManagerLeadStats(managerId) {
-    return new Promise((resolve, reject) => {
-      const sql = `
-        SELECT 
-          COUNT(*) as total_leads,
-          COUNT(CASE WHEN l.source_type = 'imported' THEN 1 END) as imported_leads,
-          COUNT(CASE WHEN l.source_type = 'manual' THEN 1 END) as manual_leads,
-          COUNT(CASE WHEN l.status = 'neu' THEN 1 END) as new_leads,
-          COUNT(CASE WHEN l.status = 'konvertiert' THEN 1 END) as converted_leads,
-          COUNT(DISTINCT l.studio_id) as studios_with_leads,
-          COUNT(DISTINCT gsi.id) as active_integrations
-        FROM leads l
-        LEFT JOIN google_sheets_integrations gsi ON l.studio_id = gsi.studio_id AND gsi.manager_id = ?
-        WHERE l.created_by_manager_id = ? OR l.created_by_user_id IN (
-          SELECT u.id FROM users u 
-          JOIN studios s ON u.id = s.owner_id 
-          WHERE s.id IN (SELECT studio_id FROM google_sheets_integrations WHERE manager_id = ?)
+    const sql = `
+      SELECT 
+        COUNT(*) as total_leads,
+        COUNT(CASE WHEN l.source_type = 'imported' THEN 1 END) as imported_leads,
+        COUNT(CASE WHEN l.source_type = 'manual' THEN 1 END) as manual_leads,
+        COUNT(CASE WHEN l.status = 'neu' THEN 1 END) as new_leads,
+        COUNT(CASE WHEN l.status = 'konvertiert' THEN 1 END) as converted_leads,
+        COUNT(DISTINCT l.studio_id) as studios_with_leads,
+        COUNT(DISTINCT gsi.id) as active_integrations
+      FROM leads l
+      LEFT JOIN google_sheets_integrations gsi ON l.studio_id = gsi.studio_id AND gsi.manager_id = ?
+      WHERE l.created_by_manager_id = ? OR l.studio_id IN (
+        SELECT s.id FROM studios s 
+        JOIN users u ON s.owner_id = u.id
+        JOIN manager_codes mc ON mc.used_by_user_id = u.id
+        WHERE mc.created_by_manager_id = ?
+      )
+    `;
+    
+    return await db.get(sql, [managerId, managerId, managerId]);
+  }
+
+  async verifyManagerStudioAccess(managerId, studioId) {
+    const sql = `
+      SELECT 
+        s.id,
+        s.name,
+        s.city,
+        s.owner_id,
+        u.name as owner_name,
+        u.email as owner_email
+      FROM studios s
+      JOIN users u ON s.owner_id = u.id
+      WHERE s.id = ? AND (
+        s.created_by_manager_id = ? OR
+        EXISTS (
+          SELECT 1 FROM google_sheets_integrations gsi 
+          WHERE gsi.studio_id = s.id AND gsi.manager_id = ?
         )
-      `;
-      
-      db.get(sql, [managerId, managerId, managerId], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+      )
+    `;
+    
+    return await db.get(sql, [studioId, managerId, managerId]);
   }
 }
 

@@ -304,69 +304,119 @@ class Lead {
   }
 
   /**
-   * Bulk import leads from Google Sheets
+   * Bulk import leads from Google Sheets with duplicate prevention
    */
   static async bulkImport(studioId, leadsData, syncId, managerId) {
     return new Promise((resolve, reject) => {
       db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         
-        let successCount = 0;
+        let importedCount = 0;
+        let updatedCount = 0;
+        let skippedCount = 0;
         let errorCount = 0;
         const errors = [];
+        const importDetails = [];
 
-        const insertPromises = leadsData.map((leadData, index) => {
-          return new Promise((resolveInsert, rejectInsert) => {
-            const lead = new Lead({
-              studio_id: studioId,
-              name: leadData.name,
-              phone_number: leadData.phone_number,
-              email: leadData.email,
-              source: 'google_sheets',
-              status: 'neu',
-              notes: leadData.notes,
-              google_sheets_row_id: leadData.row_id,
-              google_sheets_sync_id: syncId,
-              source_type: 'imported',
-              created_by_manager_id: managerId
-            });
+        const processPromises = leadsData.map((leadData, index) => {
+          return new Promise(async (resolveProcess) => {
+            try {
+              // Check if lead already exists by phone number and studio
+              const existingLead = await Lead.findByPhoneAndStudio(
+                leadData.phone_number, 
+                studioId
+              );
 
-            lead.save()
-              .then((result) => {
-                successCount++;
-                resolveInsert(result);
-              })
-              .catch((error) => {
-                errorCount++;
-                errors.push({ row: index + 1, error: error.message });
-                resolveInsert(null); // Continue with other inserts
+              if (existingLead) {
+                // Update existing lead with new data from Google Sheets
+                existingLead.name = leadData.name;
+                existingLead.email = leadData.email || existingLead.email;
+                existingLead.notes = leadData.notes || existingLead.notes;
+                existingLead.google_sheets_row_id = leadData.row_id;
+                existingLead.google_sheets_sync_id = syncId;
+                existingLead.source_type = 'imported';
+                existingLead.updated_at = new Date().toISOString();
+
+                await existingLead.save();
+                updatedCount++;
+                importDetails.push({
+                  row: leadData.row_id,
+                  name: leadData.name,
+                  action: 'updated',
+                  leadId: existingLead.id
+                });
+                resolveProcess({ status: 'updated', id: existingLead.id });
+              } else {
+                // Create new lead
+                const lead = new Lead({
+                  studio_id: studioId,
+                  name: leadData.name,
+                  phone_number: leadData.phone_number,
+                  email: leadData.email,
+                  source: 'google_sheets',
+                  status: 'neu',
+                  notes: leadData.notes,
+                  google_sheets_row_id: leadData.row_id,
+                  google_sheets_sync_id: syncId,
+                  source_type: 'imported',
+                  created_by_manager_id: managerId
+                });
+
+                const leadId = await lead.save();
+                importedCount++;
+                importDetails.push({
+                  row: leadData.row_id,
+                  name: leadData.name,
+                  action: 'imported',
+                  leadId: leadId
+                });
+                resolveProcess({ status: 'imported', id: leadId });
+              }
+            } catch (error) {
+              errorCount++;
+              errors.push({ 
+                row: leadData.row_id || index + 2, 
+                name: leadData.name,
+                phone: leadData.phone_number,
+                error: error.message 
               });
+              resolveProcess({ status: 'error', error: error.message });
+            }
           });
         });
 
-        Promise.all(insertPromises)
-          .then(() => {
-            if (errorCount === 0) {
+        Promise.all(processPromises)
+          .then((results) => {
+            // Only rollback if ALL operations failed
+            if (importedCount === 0 && updatedCount === 0 && errorCount === leadsData.length) {
+              db.run('ROLLBACK', () => {
+                resolve({ 
+                  success: false, 
+                  imported: 0,
+                  updated: 0,
+                  skipped: 0,
+                  errors: errorCount,
+                  errorDetails: errors,
+                  message: 'All leads failed to import'
+                });
+              });
+            } else {
               db.run('COMMIT', (err) => {
                 if (err) {
                   reject(err);
                 } else {
                   resolve({ 
                     success: true, 
-                    imported: successCount, 
+                    imported: importedCount,
+                    updated: updatedCount,
+                    skipped: skippedCount,
                     errors: errorCount,
-                    errorDetails: errors 
+                    errorDetails: errors,
+                    importDetails: importDetails,
+                    totalProcessed: leadsData.length,
+                    message: `Import complete: ${importedCount} new, ${updatedCount} updated, ${errorCount} errors`
                   });
                 }
-              });
-            } else {
-              db.run('ROLLBACK', () => {
-                resolve({ 
-                  success: false, 
-                  imported: successCount, 
-                  errors: errorCount,
-                  errorDetails: errors 
-                });
               });
             }
           })

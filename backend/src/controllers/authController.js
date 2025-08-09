@@ -30,7 +30,7 @@ class AuthController {
 
         const validCode = await new Promise((resolve, reject) => {
           db.get(
-            'SELECT * FROM activation_codes WHERE code = ? AND is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now"))',
+            'SELECT * FROM activation_codes WHERE code = ? AND (expires_at IS NULL OR expires_at > NOW())',
             [activationCode],
             (err, row) => {
               if (err) reject(err);
@@ -53,7 +53,7 @@ class AuthController {
 
         managerCodeData = await new Promise((resolve, reject) => {
           db.get(
-            'SELECT * FROM manager_codes WHERE code = ? AND is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now"))',
+            'SELECT * FROM manager_codes WHERE code = ? AND (expires_at IS NULL OR expires_at > NOW())',
             [managerCode],
             (err, row) => {
               if (err) reject(err);
@@ -92,12 +92,12 @@ class AuthController {
         );
       });
 
-      // Mark activation code as used for customers
+      // Delete activation code after successful use for customers
       if (role === 'customer' && activationCode) {
         await new Promise((resolve, reject) => {
           db.run(
-            'UPDATE activation_codes SET is_used = 1, used_by_user_id = ? WHERE code = ?',
-            [userId, activationCode],
+            'DELETE FROM activation_codes WHERE code = ?',
+            [activationCode],
             (err) => {
               if (err) reject(err);
               else resolve();
@@ -106,12 +106,12 @@ class AuthController {
         });
       }
 
-      // Mark manager code as used for studio owners
+      // Delete manager code after successful use for studio owners
       if (role === 'studio_owner' && managerCode) {
         await new Promise((resolve, reject) => {
           db.run(
-            'UPDATE manager_codes SET is_used = 1, used_by_user_id = ? WHERE code = ?',
-            [userId, managerCode],
+            'DELETE FROM manager_codes WHERE code = ?',
+            [managerCode],
             (err) => {
               if (err) reject(err);
               else resolve();

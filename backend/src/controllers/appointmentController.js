@@ -87,7 +87,9 @@ class AppointmentController {
         studio_id,
         appointment_date,
         start_time,
-        end_time
+        end_time,
+        null,
+        appointment_type_id
       );
 
       if (hasConflict) {
@@ -201,7 +203,8 @@ class AppointmentController {
           appointment_date,
           start_time,
           end_time,
-          id
+          id,
+          appointment_type_id || existingAppointment.appointment_type_id
         );
 
         if (hasConflict) {
@@ -419,6 +422,31 @@ class AppointmentController {
         return res.status(403).json({ message: 'Access denied' });
       }
 
+      // Check if session should be consumed when marking as completed
+      const oldStatus = appointment.status;
+      const isBecomingCompleted = (status === 'abgeschlossen' || status === 'completed') && 
+                                   oldStatus !== 'abgeschlossen' && oldStatus !== 'completed';
+      const isBecomingNoShow = (status === 'nicht erschienen' || status === 'no_show') && 
+                                oldStatus !== 'nicht erschienen' && oldStatus !== 'no_show';
+      
+      // Check if appointment type consumes sessions
+      let shouldConsumeSession = false;
+      if (isBecomingCompleted || isBecomingNoShow) {
+        const appointmentType = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT consumes_session FROM appointment_types WHERE id = ?',
+            [appointment.appointment_type_id],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+        
+        shouldConsumeSession = appointmentType && appointmentType.consumes_session;
+      }
+
+      // Update the appointment status
       const updatedAppointment = new Appointment({
         id: parseInt(id),
         studio_id: appointment.studio_id,
@@ -433,11 +461,32 @@ class AppointmentController {
       });
 
       await updatedAppointment.update();
+
+      // Consume session if needed
+      if (shouldConsumeSession) {
+        try {
+          const CustomerSession = require('../models/CustomerSession');
+          await CustomerSession.deductSession(
+            appointment.customer_id,
+            appointment.studio_id,
+            appointment.id,
+            req.user.userId,
+            `Session deducted for ${isBecomingCompleted ? 'completed' : 'no-show'} appointment`
+          );
+          console.log(`✅ Session deducted for appointment ${id} (status: ${status})`);
+        } catch (sessionError) {
+          console.error(`❌ Failed to deduct session for appointment ${id}:`, sessionError.message);
+          // Don't fail the status update if session deduction fails
+          // But log it for monitoring
+        }
+      }
+
       const result = await Appointment.findById(id);
 
       res.json({
         message: 'Appointment status updated successfully',
-        appointment: result
+        appointment: result,
+        sessionDeducted: shouldConsumeSession
       });
 
     } catch (error) {

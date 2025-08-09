@@ -137,6 +137,9 @@ class LeadController {
       const leadId = await lead.save();
       const createdLead = await Lead.findById(leadId);
 
+      // Trigger Google Sheets sync for this studio if enabled
+      this.triggerStudioSync(studio_id);
+
       res.status(201).json({
         message: 'Lead created successfully',
         lead: createdLead
@@ -201,6 +204,9 @@ class LeadController {
 
       await existingLead.save();
       const updatedLead = await Lead.findById(id);
+
+      // Trigger Google Sheets sync for this studio if enabled
+      this.triggerStudioSync(existingLead.studio_id);
 
       res.json({
         message: 'Lead updated successfully',
@@ -507,6 +513,49 @@ class LeadController {
     } catch (error) {
       console.error('Error getting lead stats:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Trigger Google Sheets sync for a specific studio
+   * @param {number} studioId - Studio ID to sync
+   */
+  async triggerStudioSync(studioId) {
+    try {
+      // Import googleSheetsService only when needed to avoid circular dependencies
+      const googleSheetsService = require('../services/googleSheetsService');
+      
+      // Get all Google Sheets integrations for this studio
+      const integrations = await new Promise((resolve, reject) => {
+        const db = require('../database/database-wrapper');
+        db.all(
+          'SELECT * FROM google_sheets_integrations WHERE studio_id = ? AND is_active = 1',
+          [studioId],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      // Trigger sync for each active integration
+      for (const integration of integrations) {
+        console.log(`🔄 Triggering sync for integration ${integration.id} after lead creation`);
+        googleSheetsService.syncLeads(integration.id)
+          .then((result) => {
+            if (result && result.success === false) {
+              console.log(`⚠️ Sync skipped for integration ${integration.id}: ${result.message}`);
+            } else {
+              console.log(`✅ Sync completed for integration ${integration.id}`);
+            }
+          })
+          .catch(error => {
+            console.error(`❌ Sync failed for integration ${integration.id}:`, error.message);
+          });
+      }
+    } catch (error) {
+      console.error('Error triggering studio sync:', error);
+      // Don't throw - this is a background operation
     }
   }
 }

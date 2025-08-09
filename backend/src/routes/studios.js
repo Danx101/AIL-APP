@@ -43,6 +43,12 @@ router.get('/my-studio',
   studioController.getMyStudio
 );
 
+router.get('/my-studios', 
+  authenticate, 
+  authorize(['studio_owner']), 
+  studioController.getMyStudios
+);
+
 router.get('/prefill-info', 
   authenticate, 
   authorize(['studio_owner']), 

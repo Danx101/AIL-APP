@@ -298,58 +298,135 @@ class Appointment {
   }
 
   /**
-   * Check for time conflicts
+   * Check for time conflicts considering studio machine count and appointment types
+   * Beratung can overlap with Behandlung, but only 1 Beratung at a time
    */
-  static async checkConflicts(studioId, appointmentDate, startTime, endTime, excludeId = null) {
-    return new Promise((resolve, reject) => {
-      let query = `
-        SELECT COUNT(*) as count
-        FROM appointments 
-        WHERE studio_id = ? 
-          AND appointment_date = ? 
-          AND status NOT IN ('cancelled', 'no_show')
-          AND (
-            (start_time < ? AND end_time > ?) OR
-            (start_time < ? AND end_time > ?) OR
-            (start_time >= ? AND end_time <= ?)
-          )
-      `;
+  static async checkConflicts(studioId, appointmentDate, startTime, endTime, excludeId = null, appointmentTypeId = null) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // First, get the studio's machine count and appointment type info
+        const studioQuery = 'SELECT machine_count FROM studios WHERE id = ?';
+        
+        db.get(studioQuery, [studioId], async (err, studio) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const machineCount = studio?.machine_count || 1; // Default to 1 if not set
+          
+          // Get appointment type name if typeId provided
+          let appointmentTypeName = null;
+          if (appointmentTypeId) {
+            const typeQuery = 'SELECT name FROM appointment_types WHERE id = ?';
+            const appointmentType = await new Promise((resolve, reject) => {
+              db.get(typeQuery, [appointmentTypeId], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              });
+            });
+            appointmentTypeName = appointmentType?.name;
+          }
+          
+          // Check for Beratung appointments - only 1 allowed at a time
+          if (appointmentTypeName === 'Beratung') {
+            let beratungQuery = `
+              SELECT COUNT(*) as count
+              FROM appointments a
+              JOIN appointment_types at ON a.appointment_type_id = at.id
+              WHERE a.studio_id = ? 
+                AND a.appointment_date = ? 
+                AND at.name = 'Beratung'
+                AND a.status NOT IN ('cancelled', 'no_show')
+                AND (
+                  (a.start_time < ? AND a.end_time > ?) OR
+                  (a.start_time < ? AND a.end_time > ?) OR
+                  (a.start_time >= ? AND a.end_time <= ?)
+                )
+            `;
+            
+            const beratungParams = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
+            
+            if (excludeId) {
+              beratungQuery += ' AND a.id != ?';
+              beratungParams.push(excludeId);
+            }
+            
+            const beratungResult = await new Promise((resolve, reject) => {
+              db.get(beratungQuery, beratungParams, (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              });
+            });
+            
+            if (beratungResult.count > 0) {
+              resolve(true); // Conflict - already a Beratung at this time
+              return;
+            }
+            
+            // Beratung doesn't conflict with Behandlung, so no further checks needed
+            resolve(false);
+            return;
+          }
+          
+          // For Behandlung, check against other Behandlungen only (not Beratung)
+          let conflictQuery = `
+            SELECT COUNT(*) as count
+            FROM appointments a
+            JOIN appointment_types at ON a.appointment_type_id = at.id
+            WHERE a.studio_id = ? 
+              AND a.appointment_date = ? 
+              AND at.name = 'Behandlung'
+              AND a.status NOT IN ('cancelled', 'no_show')
+              AND (
+                (a.start_time < ? AND a.end_time > ?) OR
+                (a.start_time < ? AND a.end_time > ?) OR
+                (a.start_time >= ? AND a.end_time <= ?)
+              )
+          `;
 
-      const params = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
+          const params = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
 
-      if (excludeId) {
-        query += ' AND id != ?';
-        params.push(excludeId);
+          if (excludeId) {
+            conflictQuery += ' AND a.id != ?';
+            params.push(excludeId);
+          }
+
+          db.get(conflictQuery, params, (err, row) => {
+            if (err) {
+              reject(err);
+            } else {
+              // If the number of overlapping Behandlung appointments is >= machine count, there's a conflict
+              const hasConflict = row.count >= machineCount;
+              resolve(hasConflict);
+            }
+          });
+        });
+      } catch (error) {
+        reject(error);
       }
-
-      db.get(query, params, (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row.count > 0);
-        }
-      });
     });
   }
 
   /**
    * Auto-update appointment statuses based on date and current status
-   * Changes past 'bestätigt' appointments to 'abgeschlossen' and deducts sessions
+   * Changes past 'confirmed' appointments to 'completed' when appointment end time has passed
    */
   static async updatePastAppointmentStatuses() {
     return new Promise(async (resolve, reject) => {
       try {
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-        
-        // First, get all past confirmed appointments that need to be completed
+        // Use NOW() directly in MySQL for proper timezone handling
+        // First, get all confirmed appointments that have ended (end time has passed)
         const appointmentsToComplete = await new Promise((resolveQuery, rejectQuery) => {
           const query = `
-            SELECT * FROM appointments 
-            WHERE appointment_date < ? 
-              AND status = 'bestätigt'
+            SELECT a.*, at.consumes_session 
+            FROM appointments a
+            LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+            WHERE CONCAT(a.appointment_date, ' ', a.end_time) < NOW() 
+              AND a.status = 'confirmed'
           `;
 
-          db.all(query, [today], (err, rows) => {
+          db.all(query, [], (err, rows) => {
             if (err) rejectQuery(err);
             else resolveQuery(rows);
           });
@@ -359,39 +436,43 @@ class Appointment {
           return resolve(0);
         }
 
-        // Update appointment statuses
+        // Update appointment statuses to 'completed' (MySQL English status)
         const updateQuery = `
           UPDATE appointments 
-          SET status = 'abgeschlossen', updated_at = CURRENT_TIMESTAMP
-          WHERE appointment_date < ? 
-            AND status = 'bestätigt'
+          SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+          WHERE CONCAT(appointment_date, ' ', end_time) < NOW() 
+            AND status = 'confirmed'
         `;
 
-        db.run(updateQuery, [today], async (err) => {
+        db.run(updateQuery, [], async (err) => {
           if (err) {
             return reject(err);
           }
 
-          // Deduct sessions for each completed appointment
+          // Deduct sessions for each completed appointment that consumes sessions
           const CustomerSession = require('./CustomerSession');
           let sessionDeductions = 0;
 
           for (const appointment of appointmentsToComplete) {
-            try {
-              await CustomerSession.deductSession(
-                appointment.customer_id,
-                appointment.studio_id,
-                appointment.id,
-                appointment.created_by_user_id, // Use original creator as deductor
-                'Automatic session deduction for completed past appointment'
-              );
-              sessionDeductions++;
-            } catch (sessionError) {
-              console.error(`Failed to deduct session for appointment ${appointment.id}:`, sessionError.message);
-              // Continue with other appointments even if one fails
+            // Only deduct session if appointment type consumes sessions
+            if (appointment.consumes_session) {
+              try {
+                await CustomerSession.deductSession(
+                  appointment.customer_id,
+                  appointment.studio_id,
+                  appointment.id,
+                  appointment.created_by_user_id, // Use original creator as deductor
+                  'Automatic session deduction for completed past appointment'
+                );
+                sessionDeductions++;
+              } catch (sessionError) {
+                console.error(`Failed to deduct session for appointment ${appointment.id}:`, sessionError.message);
+                // Continue with other appointments even if one fails
+              }
             }
           }
 
+          console.log(`✅ Updated ${appointmentsToComplete.length} past appointments to completed, deducted ${sessionDeductions} sessions`);
           resolve(appointmentsToComplete.length);
         });
 

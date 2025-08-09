@@ -42,6 +42,40 @@ class StudioController {
   }
 
   /**
+   * Get all studios owned by the current user
+   * GET /api/v1/studios/my-studios
+   */
+  async getMyStudios(req, res) {
+    try {
+      const ownerId = req.user.userId;
+      
+      // Get all studios owned by this user
+      const studios = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT * FROM studios WHERE owner_id = ? AND is_active = 1 ORDER BY created_at DESC`,
+          [ownerId],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+      
+      res.json({ 
+        success: true,
+        studios,
+        count: studios.length
+      });
+    } catch (error) {
+      console.error('Error getting user studios:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Internal server error' 
+      });
+    }
+  }
+
+  /**
    * Create a new studio
    * POST /api/v1/studios
    */
@@ -52,19 +86,16 @@ class StudioController {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, address, phone, email, business_hours, city } = req.body;
+      const { name, address, phone, email, business_hours, city, machine_count } = req.body;
       const owner_id = req.user.userId;
 
-      // Check if user already has a studio
-      const existingStudio = await Studio.findByOwnerId(owner_id);
-      if (existingStudio) {
-        return res.status(400).json({ message: 'User already owns a studio' });
-      }
+      // Note: We now allow multiple studios per owner
+      // No longer checking if user already has a studio
 
-      // Get manager code information for pre-filling
+      // Get manager code information for pre-filling and manager relationship
       const managerCodeInfo = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT intended_city, intended_studio_name FROM manager_codes WHERE used_by_user_id = ?',
+          'SELECT intended_city, intended_studio_name, created_by_manager_id FROM manager_codes WHERE used_by_user_id = ?',
           [owner_id],
           (err, row) => {
             if (err) reject(err);
@@ -77,7 +108,7 @@ class StudioController {
       const finalName = name || managerCodeInfo?.intended_studio_name || '';
       const finalCity = city || managerCodeInfo?.intended_city || '';
 
-      // Create studio
+      // Create studio with manager relationship
       const studio = await Studio.create({
         name: finalName,
         owner_id,
@@ -85,7 +116,9 @@ class StudioController {
         phone,
         email,
         business_hours,
-        city: finalCity
+        city: finalCity,
+        machine_count: machine_count || 1,
+        created_by_manager_id: managerCodeInfo?.created_by_manager_id || null
       });
 
       res.status(201).json({
@@ -367,33 +400,36 @@ class StudioController {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      // Get customers who have used activation codes from this studio
-      const customers = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
-           FROM users u
-           JOIN activation_codes ac ON u.id = ac.used_by_user_id
-           WHERE ac.studio_id = ? AND u.role = 'customer'
-           ORDER BY u.created_at DESC`,
-          [id],
-          (err, rows) => {
-            if (err) {
-              console.error('Database error fetching customers:', err);
-              reject(err);
-            } else {
-              // Add status calculation for each customer
-              const customersWithStatus = rows.map(customer => ({
-                ...customer,
-                status: 'neu', // For now, we'll calculate this separately if needed
-                total_sessions: 0 // Will be calculated in session blocks
-              }));
-              resolve(customersWithStatus);
-            }
-          }
-        );
-      });
+      // Get customers from customers table with contact info
+      const customers = await db.all(
+        `SELECT 
+          u.id, 
+          u.email as login_email,
+          COALESCE(c.contact_email, u.email) as email,
+          COALESCE(c.contact_first_name, u.first_name) as first_name,
+          COALESCE(c.contact_last_name, u.last_name) as last_name,
+          COALESCE(c.contact_phone, u.phone) as phone,
+          u.created_at,
+          c.probebehandlung_used,
+          c.last_weight,
+          c.goal_weight,
+          c.initial_weight,
+          c.notes as customer_notes
+        FROM customers c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.studio_id = ? AND u.role = 'customer'
+        ORDER BY u.created_at DESC`,
+        [id]
+      );
 
-      res.json({ customers });
+      // Add status and session count
+      const customersWithStatus = customers.map(customer => ({
+        ...customer,
+        status: 'neu', // This should be calculated based on lead status if applicable
+        total_sessions: 0 // This will be calculated from session blocks
+      }));
+
+      res.json({ customers: customersWithStatus });
     } catch (error) {
       console.error('Error fetching studio customers:', error);
       res.status(500).json({ 
@@ -639,21 +675,15 @@ class StudioController {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      // Verify customer belongs to this studio (has used activation code from this studio)
-      const customerStudioLink = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT u.id FROM users u
-           JOIN activation_codes ac ON u.id = ac.used_by_user_id
-           WHERE u.id = ? AND ac.studio_id = ? AND u.role = 'customer'`,
-          [customerId, studioId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      // Verify customer exists in customers table for this studio
+      const customer = await db.get(
+        `SELECT c.*, u.email as login_email FROM customers c
+         JOIN users u ON c.user_id = u.id
+         WHERE c.user_id = ? AND c.studio_id = ?`,
+        [customerId, studioId]
+      );
 
-      if (!customerStudioLink) {
+      if (!customer) {
         return res.status(404).json({ message: 'Customer not found or not associated with this studio' });
       }
 
@@ -662,37 +692,30 @@ class StudioController {
         return res.status(400).json({ message: 'First name, last name, and email are required' });
       }
 
-      // Check if email is already taken by another user
-      const existingUser = await new Promise((resolve, reject) => {
-        db.get(
-          'SELECT id FROM users WHERE email = ? AND id != ?',
-          [email, customerId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      // Update customer contact information in customers table
+      await db.run(
+        `UPDATE customers 
+         SET contact_first_name = ?, contact_last_name = ?, contact_email = ?, contact_phone = ?, updated_at = NOW() 
+         WHERE user_id = ? AND studio_id = ?`,
+        [first_name, last_name, email, phone, customerId, studioId]
+      );
 
-      if (existingUser) {
-        return res.status(400).json({ message: 'Email address already exists' });
-      }
-
-      // Update customer data
-      await new Promise((resolve, reject) => {
-        db.run(
-          'UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, updated_at = datetime("now") WHERE id = ?',
-          [first_name, last_name, email, phone, customerId],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      // Also update the display name in users table (but NOT the login email)
+      await db.run(
+        'UPDATE users SET first_name = ?, last_name = ?, phone = ?, updated_at = NOW() WHERE id = ?',
+        [first_name, last_name, phone, customerId]
+      );
 
       res.json({ 
-        message: 'Customer updated successfully',
-        customer: { id: customerId, first_name, last_name, email, phone }
+        message: 'Customer contact information updated successfully',
+        customer: { 
+          id: customerId, 
+          first_name, 
+          last_name, 
+          contact_email: email,
+          login_email: customer.login_email,
+          phone 
+        }
       });
 
     } catch (error) {

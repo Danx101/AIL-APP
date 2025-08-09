@@ -189,6 +189,36 @@ class ManagerAPI {
         }
     }
 
+    // Get leads for a specific studio
+    async getStudioLeads(studioId, filters = {}) {
+        try {
+            const params = new URLSearchParams();
+            
+            // Add filters
+            if (filters.status) params.append('status', filters.status);
+            if (filters.source_type) params.append('source_type', filters.source_type);
+            if (filters.search) params.append('search', filters.search);
+            if (filters.page) params.append('page', filters.page);
+            if (filters.limit) params.append('limit', filters.limit);
+
+            const url = `${this.baseURL}/manager/studios/${studioId}/leads${params.toString() ? '?' + params.toString() : ''}`;
+            
+            const response = await fetch(url, {
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Failed to fetch studio leads: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching studio leads:', error);
+            throw error;
+        }
+    }
+
     // ============= Studio Management =============
 
     // Get all studios (for manager oversight)

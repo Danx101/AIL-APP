@@ -152,6 +152,20 @@ class ManagerDashboard {
                                 </a>
                             </li>
                             <li class="nav-item mb-1">
+                                <a class="nav-link ${this.activeTab === 'leads' ? 'active' : ''}" 
+                                   href="#" onclick="managerDashboard.switchTab('leads')">
+                                    <i class="bi bi-people me-2"></i>
+                                    Leads
+                                </a>
+                            </li>
+                            <li class="nav-item mb-1">
+                                <a class="nav-link ${this.activeTab === 'codes' ? 'active' : ''}" 
+                                   href="#" onclick="managerDashboard.switchTab('codes')">
+                                    <i class="bi bi-key me-2"></i>
+                                    Studio Codes
+                                </a>
+                            </li>
+                            <li class="nav-item mb-1">
                                 <a class="nav-link ${this.activeTab === 'wizard' ? 'active' : ''}" 
                                    href="#" onclick="managerDashboard.switchTab('wizard')">
                                     <i class="bi bi-plus-circle me-2"></i>
@@ -217,6 +231,12 @@ class ManagerDashboard {
                 break;
             case 'studios':
                 this.renderStudios();
+                break;
+            case 'leads':
+                this.renderLeads();
+                break;
+            case 'codes':
+                this.renderCodes();
                 break;
             case 'wizard':
                 this.renderConnectionWizard();
@@ -421,6 +441,437 @@ class ManagerDashboard {
                         ${this.renderStudiosTable()}
                     </div>
                 </div>
+            </div>
+        `;
+    }
+
+    // Render codes tab
+    renderCodes() {
+        const contentContainer = document.getElementById('dashboard-content');
+        contentContainer.innerHTML = `
+            <div class="row mb-4">
+                <div class="col">
+                    <h2 class="h3 mb-0">
+                        <i class="bi bi-key text-primary me-2"></i>
+                        Studio Owner Codes
+                    </h2>
+                    <p class="text-muted mb-0">Generate activation codes for new studio owners</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" onclick="managerDashboard.showCodeGenerationModal()">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        Generate New Code
+                    </button>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div id="codes-table">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        this.loadCodes();
+    }
+
+    // Render leads tab
+    renderLeads() {
+        const contentContainer = document.getElementById('dashboard-content');
+        contentContainer.innerHTML = `
+            <div class="row mb-4">
+                <div class="col">
+                    <h2 class="h3 mb-0">
+                        <i class="bi bi-people text-primary me-2"></i>
+                        Lead Management
+                    </h2>
+                    <p class="text-muted mb-0">View and manage leads from Google Sheets imports</p>
+                </div>
+            </div>
+
+            <!-- Studio Selection -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Select Studio</label>
+                            <select id="studio-select" class="form-select" onchange="managerDashboard.loadStudioLeads()">
+                                <option value="">Choose a studio...</option>
+                                ${this.studios.map(studio => `
+                                    <option value="${studio.id}">${studio.name} - ${studio.city}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Filter by Source</label>
+                            <select id="source-filter" class="form-select" onchange="managerDashboard.loadStudioLeads()">
+                                <option value="">All Sources</option>
+                                <option value="imported">Google Sheets</option>
+                                <option value="manual">Manual Entry</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Filter by Status</label>
+                            <select id="status-filter" class="form-select" onchange="managerDashboard.loadStudioLeads()">
+                                <option value="">All Status</option>
+                                <option value="neu">New</option>
+                                <option value="kontaktiert">Contacted</option>
+                                <option value="konvertiert">Converted</option>
+                                <option value="nicht_interessiert">Not Interested</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="managerDashboard.refreshLeads()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lead Statistics -->
+            <div id="lead-stats" class="row g-3 mb-4" style="display: none;">
+                <div class="col-lg-3 col-md-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-circle bg-primary bg-opacity-10">
+                                    <i class="bi bi-people text-primary"></i>
+                                </div>
+                                <div class="ms-3">
+                                    <div class="fw-bold fs-4" id="total-studio-leads">0</div>
+                                    <div class="text-muted small">Total Leads</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-circle bg-success bg-opacity-10">
+                                    <i class="bi bi-table text-success"></i>
+                                </div>
+                                <div class="ms-3">
+                                    <div class="fw-bold fs-4" id="imported-leads">0</div>
+                                    <div class="text-muted small">From Google Sheets</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-circle bg-warning bg-opacity-10">
+                                    <i class="bi bi-pencil text-warning"></i>
+                                </div>
+                                <div class="ms-3">
+                                    <div class="fw-bold fs-4" id="manual-leads">0</div>
+                                    <div class="text-muted small">Manual Entry</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-circle bg-info bg-opacity-10">
+                                    <i class="bi bi-check-circle text-info"></i>
+                                </div>
+                                <div class="ms-3">
+                                    <div class="fw-bold fs-4" id="converted-leads">0</div>
+                                    <div class="text-muted small">Converted</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leads Table -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-list-ul me-2"></i>
+                        Lead List
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="leads-table">
+                        <p class="text-muted text-center py-4">Select a studio to view leads</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Load leads for selected studio
+    async loadStudioLeads() {
+        const studioId = document.getElementById('studio-select').value;
+        if (!studioId) {
+            document.getElementById('lead-stats').style.display = 'none';
+            document.getElementById('leads-table').innerHTML = '<p class="text-muted text-center py-4">Select a studio to view leads</p>';
+            return;
+        }
+
+        const sourceFilter = document.getElementById('source-filter').value;
+        const statusFilter = document.getElementById('status-filter').value;
+
+        try {
+            document.getElementById('leads-table').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+
+            const response = await window.managerAPI.getStudioLeads(studioId, {
+                source_type: sourceFilter,
+                status: statusFilter,
+                page: 1,
+                limit: 100
+            });
+
+            // Update statistics
+            document.getElementById('lead-stats').style.display = 'flex';
+            document.getElementById('total-studio-leads').textContent = response.stats.total_leads || 0;
+            document.getElementById('imported-leads').textContent = response.stats.imported_leads || 0;
+            document.getElementById('manual-leads').textContent = response.stats.manual_leads || 0;
+            document.getElementById('converted-leads').textContent = response.stats.converted_leads || 0;
+
+            // Render leads table
+            this.renderLeadsTable(response.leads);
+
+        } catch (error) {
+            console.error('Error loading studio leads:', error);
+            document.getElementById('leads-table').innerHTML = '<p class="text-danger text-center py-4">Failed to load leads</p>';
+        }
+    }
+
+    // Render leads table
+    renderLeadsTable(leads) {
+        const container = document.getElementById('leads-table');
+        
+        if (!leads || leads.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center py-4">No leads found</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${leads.map(lead => `
+                            <tr>
+                                <td>${lead.name || '-'}</td>
+                                <td>${lead.phone_number || '-'}</td>
+                                <td>${lead.email || '-'}</td>
+                                <td>
+                                    ${lead.source_type === 'imported' ? 
+                                        '<span class="badge bg-success">Google Sheets</span>' : 
+                                        '<span class="badge bg-secondary">Manual</span>'}
+                                </td>
+                                <td>
+                                    ${this.getStatusBadge(lead.status)}
+                                </td>
+                                <td>${new Date(lead.created_at).toLocaleDateString()}</td>
+                                <td>${lead.notes ? `<small>${lead.notes}</small>` : '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Get status badge HTML
+    getStatusBadge(status) {
+        const statusMap = {
+            'neu': '<span class="badge bg-primary">New</span>',
+            'kontaktiert': '<span class="badge bg-info">Contacted</span>',
+            'konvertiert': '<span class="badge bg-success">Converted</span>',
+            'nicht_interessiert': '<span class="badge bg-danger">Not Interested</span>'
+        };
+        return statusMap[status] || '<span class="badge bg-secondary">Unknown</span>';
+    }
+
+    // Refresh leads
+    refreshLeads() {
+        this.loadStudioLeads();
+    }
+    
+    // Show code generation modal
+    showCodeGenerationModal() {
+        const modal = document.createElement('div');
+        modal.innerHTML = `
+            <div class="modal fade" id="codeGenerationModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Generate Studio Owner Code</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="codeGenerationForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Intended Owner Name</label>
+                                    <input type="text" class="form-control" name="intendedOwnerName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">City</label>
+                                    <input type="text" class="form-control" name="intendedCity" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Studio Name</label>
+                                    <input type="text" class="form-control" name="intendedStudioName" required>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Code will expire in 3 days
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="managerDashboard.generateCode()">Generate Code</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const modalInstance = new bootstrap.Modal(document.getElementById('codeGenerationModal'));
+        modalInstance.show();
+        
+        // Cleanup on close
+        document.getElementById('codeGenerationModal').addEventListener('hidden.bs.modal', function () {
+            modal.remove();
+        });
+    }
+    
+    // Generate code
+    async generateCode() {
+        const form = document.getElementById('codeGenerationForm');
+        const formData = new FormData(form);
+        const data = {
+            intendedOwnerName: formData.get('intendedOwnerName'),
+            intendedCity: formData.get('intendedCity'),
+            intendedStudioName: formData.get('intendedStudioName')
+        };
+        
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/manager/studio-owner-codes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to generate code');
+            }
+            
+            const result = await response.json();
+            
+            // Close modal
+            bootstrap.Modal.getInstance(document.getElementById('codeGenerationModal')).hide();
+            
+            // Show success message
+            this.showSuccess(`Code generated successfully: ${result.codes[0].code}`);
+            
+            // Reload codes
+            this.loadCodes();
+            
+        } catch (error) {
+            console.error('Error generating code:', error);
+            this.showError('Failed to generate code');
+        }
+    }
+    
+    // Load codes
+    async loadCodes() {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/manager/studio-owner-codes`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load codes');
+            }
+            
+            const data = await response.json();
+            this.renderCodesTable(data.codes || []);
+            
+        } catch (error) {
+            console.error('Error loading codes:', error);
+            document.getElementById('codes-table').innerHTML = '<p class="text-muted text-center py-4">Failed to load codes</p>';
+        }
+    }
+    
+    // Render codes table
+    renderCodesTable(codes) {
+        const container = document.getElementById('codes-table');
+        
+        if (codes.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center py-4">No codes generated yet</p>';
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Intended For</th>
+                            <th>City</th>
+                            <th>Studio Name</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${codes.map(code => `
+                            <tr>
+                                <td>
+                                    <code class="bg-light px-2 py-1 rounded">${code.code}</code>
+                                </td>
+                                <td>${code.intended_owner_name || '-'}</td>
+                                <td>${code.intended_city || '-'}</td>
+                                <td>${code.intended_studio_name || '-'}</td>
+                                <td>${new Date(code.created_at).toLocaleDateString()}</td>
+                                <td>${new Date(code.expires_at).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="navigator.clipboard.writeText('${code.code}')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
         `;
     }

@@ -140,7 +140,7 @@ function initializeCheckpoints(db, callback) {
           db.run(
             `INSERT OR IGNORE INTO sync_checkpoints (table_name, last_sync_at, last_record_id, records_count) 
              VALUES (?, ?, 0, 0)`,
-            [tableName, '1970-01-01 00:00:00'],
+            [tableName, '2000-01-01 00:00:00'],
             (err) => {
               if (err) {
                 console.error(`Error initializing checkpoint for ${tableName}:`, err.message);
@@ -219,7 +219,7 @@ async function createMySQLSyncTables(connection) {
           `INSERT INTO sync_checkpoints (table_name, last_sync_at, last_record_id, records_count) 
            VALUES (?, ?, 0, 0)
            ON DUPLICATE KEY UPDATE table_name = table_name`,
-          [tableName, '1970-01-01 00:00:00']
+          [tableName, '2000-01-01 00:00:00']
         );
         console.log(`📋 Initialized MySQL checkpoint for table: ${tableName}`);
       } catch (error) {

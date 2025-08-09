@@ -56,6 +56,11 @@ class App {
 
         // Update sidebar navigation
         this.updateSidebarNavigation();
+        
+        // Load studios for studio owners
+        if (this.currentUser?.role === 'studio_owner') {
+            this.loadUserStudios();
+        }
 
 
         // Add user profile toggle functionality
@@ -2679,8 +2684,12 @@ class App {
             <div class="row">
                 <div class="col-md-8 mx-auto">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h4>Aktivierungscodes generieren</h4>
+                            <button class="btn btn-outline-secondary" id="backToCodesListBtn">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                Zurück
+                            </button>
                         </div>
                         <div class="card-body">
                             <div id="activationCodeError" class="alert alert-danger d-none"></div>
@@ -2698,8 +2707,9 @@ class App {
                                 </button>
                             </form>
                             <hr>
-                            <div class="d-flex justify-content-end">
+                            <div class="d-flex justify-content-center">
                                 <button class="btn btn-outline-info" id="viewExistingCodesBtn">
+                                    <i class="fas fa-list me-2"></i>
                                     Vorhandene Codes anzeigen
                                 </button>
                             </div>
@@ -2713,10 +2723,18 @@ class App {
             this.handleActivationCodeGeneration(e, studioId);
         });
 
-
         document.getElementById('viewExistingCodesBtn').addEventListener('click', () => {
             this.showExistingActivationCodes(studioId);
         });
+
+        // Add new button event listeners with null checks
+        const backToListBtn = document.getElementById('backToCodesListBtn');
+        if (backToListBtn) {
+            backToListBtn.addEventListener('click', () => {
+                this.showExistingActivationCodes(studioId);
+            });
+        }
+
     }
 
     async handleActivationCodeGeneration(e, studioId) {
@@ -2777,8 +2795,12 @@ class App {
             <div class="row">
                 <div class="col-md-10 mx-auto">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h4>Vorhandene Aktivierungscodes</h4>
+                            <button class="btn btn-outline-secondary" id="backFromCodesBtn">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                Zurück
+                            </button>
                         </div>
                         <div class="card-body">
                             <div id="activationCodesList">
@@ -2789,15 +2811,34 @@ class App {
                                     <p class="mt-2">Lade Aktivierungscodes...</p>
                                 </div>
                             </div>
+                            <hr class="my-4">
+                            <div class="d-flex justify-content-center">
+                                <button class="btn btn-primary" id="generateNewCodeBtn">
+                                    <i class="fas fa-plus-circle me-2"></i>
+                                    Neuen Code generieren
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
 
-        document.getElementById('backFromCodesBtn').addEventListener('click', () => {
-            this.showStudioDashboard();
-        });
+        // Add event listeners with null checks
+        const backBtn = document.getElementById('backFromCodesBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                this.showStudioDashboard();
+            });
+        }
+
+        const generateBtn = document.getElementById('generateNewCodeBtn');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => {
+                this.showActivationCodeGeneration(studioId);
+            });
+        }
+
 
         this.loadExistingActivationCodes(studioId);
     }
@@ -3287,6 +3328,15 @@ class App {
                                     <textarea class="form-control" id="businessHours" rows="3" 
                                               placeholder="Mo-Fr: 9:00-18:00, Sa: 10:00-16:00"></textarea>
                                 </div>
+                                <div class="mb-3">
+                                    <label for="machineCount" class="form-label">
+                                        <i class="fas fa-cogs me-2"></i>Anzahl der Behandlungsgeräte
+                                    </label>
+                                    <input type="number" class="form-control" id="machineCount" min="1" max="3" value="1" required>
+                                    <small class="form-text text-muted">
+                                        Wie viele Geräte stehen für gleichzeitige Behandlungen zur Verfügung? (Maximum: 3)
+                                    </small>
+                                </div>
                                 <button type="submit" class="btn btn-primary w-100" id="studioSetupSubmitBtn">Studio erstellen</button>
                             </form>
                         </div>
@@ -3349,7 +3399,8 @@ class App {
             address: document.getElementById('studioAddress').value,
             phone: document.getElementById('studioSetupPhone').value,
             email: document.getElementById('studioSetupEmail').value,
-            business_hours: document.getElementById('businessHours').value
+            business_hours: document.getElementById('businessHours').value,
+            machine_count: parseInt(document.getElementById('machineCount').value) || 1
         };
         
         const submitBtn = document.getElementById('studioSetupSubmitBtn');
@@ -3589,6 +3640,80 @@ class App {
         
         return result;
     }
+    
+    getAvailableStatusOptions(appointment) {
+        const now = new Date();
+        const startTime = new Date(`${appointment.appointment_date} ${appointment.start_time}`);
+        const endTime = new Date(`${appointment.appointment_date} ${appointment.end_time}`);
+        const hasStarted = now >= startTime;
+        const hasEnded = now >= endTime;
+        
+        const currentStatus = appointment.status;
+        const options = [];
+        
+        // Always show current status first
+        if (currentStatus === 'bestätigt' || currentStatus === 'confirmed') {
+            options.push({ value: 'bestätigt', englishValue: 'confirmed', label: 'Bestätigt' });
+            
+            // Can manually mark as completed anytime
+            options.push({ value: 'abgeschlossen', englishValue: 'completed', label: 'Abgeschlossen' });
+            
+            // Can mark as no-show only after appointment has started
+            if (hasStarted) {
+                options.push({ value: 'nicht erschienen', englishValue: 'no_show', label: 'Nicht erschienen' });
+            }
+            
+            // Can always cancel
+            options.push({ value: 'abgesagt', englishValue: 'cancelled', label: 'Abgesagt' });
+            
+        } else if (currentStatus === 'abgeschlossen' || currentStatus === 'completed') {
+            options.push({ value: 'abgeschlossen', englishValue: 'completed', label: 'Abgeschlossen' });
+            
+            // From completed, can only change to no-show
+            options.push({ value: 'nicht erschienen', englishValue: 'no_show', label: 'Nicht erschienen' });
+            
+        } else if (currentStatus === 'nicht erschienen' || currentStatus === 'no_show') {
+            // No-show is final, no changes allowed
+            options.push({ value: 'nicht erschienen', englishValue: 'no_show', label: 'Nicht erschienen' });
+            
+        } else if (currentStatus === 'abgesagt' || currentStatus === 'cancelled' || currentStatus === 'storniert') {
+            // Cancelled is final, no changes allowed
+            options.push({ value: 'abgesagt', englishValue: 'cancelled', label: 'Abgesagt' });
+            
+        } else {
+            // For any other status (like pending), show all options
+            options.push({ value: 'pending', englishValue: 'pending', label: 'Ausstehend' });
+            options.push({ value: 'bestätigt', englishValue: 'confirmed', label: 'Bestätigt' });
+            options.push({ value: 'abgeschlossen', englishValue: 'completed', label: 'Abgeschlossen' });
+            if (hasStarted) {
+                options.push({ value: 'nicht erschienen', englishValue: 'no_show', label: 'Nicht erschienen' });
+            }
+            options.push({ value: 'abgesagt', englishValue: 'cancelled', label: 'Abgesagt' });
+        }
+        
+        return options;
+    }
+    
+    getStatusChangeWarning(appointment) {
+        const now = new Date();
+        const startTime = new Date(`${appointment.appointment_date} ${appointment.start_time}`);
+        const hasStarted = now >= startTime;
+        const currentStatus = appointment.status;
+        
+        // If appointment hasn't started and current status is confirmed
+        if (!hasStarted && (currentStatus === 'bestätigt' || currentStatus === 'confirmed')) {
+            return `Hinweis: "Nicht erschienen" kann erst nach Terminbeginn (${appointment.start_time}) ausgewählt werden.`;
+        }
+        
+        // Warning about session consumption
+        if (appointment.appointment_type_name === 'Behandlung' && !appointment.session_consumed) {
+            if (currentStatus === 'bestätigt' || currentStatus === 'confirmed') {
+                return 'Hinweis: Bei Änderung zu "Abgeschlossen" oder "Nicht erschienen" wird eine Sitzung vom Kundenkonto abgezogen.';
+            }
+        }
+        
+        return null;
+    }
 
     getStatusText(status) {
         const texts = {
@@ -3606,6 +3731,68 @@ class App {
         return texts[status] || status;
     }
 
+    detectOverlappingAppointments(appointments) {
+        // Sort appointments by start time
+        const sorted = [...appointments].sort((a, b) => {
+            if (a.start_time < b.start_time) return -1;
+            if (a.start_time > b.start_time) return 1;
+            return 0;
+        });
+        
+        // Group overlapping appointments
+        const groups = [];
+        sorted.forEach(appointment => {
+            // Convert time strings to minutes for easier comparison
+            const [startH, startM] = appointment.start_time.split(':').map(Number);
+            const [endH, endM] = appointment.end_time.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            
+            // Find a group where this appointment overlaps
+            let foundGroup = false;
+            for (let group of groups) {
+                // Check if this appointment overlaps with any in the group
+                let overlaps = false;
+                for (let existing of group) {
+                    const [existStartH, existStartM] = existing.start_time.split(':').map(Number);
+                    const [existEndH, existEndM] = existing.end_time.split(':').map(Number);
+                    const existStartMinutes = existStartH * 60 + existStartM;
+                    const existEndMinutes = existEndH * 60 + existEndM;
+                    
+                    // Check for overlap
+                    if (startMinutes < existEndMinutes && endMinutes > existStartMinutes) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                
+                if (overlaps) {
+                    group.push(appointment);
+                    foundGroup = true;
+                    break;
+                }
+            }
+            
+            if (!foundGroup) {
+                groups.push([appointment]);
+            }
+        });
+        
+        // Add overlap information to each appointment
+        const processedAppointments = [];
+        groups.forEach(group => {
+            group.forEach((appointment, index) => {
+                processedAppointments.push({
+                    ...appointment,
+                    overlapIndex: index,
+                    overlapCount: group.length
+                });
+            });
+        });
+        
+        return processedAppointments;
+    }
+
     renderTimelineView(appointments, selectedDate) {
         const today = new Date();
         const isToday = selectedDate.toDateString() === today.toDateString();
@@ -3616,6 +3803,9 @@ class App {
         const startHour = 8;
         const endHour = 20;
         const totalHours = endHour - startHour;
+        
+        // Detect overlapping appointments
+        const processedAppointments = this.detectOverlappingAppointments(appointments);
         
         let html = `
             <div class="timeline-container" style="position: relative; height: ${totalHours * 80}px; border: 1px solid #dee2e6; background: #f8f9fa;">
@@ -3647,10 +3837,10 @@ class App {
             `;
         }
         
-        // Appointment blocks
+        // Appointment blocks with overlap handling
         html += `<div class="appointments-area" style="position: absolute; left: 60px; right: 0; top: 0; height: 100%;">`;
         
-        appointments.forEach((appointment, index) => {
+        processedAppointments.forEach((appointment, index) => {
             const startTime = appointment.start_time; // e.g., "09:30"
             const endTime = appointment.end_time; // e.g., "10:30"
             
@@ -3680,23 +3870,40 @@ class App {
             };
             const color = statusColors[appointment.status] || '#6c757d';
             
+            // Handle overlapping appointments with card stack effect
+            const overlapOffset = appointment.overlapIndex || 0;
+            const leftOffset = 5 + (overlapOffset * 20); // Stack cards 20px to the right
+            const topOffset = startY + (overlapOffset * 5); // Stack cards 5px down
+            const zIndex = 10 + overlapOffset; // Higher z-index for overlapping cards
+            
+            // Show overlap indicator if this appointment has overlaps
+            const overlapBadge = appointment.overlapCount > 1 ? 
+                `<div style="position: absolute; top: 2px; right: 2px; background: rgba(255,255,255,0.9); color: #333; padding: 1px 4px; font-size: 9px; border-radius: 10px;">
+                    ${appointment.overlapIndex + 1}/${appointment.overlapCount}
+                </div>` : '';
+            
             html += `
                 <div class="appointment-block" 
                      style="position: absolute; 
-                            left: 5px; 
-                            right: 5px; 
-                            top: ${startY}px; 
+                            left: ${leftOffset}px; 
+                            right: ${5 + (appointment.overlapCount > 1 ? 20 : 0)}px; 
+                            top: ${topOffset}px; 
                             height: ${height}px; 
                             background: ${color}; 
-                            border: 1px solid rgba(0,0,0,0.1); 
+                            border: 1px solid rgba(0,0,0,0.2); 
                             border-radius: 4px; 
                             padding: 5px; 
                             color: white; 
                             font-size: 12px; 
                             cursor: pointer;
-                            box-shadow: 0 1px 3px rgba(0,0,0,0.2);"
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                            z-index: ${zIndex};
+                            transition: all 0.2s ease;"
+                     onmouseover="this.style.zIndex='1000'; this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.4)';"
+                     onmouseout="this.style.zIndex='${zIndex}'; this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.3)';"
                      onclick="window.app.editAppointment(${appointment.id})"
-                     title="Klicken zum Bearbeiten">
+                     title="${appointment.overlapCount > 1 ? `${appointment.overlapCount} überlappende Termine - ` : ''}Klicken zum Bearbeiten">
+                    ${overlapBadge}
                     <div style="font-weight: bold; margin-bottom: 2px;">
                         ${appointment.customer_first_name} ${appointment.customer_last_name}
                     </div>
@@ -4153,54 +4360,102 @@ class App {
     }
 
     showAppointmentDetailsModal(appointment) {
+        // Calculate customer initials
+        const firstName = appointment.customer_first_name || '';
+        const lastName = appointment.customer_last_name || '';
+        const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || '??';
         
-        // Create modal HTML
+        // Check if appointment is in the past
+        const now = new Date();
+        const appointmentStart = new Date(`${appointment.appointment_date} ${appointment.start_time}`);
+        const appointmentEnd = new Date(`${appointment.appointment_date} ${appointment.end_time || this.calculateEndTime(appointment.start_time, 60)}`);
+        const isPast = appointmentEnd < now;
+        const hasStarted = appointmentStart <= now;
+        const currentStatus = appointment.status;
+        
+        // Determine if we can show "Nicht erschienen" button
+        const canMarkNoShow = hasStarted && 
+                             (currentStatus === 'confirmed' || currentStatus === 'bestätigt' || 
+                              currentStatus === 'completed' || currentStatus === 'abgeschlossen');
+        
+        // Create modal HTML with new design
         const modalHTML = `
             <div class="modal fade" id="appointmentDetailsModal" tabindex="-1" aria-labelledby="appointmentDetailsModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title" id="appointmentDetailsModalLabel">
-                                <i class="fas fa-calendar-alt me-2"></i>Termindetails
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <div class="modal-header p-0">
+                            <div class="w-100">
+                                <!-- Customer Header (Clickable) -->
+                                <div class="bg-light p-3 border-bottom" style="cursor: pointer;" onclick="window.app.showCustomerFromAppointment(${appointment.customer_id})">
+                                    <div class="d-flex align-items-center">
+                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px; font-weight: bold;">
+                                            ${initials}
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h5 class="mb-1">${firstName} ${lastName}</h5>
+                                            <div class="text-muted small">
+                                                ${appointment.customer_email ? `<i class="fas fa-envelope me-2"></i>${appointment.customer_email}` : ''}
+                                                ${appointment.customer_phone ? `<br><i class="fas fa-phone me-2"></i>${appointment.customer_phone}` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6><i class="fas fa-user me-2"></i>Kunde</h6>
-                                    <p class="mb-3">${(appointment.customer_first_name || 'Unbekannt')} ${(appointment.customer_last_name || 'Kunde')}</p>
-                                    
-                                    <h6><i class="fas fa-calendar me-2"></i>Datum & Zeit</h6>
-                                    <p class="mb-3">${this.formatDate(appointment.appointment_date)} um ${appointment.start_time}</p>
-                                    
-                                    <h6><i class="fas fa-clock me-2"></i>Dauer</h6>
-                                    <p class="mb-3">60 Minuten (bis ${this.calculateEndTime(appointment.start_time, 60)})</p>
+                            <!-- Date & Time with inline edit button -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Datum & Zeit</h6>
+                                    ${!isPast ? `
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="window.app.rescheduleAppointment(${appointment.id})">
+                                            <i class="fas fa-edit"></i> Bearbeiten
+                                        </button>
+                                    ` : ''}
                                 </div>
-                                <div class="col-md-6">
-                                    <h6><i class="fas fa-cogs me-2"></i>Behandlungsart</h6>
-                                    <p class="mb-3">${appointment.appointment_type_name || 'Behandlung'}</p>
-                                    
-                                    <h6><i class="fas fa-info-circle me-2"></i>Status</h6>
-                                    <p class="mb-3">
-                                        <span class="badge ${this.getStatusBadgeClass(appointment.status)}">${this.getStatusText(appointment.status)}</span>
-                                    </p>
-                                    
-                                    ${appointment.notes ? `
-                                    <h6><i class="fas fa-sticky-note me-2"></i>Notizen</h6>
-                                    <p class="mb-3">${appointment.notes}</p>
+                                <p class="mb-0">${this.formatDate(appointment.appointment_date)} um ${appointment.start_time}</p>
+                                <small class="text-muted">${appointment.appointment_type_duration || 60} Minuten (bis ${appointment.end_time || this.calculateEndTime(appointment.start_time, 60)})</small>
+                            </div>
+                            
+                            <!-- Treatment Type -->
+                            <div class="mb-4">
+                                <h6 class="mb-2"><i class="fas fa-cogs me-2"></i>Behandlungsart</h6>
+                                <p class="mb-0">${appointment.appointment_type_name || 'Behandlung'}</p>
+                            </div>
+                            
+                            <!-- Status with inline action -->
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div>
+                                        <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i>Status</h6>
+                                        <span class="badge ${this.getStatusBadgeClass(appointment.status)} fs-6">
+                                            ${this.getStatusText(appointment.status)}
+                                        </span>
+                                    </div>
+                                    ${canMarkNoShow ? `
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="window.app.markAsNoShow(${appointment.id})">
+                                            <i class="fas fa-user-times"></i> Nicht erschienen
+                                        </button>
                                     ` : ''}
                                 </div>
                             </div>
+                            
+                            <!-- Notes if present -->
+                            ${appointment.notes ? `
+                                <div class="mb-4">
+                                    <h6 class="mb-2"><i class="fas fa-sticky-note me-2"></i>Notizen</h6>
+                                    <p class="mb-0 text-muted">${appointment.notes}</p>
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="modal-footer">
+                            ${!isPast && currentStatus !== 'cancelled' && currentStatus !== 'no_show' ? `
+                                <button type="button" class="btn btn-danger" onclick="window.app.cancelAppointment(${appointment.id})">
+                                    <i class="fas fa-times me-1"></i>Stornieren
+                                </button>
+                            ` : ''}
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-                            <button type="button" class="btn btn-warning me-2" onclick="window.app.editAppointmentDetails(${appointment.id})">
-                                <i class="fas fa-edit me-1"></i>Bearbeiten
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="window.app.changeAppointmentStatus(${appointment.id})">
-                                <i class="fas fa-exchange-alt me-1"></i>Status ändern
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -4439,7 +4694,296 @@ class App {
         }
     }
 
-    async changeAppointmentStatus(appointmentId) {
+    async showCustomerFromAppointment(customerId) {
+        try {
+            // Close the appointment details modal first
+            const appointmentModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (appointmentModal) {
+                appointmentModal.hide();
+            }
+
+            // Switch to customers view
+            this.showCustomers();
+
+            // Wait for customers to load, then show customer details
+            setTimeout(async () => {
+                // If customers not loaded yet, load them first
+                if (!this.allCustomers || this.allCustomers.length === 0) {
+                    await this.loadCustomersData(this.currentStudioId);
+                }
+                this.showCustomerDetails(customerId);
+            }, 1000);
+
+        } catch (error) {
+            console.error('Error navigating to customer details:', error);
+            alert('Fehler beim Wechseln zur Kundenansicht.');
+        }
+    }
+
+    // Method to show customers section
+    showCustomers() {
+        // Get or set the current studio ID
+        if (this.currentStudioId) {
+            this.showCustomerList(this.currentStudioId);
+        } else {
+            // If no studio ID, try to get it from the user
+            this.getCurrentStudioId().then(studioId => {
+                if (studioId) {
+                    this.showCustomerList(studioId);
+                }
+            });
+        }
+    }
+
+    async rescheduleAppointment(appointmentId) {
+        try {
+            // First, fetch the appointment details
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load appointment details');
+            }
+
+            const result = await response.json();
+            const appointment = result.appointment || result;
+
+            // Close the details modal and show reschedule modal
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (detailsModal) {
+                detailsModal.hide();
+            }
+
+            // Create reschedule modal
+            this.showRescheduleModal(appointment);
+
+        } catch (error) {
+            console.error('Error loading appointment for rescheduling:', error);
+            alert('Fehler beim Laden der Termindetails zum Umplanen.');
+        }
+    }
+
+    showRescheduleModal(appointment) {
+        const modalHTML = `
+            <div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning text-dark">
+                            <h5 class="modal-title" id="rescheduleModalLabel">
+                                <i class="fas fa-calendar-alt me-2"></i>Termin umplanen
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <strong>Kunde:</strong> ${appointment.customer_first_name} ${appointment.customer_last_name}<br>
+                                <strong>Behandlung:</strong> ${appointment.appointment_type_name || 'Behandlung'}
+                            </div>
+                            
+                            <form id="rescheduleForm">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rescheduleDate" class="form-label">
+                                                <i class="fas fa-calendar me-2"></i>Neues Datum
+                                            </label>
+                                            <input type="date" class="form-control" id="rescheduleDate" 
+                                                   value="${appointment.appointment_date}" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rescheduleTime" class="form-label">
+                                                <i class="fas fa-clock me-2"></i>Neue Startzeit
+                                            </label>
+                                            <input type="time" class="form-control" id="rescheduleTime" 
+                                                   value="${appointment.start_time}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="rescheduleNotes" class="form-label">
+                                        <i class="fas fa-sticky-note me-2"></i>Notiz zur Umplanung (optional)
+                                    </label>
+                                    <textarea class="form-control" id="rescheduleNotes" rows="2" 
+                                              placeholder="Grund für die Umplanung..."></textarea>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-warning" onclick="window.app.saveReschedule(${appointment.id})">
+                                <i class="fas fa-save me-1"></i>Termin umplanen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('rescheduleModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('rescheduleModal'));
+        modal.show();
+
+        // Clean up modal after hiding
+        document.getElementById('rescheduleModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    async saveReschedule(appointmentId) {
+        try {
+            const date = document.getElementById('rescheduleDate').value;
+            const time = document.getElementById('rescheduleTime').value;
+            const notes = document.getElementById('rescheduleNotes').value;
+
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    appointment_date: date,
+                    start_time: time,
+                    notes: notes ? `Umgeplant: ${notes}` : 'Termin wurde umgeplant'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to reschedule appointment');
+            }
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('rescheduleModal'));
+            if (modal) {
+                modal.hide();
+            }
+
+            // Show success message
+            this.showSuccessMessage('Erfolg!', 'Termin wurde erfolgreich umgeplant.');
+
+            // Refresh calendar
+            this.renderCalendar();
+            if (this.currentStudioId) {
+                this.loadAppointments(this.currentStudioId);
+            }
+
+        } catch (error) {
+            console.error('Error rescheduling appointment:', error);
+            alert('Fehler beim Umplanen des Termins: ' + error.message);
+        }
+    }
+
+    async cancelAppointment(appointmentId) {
+        try {
+            // Simple confirmation for studio owners (no policy warnings)
+            const confirmed = confirm('Möchten Sie diesen Termin wirklich stornieren?');
+            
+            if (!confirmed) {
+                return;
+            }
+
+            // Close the appointment details modal
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (detailsModal) {
+                detailsModal.hide();
+            }
+
+            // Cancel the appointment
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to cancel appointment');
+            }
+
+            const result = await response.json();
+
+            // Show success message
+            this.showSuccessMessage('Termin storniert', 'Der Termin wurde erfolgreich storniert.');
+
+            // Refresh calendar
+            this.renderCalendar();
+            if (this.currentStudioId) {
+                this.loadAppointments(this.currentStudioId);
+            }
+
+        } catch (error) {
+            console.error('Error cancelling appointment:', error);
+            alert('Fehler beim Stornieren des Termins: ' + error.message);
+        }
+    }
+
+    async markAsNoShow(appointmentId) {
+        try {
+            // Confirm the action
+            const confirmed = confirm('Möchten Sie diesen Termin als "Nicht erschienen" markieren? Eine Sitzung wird vom Kundenkonto abgezogen.');
+            
+            if (!confirmed) {
+                return;
+            }
+            
+            // Update status to "nicht erschienen"
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ status: 'nicht erschienen' })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fehler beim Aktualisieren des Status');
+            }
+            
+            const result = await response.json();
+            
+            // Close the details modal
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (detailsModal) {
+                detailsModal.hide();
+            }
+            
+            // Show success message
+            this.showSuccessMessage('Status aktualisiert', 'Der Termin wurde als "Nicht erschienen" markiert.');
+            
+            if (result.sessionDeducted) {
+                this.showSuccessMessage('Sitzung abgezogen', 'Eine Sitzung wurde vom Kundenkonto abgezogen.');
+            }
+            
+            // Refresh calendar
+            this.renderCalendar();
+            if (this.currentStudioId) {
+                this.loadAppointments(this.currentStudioId);
+            }
+            
+        } catch (error) {
+            console.error('Error marking appointment as no-show:', error);
+            alert('Fehler: ' + error.message);
+        }
+    }
+
+    async initStatusChange(appointmentId) {
         try {
             // First, fetch current appointment status
             const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
@@ -4471,6 +5015,15 @@ class App {
     }
 
     showStatusChangeModal(appointment) {
+        // Get available status options based on appointment time
+        const statusOptions = this.getAvailableStatusOptions(appointment);
+        const statusOptionsHTML = statusOptions.map(option => 
+            `<option value="${option.value}" ${appointment.status === option.value || appointment.status === option.englishValue ? 'selected' : ''}>${option.label}</option>`
+        ).join('');
+        
+        // Get any warnings for status changes
+        const statusWarning = this.getStatusChangeWarning(appointment);
+        
         const modalHTML = `
             <div class="modal fade" id="statusChangeModal" tabindex="-1" aria-labelledby="statusChangeModalLabel" aria-hidden="true">
                 <div class="modal-dialog">
@@ -4493,11 +5046,7 @@ class App {
                                     <i class="fas fa-info-circle me-2"></i>Neuer Status:
                                 </label>
                                 <select class="form-select" id="newStatus">
-                                    <option value="pending" ${appointment.status === 'pending' ? 'selected' : ''}>Ausstehend</option>
-                                    <option value="bestätigt" ${appointment.status === 'bestätigt' || appointment.status === 'confirmed' ? 'selected' : ''}>Bestätigt</option>
-                                    <option value="abgeschlossen" ${appointment.status === 'abgeschlossen' || appointment.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
-                                    <option value="abgesagt" ${appointment.status === 'abgesagt' || appointment.status === 'cancelled' ? 'selected' : ''}>Abgesagt</option>
-                                    <option value="nicht erschienen" ${appointment.status === 'nicht erschienen' || appointment.status === 'no_show' ? 'selected' : ''}>Nicht erschienen</option>
+                                    ${statusOptionsHTML}
                                 </select>
                             </div>
                             
@@ -4508,6 +5057,13 @@ class App {
                                     ${this.getStatusText(appointment.status)}
                                 </span>
                             </div>
+                            
+                            ${statusWarning ? `
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    ${statusWarning}
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
@@ -5049,6 +5605,145 @@ class App {
         return date.toLocaleDateString('de-DE');
     }
 
+    async loadCustomerAppointmentHistory(customerId) {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/customer/${customerId}/history?studioId=${this.currentStudioId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load appointment history');
+            }
+            
+            const data = await response.json();
+            this.displayAppointmentHistory(data.pastAppointments || [], data.upcomingAppointments || []);
+            
+        } catch (error) {
+            console.error('Error loading appointment history:', error);
+            const container = document.getElementById('appointmentHistoryContainer');
+            if (container) {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Terminhistorie konnte nicht geladen werden
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    displayAppointmentHistory(pastAppointments, upcomingAppointments) {
+        const container = document.getElementById('appointmentHistoryContainer');
+        if (!container) return;
+        
+        let html = '';
+        
+        // Upcoming appointments section
+        if (upcomingAppointments.length > 0) {
+            html += `
+                <div class="mb-4">
+                    <h6 class="text-primary mb-3">
+                        <i class="fas fa-calendar-check me-2"></i>Kommende Termine (${upcomingAppointments.length})
+                    </h6>
+                    <div class="list-group">
+            `;
+            
+            upcomingAppointments.forEach(apt => {
+                const statusBadge = this.getAppointmentStatusBadge(apt.status);
+                const typeColor = apt.appointment_type_color || '#28a745';
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge" style="background-color: ${typeColor}">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                <strong class="ms-2">${this.formatDate(apt.appointment_date)}</strong>
+                                <span class="text-muted ms-2">${apt.start_time} - ${apt.end_time}</span>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                        ${apt.notes ? `<small class="text-muted d-block mt-1">${apt.notes}</small>` : ''}
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Past appointments section
+        if (pastAppointments.length > 0) {
+            html += `
+                <div>
+                    <h6 class="text-secondary mb-3">
+                        <i class="fas fa-history me-2"></i>Vergangene Termine (${pastAppointments.length})
+                    </h6>
+                    <div class="list-group">
+            `;
+            
+            // Show only last 10 past appointments
+            pastAppointments.slice(0, 10).forEach(apt => {
+                const statusBadge = this.getAppointmentStatusBadge(apt.status);
+                const typeColor = apt.appointment_type_color || '#6c757d';
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge" style="background-color: ${typeColor}; opacity: 0.7">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                <span class="ms-2">${this.formatDate(apt.appointment_date)}</span>
+                                <span class="text-muted ms-2">${apt.start_time} - ${apt.end_time}</span>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                        ${apt.notes ? `<small class="text-muted d-block mt-1">${apt.notes}</small>` : ''}
+                    </div>
+                `;
+            });
+            
+            if (pastAppointments.length > 10) {
+                html += `
+                    <div class="text-center mt-2">
+                        <small class="text-muted">... und ${pastAppointments.length - 10} weitere vergangene Termine</small>
+                    </div>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Empty state
+        if (upcomingAppointments.length === 0 && pastAppointments.length === 0) {
+            html = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                    <p>Keine Termine vorhanden</p>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    getAppointmentStatusBadge(status) {
+        const statusMap = {
+            'bestätigt': '<span class="badge bg-primary">Bestätigt</span>',
+            'absolviert': '<span class="badge bg-success">Absolviert</span>',
+            'nicht_erschienen': '<span class="badge bg-danger">Nicht erschienen</span>',
+            'storniert': '<span class="badge bg-secondary">Storniert</span>'
+        };
+        return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
+    }
+
     async showCustomerDetails(customerId) {
         const customer = this.allCustomers.find(c => c.id === customerId);
         if (!customer) {
@@ -5088,6 +5783,9 @@ class App {
 
         // Show modal
         modal.show();
+        
+        // Load appointment history after modal is shown
+        this.loadCustomerAppointmentHistory(customerId);
     }
 
     createCustomerModalHTML(customer, safeSessionBlocks, customerId) {
@@ -5200,6 +5898,20 @@ class App {
                     ${this.renderTreatmentBlocks(safeSessionBlocks, customerId)}
                 </div>
             </div>
+
+            <!-- Appointment History -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Terminhistorie</h6>
+                </div>
+                <div class="card-body" id="appointmentHistoryContainer">
+                    <div class="text-center">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Lade Termine...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
     }
 
@@ -5281,20 +5993,9 @@ class App {
                                     Gekauft: ${this.formatDate(block.purchase_date)}
                                 </small>
                             </div>
-                            <div class="btn-group">
-                                ${isCurrentBlock ? `
-                                    <button class="btn btn-sm btn-primary" onclick="app.showEditSessionModal(${block.id}, ${block.remaining_sessions}, ${block.total_sessions})" title="Verbleibende Behandlungen bearbeiten">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                ` : `
-                                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                `}
-                            </div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -5368,15 +6069,16 @@ class App {
                 return;
             }
 
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify({
-                    sessionCount: sessionCount,
-                    notes: `${sessionCount} Behandlungsblock hinzugefügt`
+                    customer_id: customerId,
+                    sessions: sessionCount,
+                    notes: `${sessionCount}er Behandlungsblock hinzugefügt`
                 })
             });
 
@@ -5414,16 +6116,11 @@ class App {
         }
 
         try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${blockId}/deactivate`, {
-                method: 'PATCH',
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks/${blockId}`, {
+                method: 'DELETE',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({
-                    reason: 'Session block deleted by studio owner',
-                    notes: 'Deleted via customer details modal'
-                })
+                }
             });
 
             if (!response.ok) {
@@ -5433,7 +6130,7 @@ class App {
             }
 
             const result = await response.json();
-            console.log('Session block deactivated successfully:', result);
+            console.log('Session block deleted successfully:', result);
 
             // Refresh details using stored customer ID
             if (this.currentCustomerId) {
@@ -6051,10 +6748,6 @@ class App {
                                         <span><strong>${session.total_sessions}er Paket</strong></span>
                                         <div>
                                             <span class="badge bg-primary me-2">${session.remaining_sessions} verbleibend</span>
-                                            <button class="btn btn-outline-primary btn-sm me-1" 
-                                                    onclick="window.app.showEditSessionModal(${session.id}, ${session.remaining_sessions}, '${session.notes || ''}')">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
                                             <button class="btn btn-outline-danger btn-sm" 
                                                     onclick="window.app.showDeactivateSessionModal(${session.id}, ${session.total_sessions})">
                                                 <i class="fas fa-times"></i>
@@ -6142,14 +6835,15 @@ class App {
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird hinzugefügt...';
             
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/topup`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    sessionCount: amount,
+                    customer_id: customerId,
+                    sessions: amount,
                     notes: notes
                 })
             });
@@ -6176,120 +6870,8 @@ class App {
         }
     }
 
-    showEditSessionModal(sessionId, currentRemaining, totalSessions) {
-        const modalHTML = `
-            <div class="modal fade" id="editSessionModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Behandlungspaket bearbeiten</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="editRemainingTreatments" class="form-label">Verbleibende Behandlungen</label>
-                                <input type="number" class="form-control" id="editRemainingTreatments" 
-                                       value="${currentRemaining}" min="0" max="${totalSessions}">
-                                <div class="form-text">Aktuelle Anzahl: ${currentRemaining} von ${totalSessions} Behandlungen</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="editSessionNotes" class="form-label">Notizen (optional)</label>
-                                <textarea class="form-control" id="editSessionNotes" rows="3" placeholder="Grund für die Änderung..."></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                            <button type="button" class="btn btn-primary" id="confirmEditBtn">
-                                <i class="fas fa-save"></i> Änderungen speichern
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Remove existing modal if any
-        const existingModal = document.getElementById('editSessionModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-        
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Set up event listener
-        document.getElementById('confirmEditBtn').addEventListener('click', () => {
-            this.performSessionEdit(sessionId, currentRemaining, totalSessions);
-        });
-        
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('editSessionModal'));
-        modal.show();
-    }
 
-    async performSessionEdit(sessionId, originalRemaining, totalSessions) {
-        const confirmBtn = document.getElementById('confirmEditBtn');
-        const newRemaining = parseInt(document.getElementById('editRemainingTreatments').value);
-        const newNotes = document.getElementById('editSessionNotes').value;
-        
-        // Validation
-        if (isNaN(newRemaining) || newRemaining < 0) {
-            this.showErrorMessage('Fehler', 'Bitte geben Sie eine gültige Anzahl an Behandlungen ein (mindestens 0).');
-            return;
-        }
-        
-        if (newRemaining > totalSessions) {
-            this.showErrorMessage('Fehler', `Die Anzahl kann nicht größer als ${totalSessions} (Gesamtanzahl) sein.`);
-            return;
-        }
-        
-        try {
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gespeichert...';
-            
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/sessions/${sessionId}/edit`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    remaining_sessions: newRemaining,
-                    notes: newNotes || `Behandlungen von ${originalRemaining} auf ${newRemaining} geändert`
-                })
-            });
-
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || 'Failed to update session');
-            }
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editSessionModal'));
-            modal.hide();
-            
-            // Refresh the view
-            const currentCustomerId = this.currentCustomerId;
-            if (currentCustomerId) {
-                this.loadCustomerSessionDetails(currentCustomerId);
-                this.loadSessionCustomersList(this.currentStudioId);
-            }
-            
-            // Show success message with details
-            const difference = newRemaining - originalRemaining;
-            const changeText = difference > 0 ? `${difference} Behandlungen hinzugefügt` : 
-                              difference < 0 ? `${Math.abs(difference)} Behandlungen entfernt` : 
-                              'Keine Änderung';
-            
-            this.showSuccessMessage('Behandlungspaket aktualisiert', 
-                `Verbleibende Behandlungen: ${originalRemaining} → ${newRemaining}${difference !== 0 ? ` (${changeText})` : ''}`);
-            
-        } catch (error) {
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<i class="fas fa-save"></i> Änderungen speichern';
-            this.showErrorMessage('Fehler', 'Fehler beim Aktualisieren: ' + error.message);
-        }
-    }
+    // Session edit function removed - editing session blocks is not allowed
 
     showDeactivateSessionModal(sessionId, totalSessions) {
         const modalHTML = `
@@ -6655,6 +7237,250 @@ class App {
         sidebarOverlay.classList.remove('show');
     }
 
+    async loadUserStudios() {
+        if (this.currentUser?.role !== 'studio_owner') return;
+        
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studios`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.userStudios = data.studios || [];
+                
+                // If no selected studio, select the first one
+                if (this.userStudios.length > 0 && !this.currentStudioId) {
+                    const savedStudioId = localStorage.getItem('selectedStudioId');
+                    const studioExists = this.userStudios.find(s => s.id === parseInt(savedStudioId));
+                    
+                    if (studioExists) {
+                        this.currentStudioId = parseInt(savedStudioId);
+                    } else {
+                        this.currentStudioId = this.userStudios[0].id;
+                        localStorage.setItem('selectedStudioId', this.currentStudioId);
+                    }
+                }
+                
+                // Update studio selector if it exists
+                this.updateStudioSelector();
+            }
+        } catch (error) {
+            console.error('Error loading user studios:', error);
+        }
+    }
+    
+    updateStudioSelector() {
+        const studioSelector = document.getElementById('studioSelector');
+        if (!studioSelector || !this.userStudios) return;
+        
+        // Get current studio for machine count display
+        const currentStudio = this.userStudios.find(s => s.id === this.currentStudioId);
+        const machineCount = currentStudio?.machine_count || 1;
+        
+        // Show selector only if user has multiple studios
+        if (this.userStudios.length > 1) {
+            studioSelector.innerHTML = `
+                <div class="studio-selector mb-3 px-3">
+                    <label class="small text-muted mb-1">Aktuelles Studio:</label>
+                    <select class="form-select form-select-sm" id="studioSelectorDropdown">
+                        ${this.userStudios.map(studio => `
+                            <option value="${studio.id}" ${studio.id === this.currentStudioId ? 'selected' : ''}>
+                                ${studio.name}
+                            </option>
+                        `).join('')}
+                    </select>
+                    <div class="d-flex align-items-center mt-2">
+                        <i class="fas fa-cogs text-muted me-2"></i>
+                        <small class="text-muted">
+                            ${machineCount} ${machineCount === 1 ? 'Gerät' : 'Geräte'} verfügbar
+                        </small>
+                        <button class="btn btn-link btn-sm ms-auto p-0" onclick="window.app.editStudioMachineCount()">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Add change event listener
+            document.getElementById('studioSelectorDropdown').addEventListener('change', (e) => {
+                this.switchStudio(parseInt(e.target.value));
+            });
+        } else if (this.userStudios.length === 1) {
+            // Show studio name but not as dropdown
+            studioSelector.innerHTML = `
+                <div class="studio-info mb-3 px-3">
+                    <label class="small text-muted mb-1">Dein Studio:</label>
+                    <div class="fw-bold">${this.userStudios[0].name}</div>
+                    <div class="d-flex align-items-center mt-2">
+                        <i class="fas fa-cogs text-muted me-2"></i>
+                        <small class="text-muted">
+                            ${machineCount} ${machineCount === 1 ? 'Gerät' : 'Geräte'} verfügbar
+                        </small>
+                        <button class="btn btn-link btn-sm ms-auto p-0" onclick="window.app.editStudioMachineCount()">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    async switchStudio(studioId) {
+        if (studioId === this.currentStudioId) return;
+        
+        this.currentStudioId = studioId;
+        localStorage.setItem('selectedStudioId', studioId);
+        
+        // Reload the current view with new studio
+        if (this.currentUser?.role === 'studio_owner') {
+            this.showStudioDashboard();
+        }
+    }
+    
+    showSuccessMessage(title, message) {
+        const alertHTML = `
+            <div class="alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3" 
+                 style="z-index: 9999; min-width: 300px;" role="alert">
+                <strong>${title}</strong> ${message ? `<br>${message}` : ''}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', alertHTML);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            const alert = document.querySelector('.alert-success');
+            if (alert) alert.remove();
+        }, 5000);
+    }
+    
+    showErrorMessage(title, message) {
+        const alertHTML = `
+            <div class="alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3" 
+                 style="z-index: 9999; min-width: 300px;" role="alert">
+                <strong>${title}</strong> ${message ? `<br>${message}` : ''}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', alertHTML);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            const alert = document.querySelector('.alert-danger');
+            if (alert) alert.remove();
+        }, 5000);
+    }
+
+    async editStudioMachineCount() {
+        const currentStudio = this.userStudios?.find(s => s.id === this.currentStudioId);
+        if (!currentStudio) return;
+        
+        const currentCount = currentStudio.machine_count || 1;
+        
+        // Create modal for editing machine count
+        const modalHTML = `
+            <div class="modal fade" id="editMachineCountModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-cogs me-2"></i>Anzahl der Behandlungsgeräte
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted mb-3">
+                                Geben Sie an, wie viele Behandlungsgeräte in Ihrem Studio verfügbar sind. 
+                                Dies bestimmt, wie viele Termine gleichzeitig gebucht werden können.
+                            </p>
+                            <div class="form-group">
+                                <label for="newMachineCount" class="form-label">Anzahl der Geräte:</label>
+                                <input type="number" class="form-control" id="newMachineCount" 
+                                       min="1" max="3" value="${currentCount}" required>
+                                <small class="form-text text-muted">
+                                    Aktuell: ${currentCount} ${currentCount === 1 ? 'Gerät' : 'Geräte'}
+                                </small>
+                            </div>
+                            <div id="machineCountError" class="alert alert-danger d-none mt-3"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="saveMachineCount">
+                                <i class="fas fa-save me-2"></i>Speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('editMachineCountModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        const modal = new bootstrap.Modal(document.getElementById('editMachineCountModal'));
+        
+        // Save button handler
+        document.getElementById('saveMachineCount').addEventListener('click', async () => {
+            const newCount = parseInt(document.getElementById('newMachineCount').value);
+            const errorDiv = document.getElementById('machineCountError');
+            const saveBtn = document.getElementById('saveMachineCount');
+            
+            if (newCount < 1 || newCount > 3) {
+                errorDiv.textContent = 'Die Anzahl muss zwischen 1 und 3 liegen.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            
+            try {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Speichern...';
+                errorDiv.classList.add('d-none');
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${this.currentStudioId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ machine_count: newCount })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Fehler beim Speichern');
+                }
+                
+                // Update local data
+                currentStudio.machine_count = newCount;
+                
+                // Update UI
+                this.updateStudioSelector();
+                
+                // Close modal
+                modal.hide();
+                
+                // Show success message
+                this.showSuccessMessage('Erfolgreich gespeichert', 
+                    `Die Anzahl der Geräte wurde auf ${newCount} aktualisiert.`);
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('d-none');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Speichern';
+            }
+        });
+        
+        modal.show();
+    }
+
     updateSidebarNavigation() {
         const sidebarNav = document.getElementById('sidebarNav');
         if (!sidebarNav) return;
@@ -6682,6 +7508,10 @@ class App {
                     break;
                     
                 case 'studio_owner':
+                    // Add studio selector before navigation items
+                    const studioSelectorHTML = '<div id="studioSelector"></div>';
+                    sidebarNav.innerHTML = studioSelectorHTML;
+                    
                     navItems = [
                         { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
                         { icon: 'fas fa-calendar-alt', text: 'Termine', section: 'termine' },
@@ -6718,7 +7548,12 @@ class App {
             </li>
         `).join('');
 
-        sidebarNav.innerHTML = navHTML;
+        // For studio owners, append nav items after studio selector
+        if (this.currentUser?.role === 'studio_owner') {
+            sidebarNav.innerHTML += navHTML;
+        } else {
+            sidebarNav.innerHTML = navHTML;
+        }
 
         // Add click event listeners
         sidebarNav.querySelectorAll('.nav-link').forEach(link => {
@@ -6834,6 +7669,10 @@ class App {
                 break;
             case 'analytics':
                 this.showAnalyticsView();
+                break;
+            case 'customers':
+            case 'kunden':
+                this.showCustomers();
                 break;
             // Add more cases as needed
             default:

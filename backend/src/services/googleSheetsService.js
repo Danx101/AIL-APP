@@ -129,10 +129,13 @@ class GoogleSheetsService {
         return rowData;
       });
 
+      // Get actual row count with data (excluding empty rows)
+      const allRows = await sheet.getRows();
+      
       return {
         headers,
         sampleData,
-        totalRows: sheet.rowCount - 1, // Exclude header row
+        totalRows: allRows.length, // Actual rows with data
         worksheetTitle: sheet.title
       };
 
@@ -248,11 +251,28 @@ class GoogleSheetsService {
         throw new Error('Integration not found or auto-sync disabled');
       }
 
-      const columnMapping = JSON.parse(integration.column_mapping);
+      // Handle null or invalid column mapping
+      let columnMapping;
+      try {
+        columnMapping = integration.column_mapping ? JSON.parse(integration.column_mapping) : null;
+      } catch (parseError) {
+        console.error('Error parsing column mapping:', parseError);
+        columnMapping = null;
+      }
+
+      if (!columnMapping) {
+        console.log(`⚠️ No column mapping found for integration ${integrationId}, skipping sync`);
+        return {
+          success: false,
+          message: 'No column mapping configured for this integration'
+        };
+      }
+
       const result = await this.importLeads(
         integration.studio_id,
         `https://docs.google.com/spreadsheets/d/${integration.sheet_id}`,
-        columnMapping
+        columnMapping,
+        integration.manager_id
       );
 
       // Update last sync time
@@ -427,8 +447,12 @@ class GoogleSheetsService {
           
           if (minutesSinceLastSync >= integration.sync_frequency_minutes) {
             console.log(`🔄 Auto-syncing integration ${integration.id} for studio ${integration.studio_id}`);
-            await this.syncLeads(integration.id);
-            console.log(`✅ Auto-sync completed for integration ${integration.id}`);
+            const result = await this.syncLeads(integration.id);
+            if (result.success === false) {
+              console.log(`⚠️ Auto-sync skipped for integration ${integration.id}: ${result.message}`);
+            } else {
+              console.log(`✅ Auto-sync completed for integration ${integration.id}`);
+            }
           }
           
         } catch (syncError) {

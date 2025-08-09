@@ -18,15 +18,20 @@ class ManagerController {
         intendedCity, 
         intendedStudioName, 
         count = 1, 
-        expiresInDays = 30 
+        expiresInDays = 3 
       } = req.body;
 
       const managerId = req.user.userId;
       const codes = [];
+      
+      console.log('Generating manager code with params:', { intendedOwnerName, intendedCity, intendedStudioName, count, expiresInDays, managerId });
 
       // Generate expiration date
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+      
+      // Format datetime for MySQL
+      const mysqlExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
 
       // Generate codes
       for (let i = 0; i < count; i++) {
@@ -37,18 +42,13 @@ class ManagerController {
           code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         
-        const codeId = await new Promise((resolve, reject) => {
-          db.run(
-            `INSERT INTO manager_codes 
-             (code, intended_owner_name, intended_city, intended_studio_name, created_by_manager_id, expires_at) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [code, intendedOwnerName, intendedCity, intendedStudioName, managerId, expiresAt.toISOString()],
-            function(err) {
-              if (err) reject(err);
-              else resolve(this.lastID);
-            }
-          );
-        });
+        const result = await db.run(
+          `INSERT INTO manager_codes 
+           (code, intended_owner_name, intended_city, intended_studio_name, created_by_manager_id, expires_at, created_at) 
+           VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY), NOW())`,
+          [code, intendedOwnerName, intendedCity, intendedStudioName, managerId, expiresInDays]
+        );
+        const codeId = result.lastID;
 
         codes.push({
           id: codeId,
@@ -82,7 +82,6 @@ class ManagerController {
       const { 
         page = 1, 
         limit = 20, 
-        showUsed = false, 
         city,
         includeExpired = false 
       } = req.query;
@@ -91,17 +90,12 @@ class ManagerController {
       const offset = (page - 1) * limit;
 
       let query = `
-        SELECT mc.*, u.email as used_by_email, u.first_name as used_by_first_name, u.last_name as used_by_last_name
+        SELECT mc.*
         FROM manager_codes mc
-        LEFT JOIN users u ON mc.used_by_user_id = u.id
         WHERE mc.created_by_manager_id = ?
       `;
       
       const params = [managerId];
-
-      if (!showUsed) {
-        query += ' AND mc.is_used = 0';
-      }
 
       if (city) {
         query += ' AND mc.intended_city = ?';
@@ -109,18 +103,12 @@ class ManagerController {
       }
 
       if (!includeExpired) {
-        query += ' AND (mc.expires_at IS NULL OR mc.expires_at > datetime("now"))';
+        query += ' AND (mc.expires_at IS NULL OR mc.expires_at > NOW())';
       }
 
-      query += ' ORDER BY mc.created_at DESC LIMIT ? OFFSET ?';
-      params.push(parseInt(limit), offset);
+      query += ` ORDER BY mc.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
 
-      const codes = await new Promise((resolve, reject) => {
-        db.all(query, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
+      const codes = await db.all(query, params);
 
       // Get total count for pagination
       let countQuery = `
@@ -131,25 +119,16 @@ class ManagerController {
       
       const countParams = [managerId];
 
-      if (!showUsed) {
-        countQuery += ' AND mc.is_used = 0';
-      }
-
       if (city) {
         countQuery += ' AND mc.intended_city = ?';
         countParams.push(city);
       }
 
       if (!includeExpired) {
-        countQuery += ' AND (mc.expires_at IS NULL OR mc.expires_at > datetime("now"))';
+        countQuery += ' AND (mc.expires_at IS NULL OR mc.expires_at > NOW())';
       }
 
-      const { total } = await new Promise((resolve, reject) => {
-        db.get(countQuery, countParams, (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const { total } = await db.get(countQuery, countParams);
 
       res.json({
         codes,
@@ -174,39 +153,25 @@ class ManagerController {
     try {
       const managerId = req.user.userId;
 
-      const stats = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT 
-            COUNT(*) as total_codes,
-            COUNT(CASE WHEN is_used = 1 THEN 1 END) as used_codes,
-            COUNT(CASE WHEN is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now")) THEN 1 END) as active_codes,
-            COUNT(CASE WHEN is_used = 0 AND expires_at <= datetime("now") THEN 1 END) as expired_codes,
-            COUNT(DISTINCT intended_city) as cities_count
-           FROM manager_codes 
-           WHERE created_by_manager_id = ?`,
-          [managerId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      const stats = await db.get(
+        `SELECT 
+          COUNT(*) as total_codes,
+          0 as used_codes,
+          COUNT(CASE WHEN expires_at IS NULL OR expires_at > NOW() THEN 1 END) as active_codes,
+          COUNT(CASE WHEN expires_at <= NOW() THEN 1 END) as expired_codes,
+          COUNT(DISTINCT intended_city) as cities_count
+         FROM manager_codes 
+         WHERE created_by_manager_id = ?`,
+        [managerId]
+      );
 
-      // Get studios count
-      const studioStats = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT COUNT(*) as total_studios
-           FROM studios s
-           JOIN users u ON s.owner_id = u.id
-           JOIN manager_codes mc ON mc.used_by_user_id = u.id
-           WHERE mc.created_by_manager_id = ?`,
-          [managerId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      // Get studios count using direct relationship
+      const studioStats = await db.get(
+        `SELECT COUNT(*) as total_studios
+         FROM studios s
+         WHERE s.created_by_manager_id = ?`,
+        [managerId]
+      );
 
       res.json({
         statistics: {
@@ -239,14 +204,14 @@ class ManagerController {
       const managerId = req.user.userId;
       const { city, page = 1, limit = 20 } = req.query;
       const offset = (page - 1) * limit;
+      
+      console.log('getStudiosOverview called with:', { managerId, city, page, limit, offset });
 
       let query = `
-        SELECT s.*, u.email as owner_email, u.first_name as owner_first_name, u.last_name as owner_last_name,
-               mc.intended_city, mc.code as manager_code
+        SELECT s.*, u.email as owner_email, u.first_name as owner_first_name, u.last_name as owner_last_name
         FROM studios s
         JOIN users u ON s.owner_id = u.id
-        JOIN manager_codes mc ON mc.used_by_user_id = u.id
-        WHERE mc.created_by_manager_id = ?
+        WHERE s.created_by_manager_id = ?
       `;
       
       const params = [managerId];
@@ -256,19 +221,16 @@ class ManagerController {
         params.push(city);
       }
 
-      query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
-      params.push(parseInt(limit), offset);
+      query += ` ORDER BY s.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
 
-      const studios = await new Promise((resolve, reject) => {
-        db.all(query, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
+      console.log('Running query with params:', params);
+      const studios = await db.all(query, params);
+      console.log('Query returned', studios.length, 'studios');
 
       res.json({ studios });
     } catch (error) {
       console.error('Error fetching studios overview:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -281,26 +243,31 @@ class ManagerController {
     try {
       const managerId = req.user.userId;
 
-      const cities = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT 
-            mc.intended_city as city,
-            COUNT(*) as total_codes,
-            COUNT(CASE WHEN mc.is_used = 1 THEN 1 END) as used_codes,
-            COUNT(CASE WHEN s.id IS NOT NULL THEN 1 END) as studios_count
-           FROM manager_codes mc
-           LEFT JOIN users u ON mc.used_by_user_id = u.id
-           LEFT JOIN studios s ON u.id = s.owner_id
-           WHERE mc.created_by_manager_id = ?
-           GROUP BY mc.intended_city
-           ORDER BY studios_count DESC, city ASC`,
-          [managerId],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const cities = await db.all(
+        `SELECT 
+          s.city,
+          COUNT(DISTINCT s.id) as studios_count,
+          COUNT(DISTINCT mc.id) as total_codes,
+          0 as used_codes
+         FROM studios s
+         LEFT JOIN manager_codes mc ON mc.intended_city = s.city AND mc.created_by_manager_id = ?
+         WHERE s.created_by_manager_id = ?
+         GROUP BY s.city
+         UNION
+         SELECT 
+          mc.intended_city as city,
+          0 as studios_count,
+          COUNT(*) as total_codes,
+          0 as used_codes
+         FROM manager_codes mc
+         WHERE mc.created_by_manager_id = ?
+           AND mc.intended_city NOT IN (
+             SELECT DISTINCT city FROM studios WHERE created_by_manager_id = ?
+           )
+         GROUP BY mc.intended_city
+         ORDER BY studios_count DESC, city ASC`,
+        [managerId, managerId, managerId, managerId]
+      );
 
       res.json({ cities });
     } catch (error) {

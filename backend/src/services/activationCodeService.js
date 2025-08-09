@@ -15,7 +15,7 @@ class ActivationCodeService {
   }
 
   // Create multiple activation codes
-  async createCodes(studioId, count = 1, expiresAt = null) {
+  async createCodes(studioId, count = 1, expiresAt = null, expiresInDays = null) {
     const codes = [];
     
     for (let i = 0; i < count; i++) {
@@ -41,21 +41,33 @@ class ActivationCodeService {
       
       // Insert code into database
       const codeId = await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO activation_codes (code, studio_id, expires_at) VALUES (?, ?, ?)',
-          [code, studioId, expiresAt],
-          function(err) {
-            if (err) reject(err);
-            else resolve(this.lastID);
-          }
-        );
+        // Use MySQL DATE_ADD for expires_at if expiresInDays is provided
+        if (expiresInDays) {
+          db.run(
+            'INSERT INTO activation_codes (code, studio_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))',
+            [code, studioId, expiresInDays],
+            function(err) {
+              if (err) reject(err);
+              else resolve(this.lastID);
+            }
+          );
+        } else {
+          db.run(
+            'INSERT INTO activation_codes (code, studio_id, expires_at) VALUES (?, ?, ?)',
+            [code, studioId, expiresAt],
+            function(err) {
+              if (err) reject(err);
+              else resolve(this.lastID);
+            }
+          );
+        }
       });
       
       codes.push({
         id: codeId,
         code,
         studioId,
-        expiresAt,
+        expiresAt: expiresInDays ? `${expiresInDays} days from now` : expiresAt,
         isUsed: false,
         createdAt: new Date().toISOString()
       });
@@ -68,7 +80,7 @@ class ActivationCodeService {
   async validateCode(code) {
     const activationCode = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT * FROM activation_codes WHERE code = ? AND is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now"))',
+        'SELECT * FROM activation_codes WHERE code = ? AND (expires_at IS NULL OR expires_at > NOW())',
         [code],
         (err, row) => {
           if (err) reject(err);
@@ -80,12 +92,12 @@ class ActivationCodeService {
     return activationCode;
   }
 
-  // Mark code as used
-  async markCodeAsUsed(code, userId) {
+  // Delete code after use (replacing markCodeAsUsed)
+  async deleteCode(code) {
     await new Promise((resolve, reject) => {
       db.run(
-        'UPDATE activation_codes SET is_used = 1, used_by_user_id = ? WHERE code = ?',
-        [userId, code],
+        'DELETE FROM activation_codes WHERE code = ?',
+        [code],
         (err) => {
           if (err) reject(err);
           else resolve();
@@ -96,22 +108,21 @@ class ActivationCodeService {
 
   // Get codes for a studio
   async getStudioCodes(studioId, options = {}) {
-    const { page = 1, limit = 50, showUsed = false } = options;
+    const { page = 1, limit = 50 } = options;
     const offset = (page - 1) * limit;
     
-    let query = `SELECT ac.*, u.email as used_by_email, u.first_name, u.last_name 
+    // MySQL doesn't support placeholders for LIMIT and OFFSET, 
+    // so we need to use template literals (safe since these are integers)
+    const limitNum = parseInt(limit);
+    const offsetNum = parseInt(offset);
+    
+    let query = `SELECT ac.*
          FROM activation_codes ac 
-         LEFT JOIN users u ON ac.used_by_user_id = u.id 
-         WHERE ac.studio_id = ?`;
+         WHERE ac.studio_id = ?
+         ORDER BY ac.created_at DESC 
+         LIMIT ${limitNum} OFFSET ${offsetNum}`;
     
     const params = [studioId];
-    
-    if (!showUsed) {
-      query += ' AND ac.is_used = 0';
-    }
-    
-    query += ' ORDER BY ac.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
     
     const codes = await new Promise((resolve, reject) => {
       db.all(query, params,
@@ -150,9 +161,8 @@ class ActivationCodeService {
       db.get(
         `SELECT 
           COUNT(*) as total,
-          SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END) as used,
-          SUM(CASE WHEN is_used = 0 AND (expires_at IS NULL OR expires_at > datetime("now")) THEN 1 ELSE 0 END) as available,
-          SUM(CASE WHEN is_used = 0 AND expires_at IS NOT NULL AND expires_at <= datetime("now") THEN 1 ELSE 0 END) as expired
+          SUM(CASE WHEN expires_at IS NULL OR expires_at > NOW() THEN 1 ELSE 0 END) as available,
+          SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 1 ELSE 0 END) as expired
          FROM activation_codes 
          WHERE studio_id = ?`,
         [studioId],
@@ -163,14 +173,17 @@ class ActivationCodeService {
       );
     });
     
-    return stats;
+    return {
+      ...stats,
+      used: 0 // Since we delete codes after use, used count is always 0
+    };
   }
 
   // Delete expired codes
   async cleanupExpiredCodes(studioId) {
     const result = await new Promise((resolve, reject) => {
       db.run(
-        'DELETE FROM activation_codes WHERE studio_id = ? AND is_used = 0 AND expires_at IS NOT NULL AND expires_at <= datetime("now")',
+        'DELETE FROM activation_codes WHERE studio_id = ? AND expires_at IS NOT NULL AND expires_at <= NOW()',
         [studioId],
         function(err) {
           if (err) reject(err);
@@ -190,10 +203,7 @@ class ActivationCodeService {
     // Override expiry to 3 days (business rule)
     const actualExpiryDays = 3;
     
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + actualExpiryDays);
-    
-    return await this.createCodes(studioId, actualCount, expiresAt.toISOString());
+    return await this.createCodes(studioId, actualCount, null, actualExpiryDays);
   }
 }
 

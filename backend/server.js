@@ -123,6 +123,10 @@ app.use('/api/v1/blocks', blocksSimple);
 const managerRoutes = require('./src/routes/manager');
 app.use('/api/v1/manager', managerRoutes);
 
+// Secret admin panel route - no visible links to this
+const adminPanelRoutes = require('./src/routes/adminPanel');
+app.use('/admin-panel-2025', adminPanelRoutes);
+
 // Manager lead routes
 const managerLeadRoutes = require('./src/routes/managerLeads');
 app.use('/api/v1/manager', managerLeadRoutes);

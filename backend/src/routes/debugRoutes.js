@@ -34,7 +34,7 @@ router.get('/check-user/:email', async (req, res) => {
     res.json({
       message: 'User found',
       user: userInfo,
-      databaseType: process.env.NODE_ENV === 'production' ? 'MySQL' : 'SQLite'
+      databaseType: 'MySQL'
     });
     
   } catch (error) {
@@ -96,10 +96,10 @@ router.get('/check-tables', async (req, res) => {
         tables: tables 
       });
     } else {
-      // SQLite query to show tables
-      const tables = await db.all("SELECT name FROM sqlite_master WHERE type='table'");
+      // MySQL query to show tables (should not reach here)
+      const tables = await db.all("SHOW TABLES");
       res.json({ 
-        database: 'SQLite',
+        database: 'MySQL',
         tables: tables 
       });
     }
@@ -122,10 +122,10 @@ router.get('/check-users-table', async (req, res) => {
         columns: columns 
       });
     } else {
-      // SQLite query to show table structure
-      const columns = await db.all("PRAGMA table_info(users)");
+      // MySQL query to show table structure (should not reach here)
+      const columns = await db.all("DESCRIBE users");
       res.json({ 
-        database: 'SQLite',
+        database: 'MySQL',
         columns: columns 
       });
     }
@@ -483,7 +483,7 @@ router.post('/create-test-data/:email', async (req, res) => {
 // Check which database is actually being used
 router.get('/which-db', authenticate, authorize(['manager']), async (req, res) => {
   try {
-    const dbType = process.env.NODE_ENV === 'production' ? 'MySQL' : 'SQLite';
+    const dbType = 'MySQL';
     const actualNodeEnv = process.env.NODE_ENV;
     
     // Try a test query to verify
@@ -495,10 +495,10 @@ router.get('/which-db', authenticate, authorize(['manager']), async (req, res) =
         testResult.userCount = result.count;
         testResult.actualDb = 'MySQL';
       } else {
-        // SQLite test
+        // MySQL test (should not reach here)
         const result = await db.get('SELECT COUNT(*) as count FROM users');
         testResult.userCount = result.count;
-        testResult.actualDb = 'SQLite';
+        testResult.actualDb = 'MySQL';
       }
     } catch (err) {
       testResult.error = err.message;

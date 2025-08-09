@@ -8,14 +8,14 @@ class Studio {
    */
   static async create(studioData) {
     return new Promise((resolve, reject) => {
-      const { name, owner_id, address, phone, email, business_hours, city } = studioData;
+      const { name, owner_id, address, phone, email, business_hours, city, created_by_manager_id, machine_count } = studioData;
       
       const query = `
-        INSERT INTO studios (name, owner_id, address, phone, email, business_hours, city)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO studios (name, owner_id, address, phone, email, business_hours, city, created_by_manager_id, machine_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      db.run(query, [name, owner_id, address, phone, email, business_hours, city], function(err) {
+      db.run(query, [name, owner_id, address, phone, email, business_hours, city, created_by_manager_id, machine_count || 1], function(err) {
         if (err) {
           reject(err);
         } else {
@@ -28,6 +28,8 @@ class Studio {
             email,
             business_hours,
             city,
+            created_by_manager_id,
+            machine_count: machine_count || 1,
             is_active: 1,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -93,7 +95,7 @@ class Studio {
    */
   static async update(id, updateData) {
     return new Promise((resolve, reject) => {
-      const allowedFields = ['name', 'address', 'phone', 'email', 'business_hours', 'city'];
+      const allowedFields = ['name', 'address', 'phone', 'email', 'business_hours', 'city', 'machine_count'];
       const fields = Object.keys(updateData).filter(key => allowedFields.includes(key));
       
       if (fields.length === 0) {
@@ -190,23 +192,36 @@ class Studio {
    */
   static async getStatistics(studioId) {
     return new Promise((resolve, reject) => {
-      const query = `
-        SELECT 
-          COUNT(CASE WHEN ac.is_used = 1 THEN 1 END) as customers_registered,
-          COUNT(CASE WHEN ac.is_used = 0 THEN 1 END) as unused_codes,
-          COUNT(ac.id) as total_codes
-        FROM activation_codes ac
-        WHERE ac.studio_id = ?
+      // Get customer count from customers table
+      const customersQuery = `
+        SELECT COUNT(*) as customers_registered
+        FROM customers
+        WHERE studio_id = ?
       `;
       
-      db.get(query, [studioId], (err, row) => {
+      // Get active codes count
+      const codesQuery = `
+        SELECT 
+          COUNT(*) as active_codes,
+          COUNT(*) as total_codes
+        FROM activation_codes ac
+        WHERE ac.studio_id = ? AND (ac.expires_at IS NULL OR ac.expires_at > NOW())
+      `;
+      
+      db.get(customersQuery, [studioId], (err, customerRow) => {
         if (err) {
           reject(err);
         } else {
-          resolve({
-            customers_registered: row.customers_registered || 0,
-            unused_codes: row.unused_codes || 0,
-            total_codes: row.total_codes || 0
+          db.get(codesQuery, [studioId], (err, codeRow) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve({
+                customers_registered: customerRow.customers_registered || 0,
+                unused_codes: codeRow.active_codes || 0,
+                total_codes: codeRow.total_codes || 0
+              });
+            }
           });
         }
       });

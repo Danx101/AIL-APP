@@ -114,4 +114,62 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Delete customer session block (no studio ID needed)
+router.delete('/:blockId', async (req, res) => {
+  try {
+    const { blockId } = req.params;
+    
+    // First get the user's studio
+    const studio = await db.get(
+      'SELECT * FROM studios WHERE owner_id = ? AND is_active = 1',
+      [req.user.userId]
+    );
+    
+    if (!studio) {
+      return res.status(404).json({ message: 'No studio found for this user' });
+    }
+    
+    // Check if the block exists and belongs to this studio
+    const block = await db.get(
+      'SELECT * FROM customer_sessions WHERE id = ? AND studio_id = ?',
+      [blockId, studio.id]
+    );
+    
+    if (!block) {
+      return res.status(404).json({ message: 'Session block not found' });
+    }
+    
+    // Don't allow deletion of blocks with consumed sessions
+    if (block.total_sessions > block.remaining_sessions) {
+      return res.status(400).json({ message: 'Cannot delete block with consumed sessions' });
+    }
+    
+    // Delete the block
+    await db.run(
+      'DELETE FROM customer_sessions WHERE id = ? AND studio_id = ?',
+      [blockId, studio.id]
+    );
+    
+    // If this was the active block, activate the next one
+    if (block.is_active) {
+      const nextBlock = await db.get(
+        'SELECT * FROM customer_sessions WHERE customer_id = ? AND studio_id = ? AND id != ? ORDER BY queue_position ASC, id ASC LIMIT 1',
+        [block.customer_id, studio.id, blockId]
+      );
+      
+      if (nextBlock) {
+        await db.run(
+          'UPDATE customer_sessions SET is_active = 1, updated_at = NOW() WHERE id = ?',
+          [nextBlock.id]
+        );
+      }
+    }
+    
+    res.json({ message: 'Session block deleted' });
+  } catch (error) {
+    console.error('Error deleting session block:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 module.exports = router;

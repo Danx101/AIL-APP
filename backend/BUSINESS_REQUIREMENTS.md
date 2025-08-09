@@ -1,6 +1,7 @@
 # Business Requirements - Abnehmen im Liegen Backend
 
 *Comprehensive business logic and requirements documentation*
+*Keep this file updated*
 
 ## Core Business Model
 
@@ -82,7 +83,7 @@ Customers purchase session blocks (packages) containing multiple treatments, whi
 - **Studio Owner Actions**:
   - Schedule appointment → "bestätigt"
   - Mark completed → "absolviert" (consumes session if applicable)
-  - Mark no-show → "nicht erschienen" (consumes session if applicable)
+  - Mark no-show → "nicht erschienen" (consumes session if applicable, only allowed after appointment START time)
   - Cancel appointment → "storniert" (no session consumed)
 
 - **Customer Actions** (current scope: cancellation only):
@@ -90,8 +91,14 @@ Customers purchase session blocks (packages) containing multiple treatments, whi
   - Cancel <48 hours ahead → "storniert" (session consumed if applicable)
 
 - **System Actions**:
-  - Past appointments remain "bestätigt" until manually updated
-  - No automatic status changes based on time
+  - Appointments remain "bestätigt" during their scheduled time (between start and end)
+  - After appointment END time passes → automatically updates to "abgeschlossen"
+  - Sessions are automatically deducted when status changes to "abgeschlossen"
+
+- **Time-Based Restrictions**:
+  - Cannot mark as "nicht erschienen" before appointment START time
+  - Can mark as "nicht erschienen" after appointment START time (during or after appointment)
+  - From "abgeschlossen" status, can always change to "nicht erschienen"
 
 ### **Cancellation Policy**
 - **Studio Owner Cancellation**: Never consumes sessions

@@ -53,4 +53,9 @@ router.get('/leads/stats',
   managerLeadController.getAllLeadStats.bind(managerLeadController)
 );
 
+// Get leads for a specific studio
+router.get('/studios/:studioId/leads',
+  managerLeadController.getStudioLeads.bind(managerLeadController)
+);
+
 module.exports = router;

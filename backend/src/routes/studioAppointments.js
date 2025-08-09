@@ -178,68 +178,10 @@ router.post('/:studioId/blocks', async (req, res) => {
   }
 });
 
-// Update session block
-router.put('/:studioId/blocks/:blockId', async (req, res) => {
-  try {
-    const { studioId, blockId } = req.params;
-    const { name, sessions, price, display_order, is_active } = req.body;
-    
-    // Verify user owns this studio
-    const studio = await db.get(
-      'SELECT * FROM studios WHERE id = ? AND owner_id = ?',
-      [studioId, req.user.userId]
-    );
-    
-    if (!studio) {
-      return res.status(404).json({ message: 'Studio not found or access denied' });
-    }
-    
-    // Update session block
-    const updates = [];
-    const values = [];
-    
-    if (name !== undefined) {
-      updates.push('name = ?');
-      values.push(name);
-    }
-    if (sessions !== undefined) {
-      updates.push('sessions = ?');
-      values.push(sessions);
-    }
-    if (price !== undefined) {
-      updates.push('price = ?');
-      values.push(price);
-    }
-    if (display_order !== undefined) {
-      updates.push('display_order = ?');
-      values.push(display_order);
-    }
-    if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      values.push(is_active ? 1 : 0);
-    }
-    
-    if (updates.length === 0) {
-      return res.status(400).json({ message: 'No fields to update' });
-    }
-    
-    updates.push('updated_at = datetime(\'now\')');
-    values.push(blockId);
-    values.push(studioId);
-    
-    await db.run(
-      `UPDATE session_blocks SET ${updates.join(', ')} WHERE id = ? AND studio_id = ?`,
-      values
-    );
-    
-    res.json({ message: 'Session block updated' });
-  } catch (error) {
-    console.error('Error updating session block:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
+// Note: Edit functionality for customer session blocks has been removed
+// Session blocks should not be edited once created to maintain data integrity
 
-// Delete session block
+// Delete customer session block
 router.delete('/:studioId/blocks/:blockId', async (req, res) => {
   try {
     const { studioId, blockId } = req.params;
@@ -254,11 +196,41 @@ router.delete('/:studioId/blocks/:blockId', async (req, res) => {
       return res.status(404).json({ message: 'Studio not found or access denied' });
     }
     
-    // Soft delete by setting is_active = 0
-    await db.run(
-      'UPDATE session_blocks SET is_active = 0, updated_at = datetime(\'now\') WHERE id = ? AND studio_id = ?',
+    // Check if the block exists and belongs to this studio
+    const block = await db.get(
+      'SELECT * FROM customer_sessions WHERE id = ? AND studio_id = ?',
       [blockId, studioId]
     );
+    
+    if (!block) {
+      return res.status(404).json({ message: 'Session block not found' });
+    }
+    
+    // Don't allow deletion of blocks with consumed sessions
+    if (block.total_sessions > block.remaining_sessions) {
+      return res.status(400).json({ message: 'Cannot delete block with consumed sessions' });
+    }
+    
+    // Delete the block
+    await db.run(
+      'DELETE FROM customer_sessions WHERE id = ? AND studio_id = ?',
+      [blockId, studioId]
+    );
+    
+    // If this was the active block, activate the next one
+    if (block.is_active) {
+      const nextBlock = await db.get(
+        'SELECT * FROM customer_sessions WHERE customer_id = ? AND studio_id = ? AND id != ? ORDER BY queue_position ASC, id ASC LIMIT 1',
+        [block.customer_id, studioId, blockId]
+      );
+      
+      if (nextBlock) {
+        await db.run(
+          'UPDATE customer_sessions SET is_active = 1, updated_at = NOW() WHERE id = ?',
+          [nextBlock.id]
+        );
+      }
+    }
     
     res.json({ message: 'Session block deleted' });
   } catch (error) {

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Manager Dashboard API Test</h1>
+    
+    <div class="section">
+        <h2>1. Login</h2>
+        <div>
+            <input type="email" id="email" placeholder="Email" value="manager@example.com">
+            <input type="password" id="password" placeholder="Password" value="manager123">
+            <button onclick="login()">Login</button>
+        </div>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Test API Endpoints</h2>
+        <button onclick="testStats()">Test Stats</button>
+        <button onclick="testStudios()">Test Studios</button>
+        <button onclick="testGoogleSheets()">Test Google Sheets</button>
+        <button onclick="testCities()">Test Cities</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Google Sheets Integration</h2>
+        <input type="text" id="sheetUrl" placeholder="Google Sheet URL" style="width: 400px;">
+        <button onclick="connectSheet()">Connect Sheet</button>
+        <div id="sheetResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api/v1';
+        let authToken = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            console.log('Attempting login with:', { email, role: 'manager' });
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Important for CORS
+                    body: JSON.stringify({ email, password, role: 'manager' })
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    document.getElementById('loginResult').innerHTML = 
+                        `<p class="error">❌ Login failed (${response.status}): ${errorText}</p>`;
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('Login response:', data);
+                
+                authToken = data.token;
+                document.getElementById('loginResult').innerHTML = 
+                    '<p class="success">✅ Login successful! Token stored.</p>';
+                    
+            } catch (error) {
+                console.error('Network error:', error);
+                document.getElementById('loginResult').innerHTML = 
+                    `<p class="error">❌ Network error: ${error.message}<br>
+                    Make sure the server is running on port 3001<br>
+                    Check browser console for details.</p>`;
+            }
+        }
+
+        async function makeAuthRequest(url, options = {}) {
+            if (!authToken) {
+                alert('Please login first!');
+                return null;
+            }
+            
+            return fetch(url, {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+        }
+
+        async function testStats() {
+            try {
+                const response = await makeAuthRequest(`${API_BASE}/manager/leads/stats`);
+                const data = await response.json();
+                
+                document.getElementById('apiResult').innerHTML = 
+                    `<h3>Stats Response:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = 
+                    `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testStudios() {
+            try {
+                const response = await makeAuthRequest(`${API_BASE}/manager/studios`);
+                const data = await response.json();
+                
+                document.getElementById('apiResult').innerHTML = 
+                    `<h3>Studios Response:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = 
+                    `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testGoogleSheets() {
+            try {
+                const response = await makeAuthRequest(`${API_BASE}/manager/google-sheets`);
+                const data = await response.json();
+                
+                document.getElementById('apiResult').innerHTML = 
+                    `<h3>Google Sheets Response:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = 
+                    `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testCities() {
+            try {
+                const response = await makeAuthRequest(`${API_BASE}/manager/cities`);
+                const data = await response.json();
+                
+                document.getElementById('apiResult').innerHTML = 
+                    `<h3>Cities Response:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = 
+                    `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function connectSheet() {
+            const sheetUrl = document.getElementById('sheetUrl').value;
+            if (!sheetUrl) {
+                alert('Please enter a Google Sheet URL');
+                return;
+            }
+            
+            try {
+                // First, preview the sheet
+                const previewResponse = await makeAuthRequest(`${API_BASE}/manager/google-sheets/preview`, {
+                    method: 'POST',
+                    body: JSON.stringify({ sheet_url: sheetUrl })
+                });
+                
+                const previewData = await previewResponse.json();
+                
+                if (previewResponse.ok) {
+                    document.getElementById('sheetResult').innerHTML = 
+                        `<h3>Sheet Preview:</h3><pre>${JSON.stringify(previewData, null, 2)}</pre>
+                         <p class="success">✅ Sheet accessible! You can now set up column mapping.</p>`;
+                } else {
+                    document.getElementById('sheetResult').innerHTML = 
+                        `<p class="error">❌ Error: ${previewData.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('sheetResult').innerHTML = 
+                    `<p class="error">❌ Network error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-login on page load for testing
+        window.onload = () => {
+            // Uncomment to auto-login
+            // login();
+        };
+    </script>
+</body>
+</html>
