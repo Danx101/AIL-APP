@@ -1713,7 +1713,7 @@ class App {
                                             <div class="list-group-item">
                                                 <div class="d-flex justify-content-between align-items-start">
                                                     <div class="flex-grow-1">
-                                                        <h6 class="mb-1">${appointment.customer_first_name} ${appointment.customer_last_name}</h6>
+                                                        <h6 class="mb-1">${appointment.customer_first_name || 'Unknown'} ${appointment.customer_last_name || 'Customer'}</h6>
                                                         <p class="mb-1">
                                                             <i class="fas fa-clock me-1"></i>
                                                             ${appointment.start_time} - ${appointment.end_time}
@@ -1747,7 +1747,7 @@ class App {
                                             <div class="list-group-item">
                                                 <div class="d-flex justify-content-between align-items-start">
                                                     <div class="flex-grow-1">
-                                                        <h6 class="mb-1 text-muted">${appointment.customer_first_name} ${appointment.customer_last_name}</h6>
+                                                        <h6 class="mb-1 text-muted">${appointment.customer_first_name || 'Unknown'} ${appointment.customer_last_name || 'Customer'}</h6>
                                                         <p class="mb-1 text-muted">
                                                             <i class="fas fa-clock me-1"></i>
                                                             ${appointment.start_time} - ${appointment.end_time}
@@ -2657,18 +2657,28 @@ class App {
     }
 
     showStudioLeadManagement(studioId) {
-        // Initialize Lead Management for the studio
-        const content = document.getElementById('content');
-        content.innerHTML = `<div id="lead-management-content"></div>`;
+        console.log('showStudioLeadManagement called with studioId:', studioId);
+        console.log('window.leadKanban available:', !!window.leadKanban);
+        console.log('window.leadManagement available:', !!window.leadManagement);
         
-        if (window.leadManagement) {
+        // Initialize Lead Kanban for the studio
+        const content = document.getElementById('content');
+        content.innerHTML = `<div id="lead-kanban-content"></div>`;
+        
+        if (window.leadKanban) {
+            console.log('Using Lead Kanban');
+            window.leadKanban.init(studioId);
+        } else if (window.leadManagement) {
+            console.log('Falling back to old Lead Management');
+            // Fallback to old Lead Management if Kanban not loaded
+            content.innerHTML = `<div id="lead-management-content"></div>`;
             window.leadManagement.init(studioId);
         } else {
-            console.error('Lead Management component not loaded');
+            console.error('Lead Kanban component not loaded');
             content.innerHTML = `
                 <div class="alert alert-danger">
                     <h4>Error</h4>
-                    <p>Lead Management component failed to load. Please refresh the page.</p>
+                    <p>Lead Kanban component failed to load. Please refresh the page.</p>
                     <button class="btn btn-outline-primary" onclick="app.showStudioDashboard()">
                         <i class="bi bi-arrow-left me-2"></i>
                         Back to Dashboard
@@ -2933,14 +2943,6 @@ class App {
                             <div id="studioRegisterError" class="alert alert-danger d-none"></div>
                             <div id="studioRegisterSuccess" class="alert alert-success d-none"></div>
                             <form id="studioRegisterForm">
-                                <div class="mb-3">
-                                    <label for="managerCode" class="form-label">Manager Code</label>
-                                    <input type="text" class="form-control" id="managerCode" required 
-                                           placeholder="Code vom Manager erhalten">
-                                    <div class="form-text">
-                                        Dieser Code wird von einem Manager bereitgestellt
-                                    </div>
-                                </div>
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="mb-3">
@@ -2970,6 +2972,25 @@ class App {
                                     <label for="studioPhone" class="form-label">Telefon (optional)</label>
                                     <input type="tel" class="form-control" id="studioPhone">
                                 </div>
+                                <div class="mb-3">
+                                    <label for="studioName" class="form-label">Studio Name</label>
+                                    <input type="text" class="form-control" id="studioName" required placeholder="z.B. AIL Berlin Mitte">
+                                    <div class="form-text">
+                                        Empfohlen: AIL [Stadt] [Stadtteil/Bezirk]
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioCity" class="form-label">Stadt *</label>
+                                    <input type="text" class="form-control" id="studioCity" required placeholder="z.B. Berlin">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioAddress" class="form-label">Adresse *</label>
+                                    <input type="text" class="form-control" id="studioAddress" required placeholder="Straße, Hausnummer, PLZ">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioPhoneNumber" class="form-label">Studio Telefon (optional)</label>
+                                    <input type="tel" class="form-control" id="studioPhoneNumber" placeholder="Studio Kontakt">
+                                </div>
                                 <button type="submit" class="btn btn-primary w-100" id="studioRegisterSubmitBtn">Studio Registrieren</button>
                             </form>
                             <hr>
@@ -2995,13 +3016,15 @@ class App {
         e.preventDefault();
         
         const formData = {
-            managerCode: document.getElementById('managerCode').value,
             firstName: document.getElementById('studioFirstName').value,
             lastName: document.getElementById('studioLastName').value,
             email: document.getElementById('studioRegisterEmail').value,
             password: document.getElementById('studioRegisterPassword').value,
             phone: document.getElementById('studioPhone').value || '',
-            role: 'studio_owner'
+            studioName: document.getElementById('studioName').value,
+            studioCity: document.getElementById('studioCity').value,
+            studioAddress: document.getElementById('studioAddress').value,
+            studioPhone: document.getElementById('studioPhoneNumber').value || ''
         };
         
         const submitBtn = document.getElementById('studioRegisterSubmitBtn');
@@ -3014,15 +3037,18 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            const result = await window.authService.register(formData);
-            this.currentUser = result.user;
+            const result = await window.authService.registerStudio(formData);
             
-            successDiv.textContent = 'Studio-Registrierung erfolgreich! Sie werden zum Studio-Setup weitergeleitet...';
+            successDiv.innerHTML = `
+                <strong>Studio-Registrierung erfolgreich!</strong><br>
+                Bitte überprüfen Sie Ihre E-Mail für die Verifizierung.<br>
+                <small class="text-muted">💡 <strong>Tipp:</strong> Falls die E-Mail nicht ankommt, schauen Sie auch in Ihren Spam-Ordner.</small>
+            `;
             successDiv.classList.remove('d-none');
             
             setTimeout(() => {
-                this.showStudioSetup();
-            }, 2000);
+                this.showStudioLogin();
+            }, 3000);
             
         } catch (error) {
             errorDiv.textContent = error.message;
@@ -4163,16 +4189,30 @@ class App {
             console.log('Loaded customers:', customers.length);
             
             customerSelect.innerHTML = '<option value="">Kunde auswählen...</option>';
-            customers.forEach(customer => {
+            
+            // Filter customers with active sessions only
+            const customersWithSessions = customers.filter(customer => customer.remaining_sessions > 0);
+            
+            customersWithSessions.forEach(customer => {
+                const sessionInfo = customer.remaining_sessions ? ` (${customer.remaining_sessions} Sessions)` : '';
                 customerSelect.innerHTML += `
                     <option value="${customer.id}">
-                        ${customer.first_name} ${customer.last_name} (${customer.email})
+                        ${customer.contact_first_name} ${customer.contact_last_name}${sessionInfo}
                     </option>
                 `;
             });
             
-            if (customers.length === 0) {
-                customerSelect.innerHTML += '<option value="" disabled>Keine Kunden vorhanden</option>';
+            if (customersWithSessions.length === 0) {
+                customerSelect.innerHTML += '<option value="" disabled>Keine Kunden mit aktiven Sessions vorhanden</option>';
+                // Add info message about session requirement
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'alert alert-info mt-2';
+                infoDiv.innerHTML = `
+                    <i class="fas fa-info-circle me-2"></i>
+                    Nur Kunden mit aktiven Sessions können Termine buchen. 
+                    Neue Session-Pakete können im <strong>KUNDEN</strong> Tab hinzugefügt werden.
+                `;
+                customerSelect.parentNode.appendChild(infoDiv);
             }
             
         } catch (error) {
@@ -5256,8 +5296,13 @@ class App {
                     </div>
                 </div>
 
-                <!-- Customers Grid -->
-                <div class="customers-grid" id="customersGrid">
+                <!-- Customers Content -->
+                <div id="customersContent">
+                    <!-- CustomerManagement component will be initialized here -->
+                </div>
+                
+                <!-- Customers Grid (Legacy) -->
+                <div class="customers-grid" id="customersGrid" style="display: none;">
                     <!-- Loading state -->
                     <div class="col-12">
                         <div class="text-center py-5">
@@ -5272,10 +5317,33 @@ class App {
         `;
 
         // Initialize customer management
+        console.log('About to initialize customer management with studioId:', studioId);
         this.initializeCustomerManagement(studioId);
     }
 
     initializeCustomerManagement(studioId) {
+        // Use the CustomerManagement component if available
+        if (typeof CustomerManagement !== 'undefined') {
+            console.log('Using CustomerManagement component for studio:', studioId);
+            const container = document.getElementById('customersContent');
+            if (container) {
+                container.innerHTML = '<div id="customer-management-content"></div>';
+                
+                // Create instance if it doesn't exist
+                if (!window.customerManagement) {
+                    console.log('Creating new CustomerManagement instance');
+                    window.customerManagement = new CustomerManagement();
+                }
+                
+                // Always call init - it will handle whether to reinitialize or just refresh
+                console.log('Calling CustomerManagement init with studioId:', studioId);
+                window.customerManagement.init(studioId);
+                
+                return;
+            }
+        }
+        
+        // Fallback to built-in implementation
         this.currentStudioId = studioId;
         this.allCustomers = [];
         this.filteredCustomers = [];
@@ -5444,8 +5512,8 @@ class App {
     filterAndRenderCustomers() {
         this.filteredCustomers = this.allCustomers.filter(customer => {
             // Handle both camelCase (mock) and snake_case (database) field names
-            const firstName = (customer.first_name || customer.firstName || '').toLowerCase();
-            const lastName = (customer.last_name || customer.lastName || '').toLowerCase();
+            const firstName = (customer.contact_first_name || customer.first_name || customer.firstName || '').toLowerCase();
+            const lastName = (customer.contact_last_name || customer.last_name || customer.lastName || '').toLowerCase();
             const email = (customer.email || '').toLowerCase();
             const phone = customer.phone || '';
             
@@ -5500,8 +5568,8 @@ class App {
 
     createCustomerCard(customer, index) {
         // Handle both camelCase (mock) and snake_case (database) field names
-        const firstName = customer.first_name || customer.firstName || '';
-        const lastName = customer.last_name || customer.lastName || '';
+        const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
+        const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         const initials = this.getCustomerInitials(firstName, lastName);
         const statusClass = this.getStatusClass(customer.status);
         const statusText = this.getStatusText(customer.status);
@@ -5760,8 +5828,8 @@ class App {
         // Ensure sessionBlocks is always an array
         const safeSessionBlocks = Array.isArray(sessionBlocks) ? sessionBlocks : [];
         
-        const firstName = customer.first_name || customer.firstName || '';
-        const lastName = customer.last_name || customer.lastName || '';
+        const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
+        const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         
         // Check if modal already exists
         let existingModal = document.getElementById('customerDetailsModal');
@@ -5789,8 +5857,8 @@ class App {
     }
 
     createCustomerModalHTML(customer, safeSessionBlocks, customerId) {
-        const firstName = customer.first_name || customer.firstName || '';
-        const lastName = customer.last_name || customer.lastName || '';
+        const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
+        const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         
         return `
             <div class="modal fade" id="customerDetailsModal" tabindex="-1" aria-labelledby="customerDetailsModalLabel" aria-hidden="true">
@@ -5816,8 +5884,8 @@ class App {
     }
 
     createCustomerModalBodyContent(customer, safeSessionBlocks, customerId) {
-        const firstName = customer.first_name || customer.firstName || '';
-        const lastName = customer.last_name || customer.lastName || '';
+        const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
+        const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         
         return `
             <!-- Customer Info -->
@@ -5916,8 +5984,8 @@ class App {
     }
 
     updateCustomerModalContent(customer, safeSessionBlocks, customerId) {
-        const firstName = customer.first_name || customer.firstName || '';
-        const lastName = customer.last_name || customer.lastName || '';
+        const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
+        const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         
         // Update modal title
         const modalName = document.getElementById('customerModalName');
@@ -5993,7 +6061,7 @@ class App {
                                     Gekauft: ${this.formatDate(block.purchase_date)}
                                 </small>
                             </div>
-                            <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${block.id})" title="Block löschen">
+                            <button class="btn btn-sm btn-outline-danger" onclick="app.deleteSessionBlock(${customerId}, ${block.id})" title="Block löschen">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -6069,15 +6137,15 @@ class App {
                 return;
             }
 
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify({
-                    customer_id: customerId,
-                    sessions: sessionCount,
+                    total_sessions: sessionCount,
+                    payment_method: 'cash',
                     notes: `${sessionCount}er Behandlungsblock hinzugefügt`
                 })
             });
@@ -6110,13 +6178,13 @@ class App {
     }
 
 
-    async deleteSessionBlock(blockId) {
+    async deleteSessionBlock(customerId, blockId) {
         if (!confirm('Sind Sie sicher, dass Sie diesen Session-Block löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
             return;
         }
 
         try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks/${blockId}`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/session-blocks/${blockId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -6291,7 +6359,12 @@ class App {
     }
 
     showAddCustomerModal() {
-        alert('Neuen Kunden hinzufügen\n\nDiese Funktion wird in der nächsten Phase implementiert.');
+        // Use CustomerManagement component if available
+        if (window.customerManagement && window.customerManagement.showAddCustomerModal) {
+            window.customerManagement.showAddCustomerModal();
+        } else {
+            alert('Neuen Kunden hinzufügen\n\nDiese Funktion wird in der nächsten Phase implementiert.');
+        }
     }
 
     async loadCustomersList(studioId) {
@@ -6323,7 +6396,7 @@ class App {
                         ${customers.map(customer => `
                             <a href="#" class="list-group-item list-group-item-action customer-item" data-customer-id="${customer.id}">
                                 <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">${customer.first_name} ${customer.last_name}</h6>
+                                    <h6 class="mb-1">${customer.contact_first_name || customer.first_name} ${customer.contact_last_name || customer.last_name}</h6>
                                     <small>${new Date(customer.created_at).toLocaleDateString('de-DE')}</small>
                                 </div>
                                 <p class="mb-1">${customer.email}</p>
@@ -6492,7 +6565,7 @@ class App {
     async loadCustomerSessionBlocks(customerId, customerName) {
         try {
             console.log('Loading session blocks for customer:', customerId);
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions/blocks`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/session-blocks`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -6660,7 +6733,7 @@ class App {
                     <div class="list-group-item list-group-item-action" style="cursor: pointer;" 
                          onclick="window.app.loadCustomerSessionDetails(${customer.customer_id})">
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">${customer.first_name} ${customer.last_name}</h6>
+                            <h6 class="mb-1">${customer.contact_first_name || customer.first_name} ${customer.contact_last_name || customer.last_name}</h6>
                             <span class="badge ${statusClass}">${remainingSessions} / ${totalSessions}</span>
                         </div>
                         <p class="mb-1">${customer.email}</p>
@@ -6709,14 +6782,14 @@ class App {
             const sessions = data.sessions || [];
             
             // Validate customer data
-            if (!customer || !customer.first_name) {
+            if (!customer || (!customer.contact_first_name && !customer.first_name)) {
                 console.error('Invalid customer data:', data);
                 throw new Error('Kundendaten konnten nicht geladen werden');
             }
             
             detailsDiv.innerHTML = `
                 <div class="mb-4">
-                    <h5>${customer.first_name} ${customer.last_name}</h5>
+                    <h5>${customer.contact_first_name || customer.first_name} ${customer.contact_last_name || customer.last_name}</h5>
                     <p class="text-muted">${customer.email}</p>
                 </div>
                 
@@ -6835,15 +6908,15 @@ class App {
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird hinzugefügt...';
             
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/blocks`, {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}/sessions`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    customer_id: customerId,
-                    sessions: amount,
+                    total_sessions: amount,
+                    payment_method: 'cash',
                     notes: notes
                 })
             });
@@ -6985,6 +7058,32 @@ class App {
         // Update month/year display
         monthYearDisplay.innerHTML = `<strong>${monthNames[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}</strong>`;
         
+        // Add or update legend after month/year display
+        let legend = document.getElementById('calendar-legend');
+        if (!legend) {
+            legend = document.createElement('div');
+            legend.id = 'calendar-legend';
+            legend.className = 'text-center mb-2';
+            monthYearDisplay.parentNode.insertBefore(legend, monthYearDisplay.nextSibling);
+        }
+        
+        legend.innerHTML = `
+            <div class="d-flex justify-content-center gap-3 text-small">
+                <span class="d-flex align-items-center">
+                    <span class="badge" style="background-color: #f59e0b; font-size: 10px; margin-right: 4px;">T</span>
+                    Trial Termine
+                </span>
+                <span class="d-flex align-items-center">
+                    <span class="badge" style="background-color: #10b981; font-size: 10px; margin-right: 4px;">K</span>
+                    Kunden Termine
+                </span>
+                <span class="d-flex align-items-center">
+                    <span class="badge" style="background-color: #e879f9; font-size: 10px; margin-right: 4px;">M</span>
+                    Gemischt
+                </span>
+            </div>
+        `;
+        
         // Calculate first day of month and number of days
         const firstDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
         const lastDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
@@ -7106,14 +7205,25 @@ class App {
             const data = await response.json();
             const appointments = data.appointments || [];
             
-            // Group appointments by date
+            // Group appointments by date and type
             const appointmentsByDate = {};
             appointments.forEach(appointment => {
                 const date = appointment.appointment_date;
                 if (!appointmentsByDate[date]) {
-                    appointmentsByDate[date] = [];
+                    appointmentsByDate[date] = {
+                        leads: [],
+                        customers: [],
+                        total: []
+                    };
                 }
-                appointmentsByDate[date].push(appointment);
+                appointmentsByDate[date].total.push(appointment);
+                
+                // Check if appointment is for a lead or customer
+                if (appointment.person_type === 'lead' || appointment.lead_id) {
+                    appointmentsByDate[date].leads.push(appointment);
+                } else {
+                    appointmentsByDate[date].customers.push(appointment);
+                }
             });
             
             // Configuration for density visualization
@@ -7126,16 +7236,22 @@ class App {
             allDaysInMonth.forEach(date => {
                 const dayCell = document.querySelector(`[data-date="${date}"]`);
                 if (dayCell) {
-                    const count = appointmentsByDate[date] ? appointmentsByDate[date].length : 0;
-                    const density = Math.min(count / maxAppointments, 1);
+                    const dayData = appointmentsByDate[date] || { leads: [], customers: [], total: [] };
+                    const leadCount = dayData.leads.length;
+                    const customerCount = dayData.customers.length;
+                    const totalCount = dayData.total.length;
+                    
+                    const density = Math.min(totalCount / maxAppointments, 1);
                     const isToday = date === todayStr;
                     
-                    // Apply density and today styling to the entire cell
-                    this.applyDensityStylesToCell(dayCell, density, isToday);
+                    // Apply density and today styling with lead/customer distinction
+                    this.applyDensityStylesToCell(dayCell, density, isToday, leadCount, customerCount);
                     
-                    // Clear the indicator div since we're styling the whole cell
+                    // Add visual indicators in the day element
                     const dayElement = document.getElementById(`day-${date}`);
-                    if (dayElement) {
+                    if (dayElement && (leadCount > 0 || customerCount > 0)) {
+                        dayElement.innerHTML = this.createAppointmentIndicators(leadCount, customerCount);
+                    } else if (dayElement) {
                         dayElement.innerHTML = '';
                     }
                 }
@@ -7146,11 +7262,26 @@ class App {
         }
     }
 
-    applyDensityStylesToCell(dayCell, density, isToday = false) {
-        const baseColor = '#e879f9'; // Softer primary brand color
+    applyDensityStylesToCell(dayCell, density, isToday = false, leadCount = 0, customerCount = 0) {
+        // Use different colors for leads vs customers
+        const leadColor = '#f59e0b'; // Amber for leads (trial appointments)
+        const customerColor = '#10b981'; // Green for customers (paid sessions)
+        const mixedColor = '#e879f9'; // Purple for mixed days
+        
+        let baseColor;
+        if (leadCount > 0 && customerCount > 0) {
+            baseColor = mixedColor; // Mixed: both leads and customers
+        } else if (leadCount > 0) {
+            baseColor = leadColor; // Only leads
+        } else if (customerCount > 0) {
+            baseColor = customerColor; // Only customers
+        } else {
+            baseColor = '#e879f9'; // Default
+        }
+        
         const fillHeight = Math.round(density * 100); // Percentage fill from bottom
         
-        // Create softer, more transparent gradient background
+        // Create gradient background with chosen color
         const backgroundGradient = `linear-gradient(to top, 
             ${baseColor}${density > 0 ? '40' : '10'} 0%, 
             ${baseColor}${density > 0 ? '40' : '10'} ${fillHeight}%, 
@@ -7160,15 +7291,30 @@ class App {
         // Apply background gradient
         dayCell.style.background = backgroundGradient;
         
-        // Add softer border for today
+        // Add border for today
         if (isToday) {
-            dayCell.style.border = '2px solid rgba(232, 121, 249, 0.6)';
-            dayCell.style.boxShadow = '0 0 8px rgba(232, 121, 249, 0.3)';
+            dayCell.style.border = `2px solid ${baseColor}`;
+            dayCell.style.boxShadow = `0 0 8px ${baseColor}30`;
         } else {
             // Reset border if not today
             dayCell.style.border = '1px solid #dee2e6';
             dayCell.style.boxShadow = 'none';
         }
+    }
+
+    createAppointmentIndicators(leadCount, customerCount) {
+        let indicators = '';
+        
+        // Create small dot indicators
+        if (leadCount > 0) {
+            indicators += `<span class="badge badge-sm" style="background-color: #f59e0b; font-size: 10px; margin-right: 2px;" title="Trial Termine">${leadCount}T</span>`;
+        }
+        
+        if (customerCount > 0) {
+            indicators += `<span class="badge badge-sm" style="background-color: #10b981; font-size: 10px;" title="Kunden Termine">${customerCount}K</span>`;
+        }
+        
+        return indicators;
     }
 
     getAllDaysInCurrentMonth() {
@@ -7705,9 +7851,8 @@ class App {
     // Placeholder methods for missing navigation features
     async showLeadsView() {
         const content = document.getElementById('content');
-        content.innerHTML = `<div id="lead-management-content"></div>`;
         
-        // Initialize LeadManagement component
+        // Initialize Lead Kanban component
         try {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             if (user.role !== 'studio_owner') {
@@ -7735,8 +7880,17 @@ class App {
             }
 
             if (studioId) {
-                window.leadManagement = new LeadManagement();
-                await window.leadManagement.init(studioId);
+                // Use Lead Kanban instead of old Lead Management
+                content.innerHTML = `<div id="lead-kanban-content"></div>`;
+                if (window.leadKanban) {
+                    console.log('Initializing Lead Kanban for studio:', studioId);
+                    await window.leadKanban.init(studioId);
+                } else {
+                    console.error('Lead Kanban not loaded, falling back to Lead Management');
+                    content.innerHTML = `<div id="lead-management-content"></div>`;
+                    window.leadManagement = new LeadManagement();
+                    await window.leadManagement.init(studioId);
+                }
             } else {
                 content.innerHTML = `
                     <div class="alert alert-danger">
@@ -7746,7 +7900,7 @@ class App {
                 `;
             }
         } catch (error) {
-            console.error('Error loading Lead Management:', error);
+            console.error('Error loading Lead Kanban:', error);
             content.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-triangle me-2"></i>

@@ -169,6 +169,11 @@ class ManagerAPI {
         }
     }
 
+    // Alias for triggerManualSync for consistency
+    async syncGoogleSheet(integrationId) {
+        return this.triggerManualSync(integrationId);
+    }
+
     // ============= Lead Management Statistics =============
 
     // Get overall lead statistics across all studios
@@ -221,18 +226,15 @@ class ManagerAPI {
 
     // ============= Studio Management =============
 
-    // Get all studios (for manager oversight)
-    async getAllStudios() {
+    // Get all studios with enhanced filtering (for manager oversight)
+    async getStudios(queryParams = '') {
         try {
-            console.log('Fetching all studios from:', `${this.baseURL}/manager/studios`);
-            console.log('Auth headers:', this.getAuthHeaders());
+            const url = `${this.baseURL}/manager/studios${queryParams ? '?' + queryParams : ''}`;
+            console.log('Fetching studios from:', url);
             
-            const response = await fetch(`${this.baseURL}/manager/studios`, {
+            const response = await fetch(url, {
                 headers: this.getAuthHeaders()
             });
-
-            console.log('Response status:', response.status);
-            console.log('Response headers:', response.headers);
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -245,6 +247,29 @@ class ManagerAPI {
             return result;
         } catch (error) {
             console.error('Error fetching studios:', error);
+            throw error;
+        }
+    }
+
+    // Legacy method for backward compatibility
+    async getAllStudios() {
+        return this.getStudios();
+    }
+
+    // Get specific studio details with integration info
+    async getStudioIntegration(studioId) {
+        try {
+            const response = await fetch(`${this.baseURL}/manager/studios/${studioId}/integration`, {
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch studio integration: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching studio integration:', error);
             throw error;
         }
     }

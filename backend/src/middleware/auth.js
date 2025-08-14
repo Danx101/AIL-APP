@@ -5,12 +5,15 @@ const db = require('../database/database-wrapper');
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log('Auth middleware - authHeader:', authHeader);
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Auth middleware - no valid auth header');
       return res.status(401).json({ message: 'Access token required' });
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    console.log('Auth middleware - token extracted:', token ? 'present' : 'missing');
 
 
     try {

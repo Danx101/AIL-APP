@@ -26,15 +26,38 @@ router.get('/studio/:studioId', async (req, res) => {
     let query = `
       SELECT 
         a.*,
-        u.first_name as customer_first_name,
-        u.last_name as customer_last_name,
-        u.email as customer_email,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_first_name
+          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', 1)
+          ELSE 'Unknown'
+        END as customer_first_name,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_last_name
+          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', -1)
+          ELSE 'Person'
+        END as customer_last_name,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_email
+          WHEN a.person_type = 'lead' THEN l.email
+          ELSE NULL
+        END as customer_email,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_phone
+          WHEN a.person_type = 'lead' THEN l.phone_number
+          ELSE NULL
+        END as customer_phone,
         at.name as appointment_type_name,
         at.duration_minutes,
-        at.color as appointment_type_color
+        at.color as appointment_type_color,
+        at.consumes_session,
+        cs.remaining_sessions,
+        s.machine_count
       FROM appointments a
-      JOIN users u ON a.customer_id = u.id
+      LEFT JOIN customers c ON a.customer_ref_id = c.id AND a.person_type = 'customer'
+      LEFT JOIN leads l ON a.lead_id = l.id AND a.person_type = 'lead'
       LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN customer_sessions cs ON cs.customer_id = c.id AND cs.status = 'active'
+      LEFT JOIN studios s ON a.studio_id = s.id
       WHERE a.studio_id = ?
     `;
     
@@ -68,18 +91,38 @@ router.get('/:appointmentId', async (req, res) => {
     const appointment = await db.get(`
       SELECT 
         a.*,
-        u.first_name as customer_first_name,
-        u.last_name as customer_last_name,
-        u.email as customer_email,
-        u.phone as customer_phone,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_first_name
+          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', 1)
+          ELSE 'Unknown'
+        END as customer_first_name,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_last_name
+          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', -1)
+          ELSE 'Person'
+        END as customer_last_name,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_email
+          WHEN a.person_type = 'lead' THEN l.email
+          ELSE NULL
+        END as customer_email,
+        CASE 
+          WHEN a.person_type = 'customer' THEN c.contact_phone
+          WHEN a.person_type = 'lead' THEN l.phone_number
+          ELSE NULL
+        END as customer_phone,
         at.name as appointment_type_name,
         at.duration_minutes,
         at.color as appointment_type_color,
-        s.name as studio_name
+        at.consumes_session,
+        s.name as studio_name,
+        cs.remaining_sessions
       FROM appointments a
-      JOIN users u ON a.customer_id = u.id
+      LEFT JOIN customers c ON a.customer_ref_id = c.id AND a.person_type = 'customer'
+      LEFT JOIN leads l ON a.lead_id = l.id AND a.person_type = 'lead'
       LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
       LEFT JOIN studios s ON a.studio_id = s.id
+      LEFT JOIN customer_sessions cs ON cs.customer_id = c.id AND cs.status = 'active'
       WHERE a.id = ?
     `, [appointmentId]);
     
@@ -124,6 +167,40 @@ router.get('/studio/:studioId/appointment-types', async (req, res) => {
   }
 });
 
+// Get appointments for a specific customer
+router.get('/customer/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    
+    const appointments = await db.all(`
+      SELECT 
+        a.*,
+        at.name as appointment_type_name,
+        at.duration_minutes,
+        at.color as appointment_type_color,
+        at.consumes_session,
+        s.name as studio_name
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN studios s ON a.studio_id = s.id
+      WHERE a.customer_ref_id = ? AND a.person_type = 'customer'
+      ORDER BY a.appointment_date DESC, a.start_time DESC
+    `, [customerId]);
+    
+    res.json({ 
+      appointments: appointments.map(apt => ({
+        ...apt,
+        customer_name: 'Customer', // Will be filled by frontend
+        duration: apt.duration_minutes,
+        appointment_time: `${apt.start_time?.substring(0,5)} - ${apt.end_time?.substring(0,5)}` // Format: "10:00 - 11:00"
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching customer appointments:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get('/stats', (req, res) => {
   res.json({ 
     message: 'Appointment stats temporarily disabled',
@@ -141,18 +218,39 @@ router.post('/', async (req, res) => {
   try {
     const {
       studio_id,
-      customer_id,
+      customer_id,      // For backward compatibility
+      customer_ref_id,  // New field for customers table
+      lead_id,
+      person_type,
       appointment_type_id,
       appointment_date,
       start_time,
       end_time
     } = req.body;
 
+    // Determine person type and validate
+    let actualPersonType = person_type;
+    let actualCustomerId = customer_ref_id || customer_id; // Support both for migration
+    let actualLeadId = lead_id;
+
+    if (!actualPersonType) {
+      // Auto-detect person type if not provided
+      actualPersonType = actualLeadId ? 'lead' : 'customer';
+    }
+
     // Basic validation
-    if (!studio_id || !customer_id || !appointment_type_id || !appointment_date || !start_time) {
+    if (!studio_id || !appointment_type_id || !appointment_date || !start_time) {
       return res.status(400).json({ 
-        message: 'Missing required fields: studio_id, customer_id, appointment_type_id, appointment_date, start_time' 
+        message: 'Missing required fields: studio_id, appointment_type_id, appointment_date, start_time' 
       });
+    }
+
+    if (actualPersonType === 'customer' && !actualCustomerId) {
+      return res.status(400).json({ message: 'customer_ref_id is required for customer appointments' });
+    }
+
+    if (actualPersonType === 'lead' && !actualLeadId) {
+      return res.status(400).json({ message: 'lead_id is required for lead appointments' });
     }
 
     // Calculate end time if not provided
@@ -177,20 +275,41 @@ router.post('/', async (req, res) => {
       calculatedEndTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}:00`;
     }
 
-    // Insert the appointment
+    // Get active session block for customer appointments that consume sessions
+    let sessionBlockId = null;
+    if (actualPersonType === 'customer') {
+      const appointmentType = await db.get(
+        'SELECT consumes_session FROM appointment_types WHERE id = ?',
+        [appointment_type_id]
+      );
+      
+      if (appointmentType && appointmentType.consumes_session) {
+        const activeBlock = await db.get(
+          'SELECT id FROM customer_sessions WHERE customer_id = ? AND status = "active" AND remaining_sessions > 0 LIMIT 1',
+          [actualCustomerId]
+        );
+        sessionBlockId = activeBlock ? activeBlock.id : null;
+      }
+    }
+
+    // Insert the appointment (include customer_id for backward compatibility)
     const result = await db.run(
       `INSERT INTO appointments (
-        studio_id, customer_id, appointment_type_id, 
-        appointment_date, start_time, end_time, 
+        studio_id, customer_id, customer_ref_id, lead_id, person_type, appointment_type_id, 
+        appointment_date, start_time, end_time, session_block_id,
         status, created_by_user_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
         studio_id,
-        customer_id,
+        req.user.userId,  // Use current user ID for the legacy customer_id field
+        actualPersonType === 'customer' ? actualCustomerId : null,
+        actualPersonType === 'lead' ? actualLeadId : null,
+        actualPersonType,
         appointment_type_id,
         appointment_date,
         start_time,
         calculatedEndTime,
+        sessionBlockId,
         req.user.userId
       ]
     );

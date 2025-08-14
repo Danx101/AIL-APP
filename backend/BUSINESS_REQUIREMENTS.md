@@ -65,9 +65,7 @@ Customers purchase session blocks (packages) containing multiple treatments, whi
 - **Session Cost**: FREE - no session consumption
 - **Booking**: 1 per customer per studio (lifetime limit)
 - **Purpose**: Trial treatment for new customers
-- **UI Display**: 
-  - Available: "Probebehandlung (1)"
-  - Used: "Probebehandlung (0)" with message "Probebehandlung bereits verwendet"
+
 
 ### **Appointment Status Workflow**
 

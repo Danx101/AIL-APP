@@ -4,7 +4,7 @@ const { body, param, query } = require('express-validator');
 const validateRegister = [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
     .withMessage('Please provide a valid email address'),
   
   body('password')
@@ -51,7 +51,7 @@ const validateRegister = [
 const validateLogin = [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
     .withMessage('Please provide a valid email address'),
   
   body('password')
@@ -105,7 +105,7 @@ const validateStudioCreate = [
   body('email')
     .optional()
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
     .withMessage('Please provide a valid email address'),
   
   body('businessHours')
@@ -337,7 +337,7 @@ const validateLeadCreate = [
   body('email')
     .optional({ nullable: true, checkFalsy: true })
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
     .withMessage('Please provide a valid email address'),
   
   body('source')
@@ -373,7 +373,7 @@ const validateLeadUpdate = [
   body('email')
     .optional({ nullable: true, checkFalsy: true })
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
     .withMessage('Please provide a valid email address'),
   
   body('source')
@@ -483,6 +483,87 @@ const validateIntegrationId = [
     .withMessage('Integration ID must be a positive integer')
 ];
 
+// Customer registration with code validation
+const validateCustomerRegistration = [
+  body('registrationCode')
+    .trim()
+    .notEmpty()
+    .withMessage('Registration code is required')
+    .matches(/^[A-Z]{3}-\d+$/)
+    .withMessage('Invalid registration code format'),
+  
+  body('email')
+    .isEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
+    .withMessage('Please provide a valid email address'),
+  
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
+  
+  body('sendVerificationEmail')
+    .optional()
+    .isBoolean()
+    .withMessage('Send verification email must be a boolean')
+];
+
+// Studio registration validation
+const validateStudioRegistration = [
+  body('email')
+    .isEmail()
+    .normalizeEmail({ gmail_remove_dots: false })
+    .withMessage('Please provide a valid email address'),
+  
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
+  
+  body('firstName')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('First name must be between 2 and 50 characters'),
+  
+  body('lastName')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Last name must be between 2 and 50 characters'),
+  
+  body('phone')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value.trim() === '') return true;
+      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
+    })
+    .withMessage('Please provide a valid phone number'),
+  
+  body('studioName')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Studio name must be between 2 and 100 characters'),
+  
+  body('studioAddress')
+    .trim()
+    .isLength({ min: 5, max: 200 })
+    .withMessage('Studio address must be between 5 and 200 characters'),
+  
+  body('studioCity')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Studio city must be between 2 and 50 characters'),
+  
+  body('studioPhone')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value.trim() === '') return true;
+      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
+    })
+    .withMessage('Please provide a valid studio phone number')
+];
+
 module.exports = {
   validateRegister,
   validateLogin,
@@ -508,5 +589,7 @@ module.exports = {
   validateGoogleSheetsImport,
   validateGoogleSheetsConnect,
   validateGoogleSheetsPreview,
-  validateIntegrationId
+  validateIntegrationId,
+  validateCustomerRegistration,
+  validateStudioRegistration
 };

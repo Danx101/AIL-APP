@@ -162,17 +162,22 @@ class StudioController {
    */
   async getMyStudio(req, res) {
     try {
-      // Get all studios owned by the user
-      const studios = await new Promise((resolve, reject) => {
-        db.all(
-          'SELECT * FROM studios WHERE owner_id = ? AND is_active = 1',
-          [req.user.userId],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
-          }
-        );
-      });
+      console.log('getMyStudio called for user:', req.user);
+      
+      // First check if ANY studios exist for this user (active or not)
+      const allStudios = await db.all(
+        'SELECT id, name, is_active, owner_id FROM studios WHERE owner_id = ?',
+        [req.user.userId]
+      );
+      console.log('All studios for user (active or not):', allStudios);
+      
+      // Get all active studios owned by the user
+      const studios = await db.all(
+        'SELECT * FROM studios WHERE owner_id = ? AND is_active = 1',
+        [req.user.userId]
+      );
+
+      console.log('Active studios found:', studios);
 
       if (!studios || studios.length === 0) {
         return res.status(404).json({ message: 'No studio found for this user' });
@@ -464,7 +469,7 @@ class StudioController {
         
         db.get(
           `SELECT 
-             COUNT(DISTINCT CASE WHEN cs.remaining_sessions > 0 AND cs.is_active = 1 THEN u.id END) as active_customers,
+             COUNT(DISTINCT CASE WHEN cs.remaining_sessions > 0 AND cs.status = 'active' THEN u.id END) as active_customers,
              COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('confirmed', 'pending', 'bestätigt') THEN a.id END) as today_remaining_appointments,
              COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('completed', 'abgeschlossen') THEN a.id END) as today_completed_appointments,
              COUNT(DISTINCT a.id) as total_appointments_this_week

@@ -37,19 +37,36 @@ const db = {
     }
     
     const promise = (async () => {
-      const connection = await this.getPoolConnection();
+      let connection = null;
+      let retries = 3;
       
-      try {
-        const [rows] = await connection.execute(query, params);
-        return rows[0] || null;
-      } catch (error) {
-        console.error('MySQL get error:', error);
-        console.error('Query:', query);
-        console.error('Params:', params);
-        throw error;
-      } finally {
-        // Always release the connection back to the pool
-        connection.release();
+      while (retries > 0) {
+        try {
+          connection = await this.getPoolConnection();
+          const [rows] = await connection.execute(query, params);
+          return rows[0] || null;
+        } catch (error) {
+          console.error('MySQL get error:', error.code || error.message);
+          
+          // Handle connection timeouts and connection errors
+          if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET' || 
+              error.code === 'PROTOCOL_CONNECTION_LOST') {
+            retries--;
+            if (retries > 0) {
+              console.log(`Retrying query... ${retries} attempts left`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+              continue;
+            }
+          }
+          
+          console.error('Query:', query);
+          console.error('Params:', params);
+          throw error;
+        } finally {
+          if (connection) {
+            connection.release();
+          }
+        }
       }
     })();
     
@@ -69,19 +86,36 @@ const db = {
     }
     
     const promise = (async () => {
-      const connection = await this.getPoolConnection();
+      let connection = null;
+      let retries = 3;
       
-      try {
-        const [rows] = await connection.execute(query, params);
-        return rows;
-      } catch (error) {
-        console.error('MySQL all error:', error);
-        console.error('Query:', query);
-        console.error('Params:', params);
-        throw error;
-      } finally {
-        // Always release the connection back to the pool
-        connection.release();
+      while (retries > 0) {
+        try {
+          connection = await this.getPoolConnection();
+          const [rows] = await connection.execute(query, params);
+          return rows;
+        } catch (error) {
+          console.error('MySQL all error:', error.code || error.message);
+          
+          // Handle connection timeouts and connection errors
+          if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET' || 
+              error.code === 'PROTOCOL_CONNECTION_LOST') {
+            retries--;
+            if (retries > 0) {
+              console.log(`Retrying query... ${retries} attempts left`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+              continue;
+            }
+          }
+          
+          console.error('Query:', query);
+          console.error('Params:', params);
+          throw error;
+        } finally {
+          if (connection) {
+            connection.release();
+          }
+        }
       }
     })();
     
@@ -101,20 +135,40 @@ const db = {
     }
     
     const promise = (async () => {
-      const connection = await this.getPoolConnection();
+      let connection = null;
+      let retries = 3;
       
-      try {
-        const [result] = await connection.execute(query, params);
-        return {
-          lastID: result.insertId,
-          changes: result.affectedRows
-        };
-      } catch (error) {
-        console.error('MySQL run error:', error);
-        throw error;
-      } finally {
-        // Always release the connection back to the pool
-        connection.release();
+      while (retries > 0) {
+        try {
+          connection = await this.getPoolConnection();
+          const [result] = await connection.execute(query, params);
+          return {
+            lastID: result.insertId,
+            changes: result.affectedRows,
+            insertId: result.insertId // Add both for compatibility
+          };
+        } catch (error) {
+          console.error('MySQL run error:', error.code || error.message);
+          
+          // Handle connection timeouts and connection errors
+          if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET' || 
+              error.code === 'PROTOCOL_CONNECTION_LOST') {
+            retries--;
+            if (retries > 0) {
+              console.log(`Retrying query... ${retries} attempts left`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+              continue;
+            }
+          }
+          
+          console.error('Query:', query);
+          console.error('Params:', params);
+          throw error;
+        } finally {
+          if (connection) {
+            connection.release();
+          }
+        }
       }
     })();
     
@@ -126,6 +180,27 @@ const db = {
     return promise;
   },
   
+  // Transaction support for MySQL
+  async beginTransaction() {
+    const connection = await this.getPoolConnection();
+    await connection.query('START TRANSACTION');
+    return connection;
+  },
+
+  async commit(connection) {
+    if (connection) {
+      await connection.query('COMMIT');
+      connection.release();
+    }
+  },
+
+  async rollback(connection) {
+    if (connection) {
+      await connection.query('ROLLBACK');
+      connection.release();
+    }
+  },
+
   // Close connection pool
   async close() {
     if (this.pool) {

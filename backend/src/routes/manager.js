@@ -26,27 +26,39 @@ const validatePagination = [
 router.use(authenticate);
 router.use(authorize(['manager']));
 
-// Studio owner code management
-router.post('/studio-owner-codes', 
-  validateStudioOwnerCodeGeneration,
-  managerController.generateStudioOwnerCodes
-);
+// OBSOLETE: Studio owner code management - No longer used
+// Managers don't issue codes for studio registration anymore
+// Keeping endpoints commented for reference only
+// router.post('/studio-owner-codes', 
+//   validateStudioOwnerCodeGeneration,
+//   managerController.generateStudioOwnerCodes
+// );
 
-router.get('/studio-owner-codes', 
-  validatePagination,
-  managerController.getStudioOwnerCodes
-);
+// router.get('/studio-owner-codes', 
+//   validatePagination,
+//   managerController.getStudioOwnerCodes
+// );
 
 // Manager statistics and overview
 router.get('/stats', 
   managerController.getStatistics
 );
 
+// Enhanced studios endpoint with search and Google Sheets integration status
 router.get('/studios', 
+  query('search').optional().isString(),
+  query('address').optional().isString(),
   query('city').optional().isString(),
+  query('hasSheet').optional().isIn(['true', 'false']),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   managerController.getStudiosOverview
+);
+
+// Get studio-specific Google Sheets integration details
+router.get('/studios/:studioId/integration',
+  param('studioId').isInt(),
+  managerController.getStudioIntegration
 );
 
 router.get('/cities', 

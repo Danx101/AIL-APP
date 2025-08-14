@@ -12,6 +12,7 @@ const db = require('./src/database/database-wrapper');
 
 // Initialize services
 const schedulerService = require('./src/services/schedulerService');
+const emailService = require('./src/services/emailService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -70,6 +71,12 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path} - Headers:`, req.headers.authorization ? 'Auth present' : 'No auth');
+  next();
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -99,6 +106,10 @@ app.use('/api/v1/db', dbTestRoutes);
 // Authentication routes
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
+
+// Customer routes with mandatory session packages (must be before studio routes to avoid conflicts)
+const customerRoutes = require('./src/routes/customers');
+app.use('/api/v1', customerRoutes);
 
 // Studio routes
 const studioRoutes = require('./src/routes/studios');
@@ -147,6 +158,16 @@ app.use('/api/v1', sessionRoutes);
 const leadRoutes = require('./src/routes/leadsSimple');
 app.use('/api/v1/leads', leadRoutes);
 
+// Lead Kanban routes
+const leadKanbanRoutes = require('./src/routes/leadKanban');
+app.use('/api/v1', leadKanbanRoutes);
+
+// (Customer routes moved earlier to avoid routing conflicts)
+
+// Unified search routes
+const searchRoutes = require('./src/routes/search');
+app.use('/api/v1/search', searchRoutes);
+
 // Twilio webhook routes
 const twilioRoutes = require('./src/routes/twilio');
 app.use('/api/v1/twilio', twilioRoutes);
@@ -191,6 +212,13 @@ app.listen(PORT, async () => {
     await schedulerService.initialize();
   } catch (error) {
     console.error('Failed to initialize scheduler service:', error);
+  }
+  
+  // Initialize email service
+  try {
+    await emailService.initialize();
+  } catch (error) {
+    console.error('Failed to initialize email service:', error);
   }
 });
 

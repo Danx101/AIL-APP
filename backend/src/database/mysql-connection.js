@@ -41,8 +41,13 @@ const dbConfig = {
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
-  // Connection timeout settings
-  connectTimeout: 60000  // 60 seconds
+  // Connection timeout settings - more aggressive timeouts for better error handling
+  connectTimeout: 30000,  // 30 seconds
+  acquireTimeout: 30000,  // 30 seconds
+  timeout: 30000,         // 30 seconds
+  // Additional MySQL specific settings
+  reconnect: true,
+  multipleStatements: false
 };
 
 console.log('MySQL Config:', {

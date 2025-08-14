@@ -4,7 +4,7 @@ class ManagerDashboard {
         this.integrations = [];
         this.stats = {};
         this.studios = [];
-        this.activeTab = 'overview';
+        this.activeTab = 'studios'; // Studios is now the default tab
         this.loadingStates = {
             integrations: false,
             stats: false,
@@ -123,27 +123,13 @@ class ManagerDashboard {
                             <img src="/assets/images/LOgo AIL.png" alt="AIL Logo" class="logo-img me-2" style="width: 40px; height: 40px;">
                             <div class="sidebar-brand">
                                 <h5 class="mb-0 text-primary fw-bold">Manager Portal</h5>
-                                <small class="text-muted">Google Sheets Integration</small>
+                                <small class="text-muted">Studio Management</small>
                             </div>
                         </div>
                     </div>
                     
                     <nav class="sidebar-nav flex-grow-1 p-2">
                         <ul class="nav nav-pills flex-column">
-                            <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'overview' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('overview')">
-                                    <i class="bi bi-grid-3x3-gap me-2"></i>
-                                    Overview
-                                </a>
-                            </li>
-                            <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'integrations' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('integrations')">
-                                    <i class="bi bi-table me-2"></i>
-                                    Google Sheets
-                                </a>
-                            </li>
                             <li class="nav-item mb-1">
                                 <a class="nav-link ${this.activeTab === 'studios' ? 'active' : ''}" 
                                    href="#" onclick="managerDashboard.switchTab('studios')">
@@ -152,24 +138,17 @@ class ManagerDashboard {
                                 </a>
                             </li>
                             <li class="nav-item mb-1">
+                                <a class="nav-link ${this.activeTab === 'overview' ? 'active' : ''}" 
+                                   href="#" onclick="managerDashboard.switchTab('overview')">
+                                    <i class="bi bi-grid-3x3-gap me-2"></i>
+                                    Overview
+                                </a>
+                            </li>
+                            <li class="nav-item mb-1">
                                 <a class="nav-link ${this.activeTab === 'leads' ? 'active' : ''}" 
                                    href="#" onclick="managerDashboard.switchTab('leads')">
                                     <i class="bi bi-people me-2"></i>
-                                    Leads
-                                </a>
-                            </li>
-                            <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'codes' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('codes')">
-                                    <i class="bi bi-key me-2"></i>
-                                    Studio Codes
-                                </a>
-                            </li>
-                            <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'wizard' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('wizard')">
-                                    <i class="bi bi-plus-circle me-2"></i>
-                                    Connect New Sheet
+                                    Lead Analytics
                                 </a>
                             </li>
                         </ul>
@@ -234,12 +213,6 @@ class ManagerDashboard {
                 break;
             case 'leads':
                 this.renderLeads();
-                break;
-            case 'codes':
-                this.renderCodes();
-                break;
-            case 'wizard':
-                this.renderConnectionWizard();
                 break;
             default:
                 this.renderOverview();
@@ -421,7 +394,7 @@ class ManagerDashboard {
         `;
     }
 
-    // Render studios tab
+    // Render enhanced studios tab with search and filters
     renderStudios() {
         const contentContainer = document.getElementById('dashboard-content');
         contentContainer.innerHTML = `
@@ -429,20 +402,72 @@ class ManagerDashboard {
                 <div class="col">
                     <h2 class="h3 mb-0">
                         <i class="bi bi-building text-primary me-2"></i>
-                        Studios
+                        Studio Management
                     </h2>
-                    <p class="text-muted mb-0">Overview of all studios in the system</p>
+                    <p class="text-muted mb-0">Manage studios and their Google Sheets integrations</p>
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm">
+            <!-- Search and Filter Bar -->
+            <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body">
-                    <div id="studios-table">
-                        ${this.renderStudiosTable()}
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Search</label>
+                            <input 
+                                type="text" 
+                                id="studio-search" 
+                                class="form-control" 
+                                placeholder="Search by name, owner, or address..."
+                                onkeyup="managerDashboard.debounceSearch()"
+                            />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Address</label>
+                            <input 
+                                type="text" 
+                                id="address-search" 
+                                class="form-control" 
+                                placeholder="Filter by address..."
+                                onkeyup="managerDashboard.debounceSearch()"
+                            />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted">City</label>
+                            <select id="city-filter" class="form-select" onchange="managerDashboard.applyFilters()">
+                                <option value="">All Cities</option>
+                                ${this.getUniqueCities().map(city => 
+                                    `<option value="${city}">${city}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted">Google Sheets</label>
+                            <select id="sheet-filter" class="form-select" onchange="managerDashboard.applyFilters()">
+                                <option value="">All Studios</option>
+                                <option value="true">Connected</option>
+                                <option value="false">Not Connected</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted">&nbsp;</label>
+                            <button onclick="managerDashboard.applyFilters()" class="btn btn-primary w-100">
+                                <i class="bi bi-search me-2"></i>
+                                Search
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Studios List -->
+            <div id="studios-container">
+                ${this.renderStudiosList()}
+            </div>
         `;
+        
+        // Set up debounce for search
+        this.searchTimeout = null;
     }
 
     // Render codes tab
@@ -1176,6 +1201,255 @@ class ManagerDashboard {
         container.style.zIndex = '1100';
         document.body.appendChild(container);
         return container;
+    }
+
+    // New methods for enhanced studios functionality
+
+    // Get unique cities from studios list
+    getUniqueCities() {
+        const cities = [...new Set(this.studios.map(s => s.city).filter(Boolean))];
+        return cities.sort();
+    }
+
+    // Debounce search input
+    debounceSearch() {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+            this.applyFilters();
+        }, 500);
+    }
+
+    // Apply filters and reload studios
+    async applyFilters() {
+        const search = document.getElementById('studio-search')?.value || '';
+        const address = document.getElementById('address-search')?.value || '';
+        const city = document.getElementById('city-filter')?.value || '';
+        const hasSheet = document.getElementById('sheet-filter')?.value || '';
+
+        try {
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (address) params.append('address', address);
+            if (city) params.append('city', city);
+            if (hasSheet) params.append('hasSheet', hasSheet);
+
+            const response = await window.managerAPI.getStudios(params.toString());
+            this.studios = response.studios || [];
+            
+            // Update the studios container
+            const container = document.getElementById('studios-container');
+            if (container) {
+                container.innerHTML = this.renderStudiosList();
+            }
+        } catch (error) {
+            console.error('Error applying filters:', error);
+            this.showError('Failed to filter studios');
+        }
+    }
+
+    // Render studios list with cards
+    renderStudiosList() {
+        if (this.loadingStates.studios) {
+            return '<div class="text-center py-4"><div class="spinner-border" role="status"></div></div>';
+        }
+
+        if (this.studios.length === 0) {
+            return `
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-building display-4 text-muted mb-3"></i>
+                        <h4 class="text-muted">No Studios Found</h4>
+                        <p class="text-muted">No studios match your search criteria.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="row g-3">
+                ${this.studios.map(studio => this.renderStudioCard(studio)).join('')}
+            </div>
+        `;
+    }
+
+    // Render individual studio card
+    renderStudioCard(studio) {
+        const hasSheet = studio.has_google_sheet || studio.google_sheets_integration?.connected;
+        const sheetBadge = hasSheet 
+            ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Google Sheets Connected</span>'
+            : '<span class="badge bg-warning"><i class="bi bi-exclamation-circle me-1"></i>No Sheet Connected</span>';
+
+        const leadCount = studio.total_leads || 0;
+        const importedLeads = studio.google_sheets_integration?.total_leads_imported || studio.imported_leads || 0;
+
+        return `
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h5 class="card-title mb-1">
+                                    <i class="bi bi-building text-primary me-2"></i>
+                                    ${studio.name}
+                                </h5>
+                                <p class="text-muted small mb-0">
+                                    Owner: ${studio.owner_first_name || ''} ${studio.owner_last_name || ''}
+                                </p>
+                            </div>
+                            <div>
+                                ${sheetBadge}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <p class="mb-1">
+                                <i class="bi bi-geo-alt text-muted me-2"></i>
+                                <strong>Address:</strong> ${studio.address || 'Not specified'}
+                            </p>
+                            <p class="mb-1">
+                                <i class="bi bi-pin-map text-muted me-2"></i>
+                                <strong>City:</strong> ${studio.city}
+                            </p>
+                            <p class="mb-1">
+                                <i class="bi bi-telephone text-muted me-2"></i>
+                                <strong>Phone:</strong> ${studio.phone || 'Not specified'}
+                            </p>
+                        </div>
+
+                        ${hasSheet ? `
+                            <div class="bg-light rounded p-2 mb-3">
+                                <div class="row g-2 text-center">
+                                    <div class="col-6">
+                                        <div class="fw-bold text-primary">${leadCount}</div>
+                                        <div class="text-muted small">Total Leads</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="fw-bold text-success">${importedLeads}</div>
+                                        <div class="text-muted small">From Sheets</div>
+                                    </div>
+                                </div>
+                                ${studio.google_sheets_integration?.last_sync ? `
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">
+                                            Last sync: ${new Date(studio.google_sheets_integration.last_sync).toLocaleString()}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : `
+                            <div class="alert alert-warning mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No Google Sheet connected to this studio
+                            </div>
+                        `}
+
+                        <div class="d-flex gap-2">
+                            ${hasSheet ? `
+                                <button onclick="managerDashboard.manageIntegration(${studio.id})" 
+                                        class="btn btn-sm btn-outline-primary flex-fill">
+                                    <i class="bi bi-gear me-1"></i>
+                                    Manage Integration
+                                </button>
+                                <button onclick="managerDashboard.syncNow(${studio.id})" 
+                                        class="btn btn-sm btn-outline-success flex-fill">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>
+                                    Sync Now
+                                </button>
+                            ` : `
+                                <button onclick="managerDashboard.connectSheet(${studio.id})" 
+                                        class="btn btn-sm btn-primary flex-fill">
+                                    <i class="bi bi-link-45deg me-1"></i>
+                                    Connect Google Sheet
+                                </button>
+                            `}
+                            <button onclick="managerDashboard.viewStudioDetails(${studio.id})" 
+                                    class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye me-1"></i>
+                                Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Connect Google Sheet to a studio
+    async connectSheet(studioId) {
+        const studio = this.studios.find(s => s.id === studioId);
+        if (!studio) return;
+
+        // Store selected studio for the wizard
+        localStorage.setItem('selectedStudioForSheet', JSON.stringify({
+            id: studio.id,
+            name: studio.name
+        }));
+
+        // Switch to wizard tab
+        this.switchTab('wizard');
+    }
+
+    // Manage existing integration
+    async manageIntegration(studioId) {
+        try {
+            const response = await window.managerAPI.getStudioIntegration(studioId);
+            // TODO: Show integration management modal
+            console.log('Integration details:', response);
+            this.showSuccess('Integration management coming soon');
+        } catch (error) {
+            console.error('Error loading integration:', error);
+            this.showError('Failed to load integration details');
+        }
+    }
+
+    // Trigger manual sync for a studio
+    async syncNow(studioId) {
+        try {
+            const studio = this.studios.find(s => s.id === studioId);
+            if (!studio || !studio.google_sheets_integration) {
+                this.showError('No Google Sheet connected to this studio');
+                return;
+            }
+
+            this.showInfo('Starting sync...');
+            
+            // Find the integration ID for this studio
+            const integrations = await window.managerAPI.getGoogleSheetsIntegrations();
+            const integration = integrations.integrations.find(i => i.studio_id === studioId);
+            
+            if (!integration) {
+                this.showError('Integration not found');
+                return;
+            }
+
+            await window.managerAPI.syncGoogleSheet(integration.id);
+            this.showSuccess('Sync completed successfully');
+            
+            // Reload studios to show updated data
+            await this.loadStudios();
+            this.renderStudios();
+        } catch (error) {
+            console.error('Error syncing:', error);
+            this.showError('Failed to sync Google Sheet');
+        }
+    }
+
+    // View detailed studio information
+    async viewStudioDetails(studioId) {
+        try {
+            const response = await window.managerAPI.getStudioIntegration(studioId);
+            // TODO: Show detailed studio modal
+            console.log('Studio details:', response);
+            this.showInfo('Detailed view coming soon');
+        } catch (error) {
+            console.error('Error loading studio details:', error);
+            this.showError('Failed to load studio details');
+        }
+    }
+
+    // Show info toast
+    showInfo(message) {
+        this.showToast(message, 'info');
     }
 }
 

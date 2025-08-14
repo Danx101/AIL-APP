@@ -41,6 +41,29 @@ class AuthService {
     }
   }
 
+  // Register studio with email verification
+  async registerStudio(studioData) {
+    try {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/register-studio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(studioData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Studio registration failed');
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Login user
   async login(email, password) {
     try {

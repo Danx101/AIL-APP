@@ -161,10 +161,12 @@ class LeadManagement {
                             <div class="col-lg-2">
                                 <label for="filter-status" class="form-label fw-bold">Status</label>
                                 <select class="form-select" id="filter-status">
-                                    <option value="">Alle Status</option>
-                                    <option value="neu" ${this.filters.status === 'neu' ? 'selected' : ''}>Neu</option>
-                                    <option value="kontaktiert" ${this.filters.status === 'kontaktiert' ? 'selected' : ''}>Kontaktiert</option>
-                                    <option value="konvertiert" ${this.filters.status === 'konvertiert' ? 'selected' : ''}>Konvertiert</option>
+                                    <option value="">All Status</option>
+                                    <option value="new" ${this.filters.status === 'new' ? 'selected' : ''}>New</option>
+                                    <option value="working" ${this.filters.status === 'working' ? 'selected' : ''}>Working</option>
+                                    <option value="qualified" ${this.filters.status === 'qualified' ? 'selected' : ''}>Qualified</option>
+                                    <option value="trial_scheduled" ${this.filters.status === 'trial_scheduled' ? 'selected' : ''}>Trial Scheduled</option>
+                                    <option value="converted" ${this.filters.status === 'converted' ? 'selected' : ''}>Converted</option>
                                 </select>
                             </div>
                             <div class="col-lg-2">
@@ -522,9 +524,11 @@ class LeadManagement {
                                 <div class="mb-3">
                                     <label for="lead-status" class="form-label">Status</label>
                                     <select class="form-select" id="lead-status">
-                                        <option value="neu" selected>Neu</option>
-                                        <option value="kontaktiert">Kontaktiert</option>
-                                        <option value="konvertiert">Konvertiert</option>
+                                        <option value="new" selected>New</option>
+                                        <option value="working">Working</option>
+                                        <option value="qualified">Qualified</option>
+                                        <option value="trial_scheduled">Trial Scheduled</option>
+                                        <option value="converted">Converted</option>
                                     </select>
                                 </div>
                                 

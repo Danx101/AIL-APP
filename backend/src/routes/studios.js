@@ -38,6 +38,10 @@ router.post('/',
 );
 
 router.get('/my-studio', 
+  (req, res, next) => {
+    console.log('my-studio route hit, headers:', req.headers.authorization);
+    next();
+  },
   authenticate, 
   authorize(['studio_owner']), 
   studioController.getMyStudio
