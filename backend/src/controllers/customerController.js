@@ -313,10 +313,9 @@ class CustomerController {
 
       let query = `
         SELECT c.*, 
-          (SELECT remaining_sessions 
+          (SELECT SUM(remaining_sessions) 
            FROM customer_sessions cs 
-           WHERE cs.customer_id = c.id AND cs.status = 'active'
-           LIMIT 1) as remaining_sessions,
+           WHERE cs.customer_id = c.id AND cs.status IN ('active', 'pending')) as remaining_sessions,
           (SELECT SUM(total_sessions) 
            FROM customer_sessions cs 
            WHERE cs.customer_id = c.id) as total_sessions_purchased

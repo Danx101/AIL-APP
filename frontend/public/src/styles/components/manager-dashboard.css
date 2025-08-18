@@ -52,8 +52,8 @@
 }
 
 .manager-dashboard .nav-link:hover {
-    background: rgba(232, 121, 249, 0.1);
-    border-color: rgba(232, 121, 249, 0.2);
+    background: rgba(184, 168, 216, 0.1);
+    border-color: rgba(184, 168, 216, 0.2);
     color: var(--primary);
     transform: translateX(4px);
 }
@@ -117,7 +117,7 @@
 
 .manager-dashboard .table th {
     border-top: none;
-    border-bottom: 2px solid rgba(232, 121, 249, 0.2);
+    border-bottom: 2px solid rgba(184, 168, 216, 0.2);
     background: rgba(255, 255, 255, 0.1);
     font-weight: 600;
     color: var(--primary-dark);
@@ -129,7 +129,7 @@
 }
 
 .manager-dashboard .table tbody tr:hover {
-    background: rgba(232, 121, 249, 0.05);
+    background: rgba(184, 168, 216, 0.05);
 }
 
 /* Button styles */
@@ -297,7 +297,7 @@
 /* Accessibility improvements */
 .manager-dashboard .btn:focus,
 .manager-dashboard .nav-link:focus {
-    box-shadow: 0 0 0 0.2rem rgba(232, 121, 249, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(184, 168, 216, 0.25);
 }
 
 /* Print styles */

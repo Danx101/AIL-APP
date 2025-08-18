@@ -4,6 +4,7 @@ const LeadCallLog = require('../models/LeadCallLog');
 const Studio = require('../models/Studio');
 const twilioService = require('../services/twilioService');
 const googleSheetsService = require('../services/googleSheetsService');
+const LeadActivityLogger = require('../utils/LeadActivityLogger');
 
 // TODO: Dialogflow integration temporarily disabled
 // Uncomment when Dialogflow is properly configured
@@ -134,7 +135,7 @@ class LeadController {
         created_by_user_id: req.user.userId
       });
 
-      const leadId = await lead.save();
+      const leadId = await lead.save(req.user.userId);
       const createdLead = await Lead.findById(leadId);
 
       // Trigger Google Sheets sync for this studio if enabled
@@ -202,7 +203,7 @@ class LeadController {
         conversion_status: conversion_status || existingLead.conversion_status
       });
 
-      await existingLead.save();
+      await existingLead.save(req.user.userId);
       const updatedLead = await Lead.findById(id);
 
       // Trigger Google Sheets sync for this studio if enabled
@@ -293,7 +294,7 @@ class LeadController {
         });
       }
 
-      await lead.updateStatus(status, notes);
+      await lead.updateStatus(status, notes, req.user.userId);
       const updatedLead = await Lead.findById(id);
 
       res.json({
@@ -371,6 +372,8 @@ class LeadController {
           createdCallLog.call_status = 'initiated';
           createdCallLog.started_at = new Date().toISOString();
           await createdCallLog.save();
+
+          // No call activity logging as requested
 
           res.json({
             message: `${callType === 'cold_calling' ? 'Cold calling' : 'Appointment booking'} call initiated successfully`,
@@ -517,6 +520,160 @@ class LeadController {
   }
 
   /**
+   * Get lead history for a studio
+   * GET /api/v1/leads/studio/:studioId/history
+   */
+  async getStudioHistory(req, res) {
+    try {
+      const { studioId } = req.params;
+      const { 
+        page = 1, 
+        limit = 50, 
+        activity_type, 
+        lead_id, 
+        date_from, 
+        date_to,
+        search 
+      } = req.query;
+
+      // Authorization check - verify studio ownership
+      const studio = await Studio.findById(studioId);
+      if (!studio) {
+        return res.status(404).json({ message: 'Studio not found' });
+      }
+
+      if (req.user.role !== 'admin' && studio.owner_id !== req.user.userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const db = require('../database/database-wrapper');
+      
+      // Build dynamic query
+      let query = `
+        SELECT 
+          la.*,
+          l.name as lead_name,
+          l.phone_number as lead_phone,
+          l.email as lead_email,
+          u.first_name,
+          u.last_name
+        FROM lead_activities la
+        LEFT JOIN leads l ON la.lead_id = l.id
+        LEFT JOIN users u ON la.created_by = u.id
+        WHERE la.studio_id = ?
+      `;
+      
+      const queryParams = [parseInt(studioId)];
+      
+      // Add filters
+      if (activity_type) {
+        query += ' AND la.activity_type = ?';
+        queryParams.push(activity_type);
+      }
+      
+      if (lead_id) {
+        query += ' AND la.lead_id = ?';
+        queryParams.push(lead_id);
+      }
+      
+      if (date_from) {
+        query += ' AND la.created_at >= ?';
+        queryParams.push(date_from);
+      }
+      
+      if (date_to) {
+        query += ' AND la.created_at <= ?';
+        queryParams.push(date_to);
+      }
+      
+      if (search) {
+        query += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
+        const searchPattern = `%${search}%`;
+        queryParams.push(searchPattern, searchPattern, searchPattern);
+      }
+      
+      // Add ordering and pagination
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      query += ` ORDER BY la.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${offset}`;
+      // Don't push LIMIT/OFFSET as parameters since MySQL doesn't support parameterized LIMIT/OFFSET in some configurations
+
+      // Get total count for pagination
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM lead_activities la
+        LEFT JOIN leads l ON la.lead_id = l.id
+        WHERE la.studio_id = ?
+      `;
+      
+      const countParams = [parseInt(studioId)];
+      let countParamIndex = 1;
+      
+      if (activity_type) {
+        countQuery += ' AND la.activity_type = ?';
+        countParams.push(activity_type);
+      }
+      
+      if (lead_id) {
+        countQuery += ' AND la.lead_id = ?';
+        countParams.push(lead_id);
+      }
+      
+      if (date_from) {
+        countQuery += ' AND la.created_at >= ?';
+        countParams.push(date_from);
+      }
+      
+      if (date_to) {
+        countQuery += ' AND la.created_at <= ?';
+        countParams.push(date_to);
+      }
+      
+      if (search) {
+        countQuery += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
+        const searchPattern = `%${search}%`;
+        countParams.push(searchPattern, searchPattern, searchPattern);
+      }
+
+      // Execute queries
+      const [activities, countResult] = await Promise.all([
+        new Promise((resolve, reject) => {
+          db.all(query, queryParams, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          });
+        }),
+        new Promise((resolve, reject) => {
+          db.get(countQuery, countParams, (err, row) => {
+            if (err) reject(err);
+            else resolve(row || { total: 0 });
+          });
+        })
+      ]);
+
+      res.json({
+        history: activities,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: countResult.total,
+          totalPages: Math.ceil(countResult.total / parseInt(limit))
+        },
+        filters: {
+          activity_type,
+          lead_id,
+          date_from,
+          date_to,
+          search
+        }
+      });
+
+    } catch (error) {
+      console.error('Error getting studio history:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  /**
    * Trigger Google Sheets sync for a specific studio
    * @param {number} studioId - Studio ID to sync
    */
@@ -529,7 +686,7 @@ class LeadController {
       const integrations = await new Promise((resolve, reject) => {
         const db = require('../database/database-wrapper');
         db.all(
-          'SELECT * FROM google_sheets_integrations WHERE studio_id = ? AND is_active = 1',
+          'SELECT * FROM google_sheets_integrations WHERE studio_id = ?',
           [studioId],
           (err, rows) => {
             if (err) reject(err);

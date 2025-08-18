@@ -1,27 +1,28 @@
 const db = require("../database/database-wrapper");
+const LeadActivityLogger = require("../utils/LeadActivityLogger");
 
 class Lead {
   constructor(data) {
-    this.id = data.id;
+    this.id = data.id || null;
     this.studio_id = data.studio_id;
     this.name = data.name;
     // Handle both phone_number (SQLite) and phone (MySQL) columns
     this.phone_number = data.phone_number || data.phone;
-    this.email = data.email;
+    this.email = data.email || null;
     this.source = data.source || 'manual';
-    this.status = data.status || 'neu';
-    this.notes = data.notes;
-    this.google_sheets_row_id = data.google_sheets_row_id;
-    this.google_sheets_sync_id = data.google_sheets_sync_id;
-    this.last_contacted = data.last_contacted;
-    this.next_follow_up = data.next_follow_up;
+    this.status = data.status || 'NEW';
+    this.notes = data.notes || null;
+    this.google_sheets_row_id = data.google_sheets_row_id || null;
+    this.google_sheets_sync_id = data.google_sheets_sync_id || null;
+    this.last_contacted = data.last_contacted || null;
+    this.next_follow_up = data.next_follow_up || null;
     this.lead_score = data.lead_score || 0;
     this.conversion_status = data.conversion_status || 'lead';
     this.source_type = data.source_type || 'manual';
-    this.created_by_manager_id = data.created_by_manager_id;
-    this.created_by_user_id = data.created_by_user_id;
-    this.created_at = data.created_at;
-    this.updated_at = data.updated_at;
+    this.created_by_manager_id = data.created_by_manager_id || null;
+    this.created_by_user_id = data.created_by_user_id || null;
+    this.created_at = data.created_at || null;
+    this.updated_at = data.updated_at || null;
   }
 
   // Valid statuses for leads
@@ -57,62 +58,119 @@ class Lead {
   }
 
   /**
-   * Create a new lead
+   * Create a new lead or update existing lead
    */
-  async save() {
-    return new Promise((resolve, reject) => {
-      if (this.id) {
-        // Update existing lead
-        const sql = `
-          UPDATE leads SET 
-            studio_id = ?, name = ?, phone_number = ?, email = ?, source = ?, 
-            status = ?, notes = ?, google_sheets_row_id = ?, google_sheets_sync_id = ?,
-            last_contacted = ?, next_follow_up = ?, lead_score = ?, conversion_status = ?,
-            source_type = ?, created_by_manager_id = ?, created_by_user_id = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `;
-        const params = [
-          this.studio_id, this.name, this.phone_number, this.email, this.source,
-          this.status, this.notes, this.google_sheets_row_id, this.google_sheets_sync_id,
-          this.last_contacted, this.next_follow_up, this.lead_score, this.conversion_status,
-          this.source_type, this.created_by_manager_id, this.created_by_user_id,
-          this.id
-        ];
-
-        db.run(sql, params, function(err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.changes);
+  async save(userId = null) {
+    const isUpdate = !!this.id;
+    
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (isUpdate) {
+          // Get original lead data for comparison
+          const originalLead = await Lead.findById(this.id);
+          if (!originalLead) {
+            reject(new Error('Lead not found for update'));
+            return;
           }
-        });
-      } else {
-        // Create new lead
-        const sql = `
-          INSERT INTO leads (
-            studio_id, name, phone_number, email, source, status, notes,
-            google_sheets_row_id, google_sheets_sync_id, last_contacted, 
-            next_follow_up, lead_score, conversion_status, source_type,
-            created_by_manager_id, created_by_user_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        const params = [
-          this.studio_id, this.name, this.phone_number, this.email, this.source,
-          this.status, this.notes, this.google_sheets_row_id, this.google_sheets_sync_id,
-          this.last_contacted, this.next_follow_up, this.lead_score, this.conversion_status,
-          this.source_type, this.created_by_manager_id, this.created_by_user_id
-        ];
 
-        db.run(sql, params, function(err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
+          // Update existing lead
+          const sql = `
+            UPDATE leads SET 
+              studio_id = ?, name = ?, phone_number = ?, email = ?, source = ?, 
+              status = ?, notes = ?, google_sheets_row_id = ?, google_sheets_sync_id = ?,
+              last_contacted = ?, next_follow_up = ?, lead_score = ?, conversion_status = ?,
+              source_type = ?, created_by_manager_id = ?, created_by_user_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `;
+          const params = [
+            this.studio_id, this.name, this.phone_number, this.email, this.source,
+            this.status, this.notes, this.google_sheets_row_id, this.google_sheets_sync_id,
+            this.last_contacted, this.next_follow_up, this.lead_score, this.conversion_status,
+            this.source_type, this.created_by_manager_id, this.created_by_user_id,
+            this.id
+          ];
+
+          db.run(sql, params, async (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              try {
+                // Only track status changes (no general updates)
+                const oldStatus = originalLead.status;
+                const newStatus = this.status;
+                
+                if (oldStatus !== newStatus) {
+                  await LeadActivityLogger.logStatusChange(
+                    this.id,
+                    this.studio_id,
+                    userId || null, // Allow null userId
+                    oldStatus,
+                    newStatus,
+                    this.notes
+                  );
+                }
+                resolve(this.id);
+              } catch (activityErr) {
+                console.error('Error logging status change activity:', activityErr);
+                // Don't fail the save due to activity logging error
+                resolve(this.id);
+              }
+            }
+          });
+        } else {
+          // Create new lead
+          const sql = `
+            INSERT INTO leads (
+              studio_id, name, phone_number, email, source, status, notes,
+              google_sheets_row_id, google_sheets_sync_id, last_contacted, 
+              next_follow_up, lead_score, conversion_status, source_type,
+              created_by_manager_id, created_by_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `;
+          const params = [
+            this.studio_id, this.name, this.phone_number, this.email, this.source,
+            this.status, this.notes, this.google_sheets_row_id, this.google_sheets_sync_id,
+            this.last_contacted, this.next_follow_up, this.lead_score, this.conversion_status,
+            this.source_type, this.created_by_manager_id, this.created_by_user_id
+          ];
+
+          db.run(sql, params, function(err) {
+            if (err) {
+              reject(err);
+            } else {
+              // No automatic logging of lead creation as requested
+              resolve(this.lastID);
+            }
+          });
+        }
+      } catch (error) {
+        reject(error);
       }
     });
+  }
+
+  /**
+   * Compare this lead with another lead to find changes
+   * @private
+   */
+  _getChanges(originalLead) {
+    const changes = {};
+    const fieldsToCheck = [
+      'name', 'phone_number', 'email', 'source', 'status', 'notes',
+      'lead_score', 'conversion_status', 'next_follow_up'
+    ];
+
+    fieldsToCheck.forEach(field => {
+      if (this[field] !== originalLead[field]) {
+        changes[field] = {
+          old: originalLead[field],
+          new: this[field]
+        };
+      }
+    });
+
+    return changes;
   }
 
   /**
@@ -121,7 +179,7 @@ class Lead {
   static async findById(id) {
     return new Promise((resolve, reject) => {
       const sql = `
-        SELECT l.*, s.studio_name, s.city as studio_city
+        SELECT l.*, s.name as studio_name, s.city as studio_city
         FROM leads l
         LEFT JOIN studios s ON l.studio_id = s.id
         WHERE l.id = ?
@@ -282,24 +340,52 @@ class Lead {
   /**
    * Update lead status and last contacted
    */
-  async updateStatus(newStatus, notes = null) {
-    return new Promise((resolve, reject) => {
-      const sql = `
-        UPDATE leads SET 
-          status = ?, 
-          last_contacted = CURRENT_TIMESTAMP,
-          notes = COALESCE(?, notes),
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-      
-      db.run(sql, [newStatus, notes, this.id], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.changes);
-        }
-      });
+  async updateStatus(newStatus, notes = null, userId = null) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const oldStatus = this.status;
+        
+        const sql = `
+          UPDATE leads SET 
+            status = ?, 
+            last_contacted = CURRENT_TIMESTAMP,
+            notes = COALESCE(?, notes),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        
+        db.run(sql, [newStatus, notes, this.id], async (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            try {
+              // Update local status
+              this.status = newStatus;
+              if (notes) this.notes = notes;
+              
+              // Always log status changes (even without userId)
+              if (oldStatus !== newStatus) {
+                await LeadActivityLogger.logStatusChange(
+                  this.id,
+                  this.studio_id,
+                  userId || null,
+                  oldStatus,
+                  newStatus,
+                  notes
+                );
+              }
+              
+              resolve(this);
+            } catch (activityErr) {
+              console.error('Error logging status change activity:', activityErr);
+              // Don't fail the update due to activity logging error
+              resolve(this);
+            }
+          }
+        });
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
@@ -309,7 +395,7 @@ class Lead {
   static async bulkImport(studioId, leadsData, syncId, managerId) {
     return new Promise((resolve, reject) => {
       db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+        db.run('START TRANSACTION');
         
         let importedCount = 0;
         let updatedCount = 0;
@@ -337,7 +423,7 @@ class Lead {
                 existingLead.source_type = 'imported';
                 existingLead.updated_at = new Date().toISOString();
 
-                await existingLead.save();
+                await existingLead.save(managerId);
                 updatedCount++;
                 importDetails.push({
                   row: leadData.row_id,
@@ -354,7 +440,7 @@ class Lead {
                   phone_number: leadData.phone_number,
                   email: leadData.email,
                   source: 'google_sheets',
-                  status: 'neu',
+                  status: 'NEW',
                   notes: leadData.notes,
                   google_sheets_row_id: leadData.row_id,
                   google_sheets_sync_id: syncId,
@@ -362,7 +448,7 @@ class Lead {
                   created_by_manager_id: managerId
                 });
 
-                const leadId = await lead.save();
+                const leadId = await lead.save(managerId);
                 importedCount++;
                 importDetails.push({
                   row: leadData.row_id,

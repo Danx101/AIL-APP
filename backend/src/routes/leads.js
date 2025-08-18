@@ -25,6 +25,12 @@ router.get('/studio/:studioId/stats',
   leadController.getStudioLeadStats
 );
 
+// Get lead history for a studio
+router.get('/studio/:studioId/history', 
+  validateStudioId,
+  leadController.getStudioHistory
+);
+
 // Create a new lead
 router.post('/', 
   validateLeadCreate,

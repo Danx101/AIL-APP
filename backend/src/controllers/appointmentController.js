@@ -9,8 +9,13 @@ class AppointmentController {
    */
   async createAppointment(req, res) {
     try {
+      console.log('=== CREATE APPOINTMENT DEBUG ===');
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      console.log('User:', JSON.stringify(req.user, null, 2));
+      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
       }
 
@@ -23,6 +28,16 @@ class AppointmentController {
         end_time,
         notes
       } = req.body;
+      
+      console.log('Extracted values:', {
+        studio_id,
+        customer_id,
+        appointment_type_id,
+        appointment_date,
+        start_time,
+        end_time,
+        notes
+      });
 
       const created_by_user_id = req.user.userId;
 
@@ -106,6 +121,18 @@ class AppointmentController {
       
 
       // Create the appointment
+      console.log('Creating appointment with data:', {
+        studio_id,
+        customer_id,
+        appointment_type_id,
+        appointment_date,
+        start_time,
+        end_time,
+        notes,
+        created_by_user_id,
+        status
+      });
+      
       const appointment = new Appointment({
         studio_id,
         customer_id,
@@ -118,8 +145,15 @@ class AppointmentController {
         status
       });
 
+      console.log('About to validate appointment...');
+      console.log('Appointment validation errors:', appointment.validate());
+      
+      console.log('About to create appointment...');
       const appointmentId = await appointment.create();
+      console.log('Appointment created with ID:', appointmentId);
+      
       const createdAppointment = await Appointment.findById(appointmentId);
+      console.log('Retrieved created appointment:', createdAppointment);
 
       res.status(201).json({
         message: 'Appointment created successfully',

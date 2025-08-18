@@ -344,7 +344,7 @@ class ManagerDashboard {
                         </div>
                         <div class="card-body">
                             <div class="d-grid gap-2">
-                                <button class="btn btn-primary" onclick="managerDashboard.switchTab('wizard')">
+                                <button class="btn btn-primary" onclick="managerDashboard.showInfo('Google Sheets connection feature coming soon!')">
                                     <i class="bi bi-plus-circle me-2"></i>
                                     Connect New Sheet
                                 </button>
@@ -377,7 +377,7 @@ class ManagerDashboard {
                     <p class="text-muted mb-0">Manage all Google Sheets connections</p>
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-primary" onclick="managerDashboard.switchTab('wizard')">
+                    <button class="btn btn-primary" onclick="managerDashboard.showInfo('Google Sheets connection feature coming soon!')">
                         <i class="bi bi-plus-circle me-2"></i>
                         Connect New Sheet
                     </button>
@@ -950,7 +950,7 @@ class ManagerDashboard {
                     <i class="bi bi-table display-4 text-muted mb-3"></i>
                     <h4 class="text-muted">No Google Sheets Connected</h4>
                     <p class="text-muted">Connect your first Google Sheet to start importing leads.</p>
-                    <button class="btn btn-primary" onclick="managerDashboard.switchTab('wizard')">
+                    <button class="btn btn-primary" onclick="managerDashboard.showInfo('Google Sheets connection feature coming soon!')">
                         <i class="bi bi-plus-circle me-2"></i>
                         Connect New Sheet
                     </button>
@@ -1379,14 +1379,8 @@ class ManagerDashboard {
         const studio = this.studios.find(s => s.id === studioId);
         if (!studio) return;
 
-        // Store selected studio for the wizard
-        localStorage.setItem('selectedStudioForSheet', JSON.stringify({
-            id: studio.id,
-            name: studio.name
-        }));
-
-        // Switch to wizard tab
-        this.switchTab('wizard');
+        // Show the Google Sheets connection modal
+        window.googleSheetsModal.show(studio);
     }
 
     // Manage existing integration
@@ -1395,7 +1389,7 @@ class ManagerDashboard {
             const response = await window.managerAPI.getStudioIntegration(studioId);
             // TODO: Show integration management modal
             console.log('Integration details:', response);
-            this.showSuccess('Integration management coming soon');
+            this.showIntegrationModal(response.studio, response.integration);
         } catch (error) {
             console.error('Error loading integration:', error);
             this.showError('Failed to load integration details');
@@ -1447,9 +1441,92 @@ class ManagerDashboard {
         }
     }
 
-    // Show info toast
-    showInfo(message) {
-        this.showToast(message, 'info');
+    // Show integration details modal
+    showIntegrationModal(studio, integration) {
+        const modalHtml = `
+            <div class="modal fade" id="integration-modal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-table me-2"></i>
+                                Google Sheets Integration - ${studio.name}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Integration Details</h6>
+                                    <ul class="list-unstyled">
+                                        <li><strong>Sheet Name:</strong> ${integration.sheet_name || 'N/A'}</li>
+                                        <li><strong>Connected:</strong> ${integration.integration_id ? 'Yes' : 'No'}</li>
+                                        <li><strong>Last Sync:</strong> ${integration.last_sync_at ? new Date(integration.last_sync_at).toLocaleString() : 'Never'}</li>
+                                        <li><strong>Auto Sync:</strong> ${integration.auto_sync_enabled ? 'Enabled' : 'Disabled'}</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Quick Actions</h6>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-primary" onclick="managerDashboard.syncNow(${studio.id})">
+                                            <i class="bi bi-arrow-clockwise me-2"></i>Sync Now
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="managerDashboard.disconnectSheet(${studio.id})">
+                                            <i class="bi bi-unlink me-2"></i>Disconnect Sheet
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal
+        const existingModal = document.getElementById('integration-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add new modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('integration-modal'));
+        modal.show();
+    }
+
+    // Disconnect Google Sheet
+    async disconnectSheet(studioId) {
+        if (!confirm('Are you sure you want to disconnect the Google Sheet from this studio?')) {
+            return;
+        }
+
+        try {
+            const integrationResponse = await window.managerAPI.getStudioIntegration(studioId);
+            const integrationId = integrationResponse.integration.integration_id;
+
+            if (!integrationId) {
+                this.showError('No integration found to disconnect');
+                return;
+            }
+
+            await window.managerAPI.deleteIntegration(integrationId);
+            this.showSuccess('Google Sheet disconnected successfully');
+            
+            // Close modal and reload data
+            const modal = bootstrap.Modal.getInstance(document.getElementById('integration-modal'));
+            if (modal) modal.hide();
+            
+            this.loadStudios();
+            this.renderStudios();
+
+        } catch (error) {
+            console.error('Error disconnecting sheet:', error);
+            this.showError('Failed to disconnect sheet: ' + (error.message || 'Unknown error'));
+        }
     }
 }
 

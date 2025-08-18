@@ -12,7 +12,7 @@ class CustomerManagement {
         this._initialized = false;
     }
 
-    async init(studioId) {
+    async init(studioId, skipTabSwitch = false) {
         // Prevent multiple initializations
         if (this._initializing) {
             console.log('Already initializing, skipping...');
@@ -21,7 +21,18 @@ class CustomerManagement {
         
         if (this._initialized && this.getStudioId() === studioId) {
             console.log('Already initialized with same studio, just refreshing...');
-            await this.loadCustomers();
+            
+            // Check if the container exists, if not re-render (unless skipTabSwitch is true)
+            if (!skipTabSwitch) {
+                const container = document.getElementById('customers-container');
+                if (!container) {
+                    console.log('Container not found, re-rendering...');
+                    this.render();
+                    this.setupEventListeners();
+                }
+                
+                await this.loadCustomers();
+            }
             return;
         }
         
@@ -42,9 +53,20 @@ class CustomerManagement {
         }
         
         try {
-            this.render();
+            // Only render the main UI if not skipping tab switch
+            if (!skipTabSwitch) {
+                this.render();
+            } else {
+                // Just ensure the modals are available in the DOM
+                this.ensureModalsExist();
+            }
+            
             await this.loadCustomers(true); // Pass true to skip initial updateUI
-            this.setupEventListeners();
+            
+            if (!skipTabSwitch) {
+                this.setupEventListeners();
+            }
+            
             this._initialized = true;
         } catch (error) {
             console.error('Error during initialization:', error);
@@ -58,6 +80,16 @@ class CustomerManagement {
         return this.studioId || this._studioId || window._customerManagementStudioId;
     }
 
+    ensureModalsExist() {
+        // Check if the modals container exists, if not create it
+        if (!document.getElementById('customerManagementModals')) {
+            const modalsContainer = document.createElement('div');
+            modalsContainer.id = 'customerManagementModals';
+            modalsContainer.innerHTML = this.renderModals();
+            document.body.appendChild(modalsContainer);
+        }
+    }
+
     render() {
         const container = document.getElementById('customer-management-content') || document.getElementById('app');
         container.innerHTML = `
@@ -67,13 +99,13 @@ class CustomerManagement {
                     <div>
                         <h2 class="h3 mb-0">
                             <i class="bi bi-people-fill text-primary me-2"></i>
-                            Customer Management
+                            Kunden Management
                         </h2>
-                        <p class="text-muted mb-0">Manage customers with session packages and registration codes</p>
+                        <p class="text-muted mb-0">Verwalten Sie Ihre Kunden mit Behandlungspaketen und Registrierungscodes</p>
                     </div>
                     <button class="btn btn-primary" onclick="customerManagement.showAddCustomerModal()">
                         <i class="bi bi-plus-circle me-1"></i>
-                        New Customer
+                        Neuer Kunde
                     </button>
                 </div>
 
@@ -88,7 +120,7 @@ class CustomerManagement {
                                     </div>
                                     <div class="ms-3">
                                         <div class="fs-4 fw-bold text-primary" id="stat-total">0</div>
-                                        <div class="text-muted small">Total Customers</div>
+                                        <div class="text-muted small">Kunden Gesamt</div>
                                     </div>
                                 </div>
                             </div>
@@ -103,7 +135,7 @@ class CustomerManagement {
                                     </div>
                                     <div class="ms-3">
                                         <div class="fs-4 fw-bold text-success" id="stat-registered">0</div>
-                                        <div class="text-muted small">App Users</div>
+                                        <div class="text-muted small">App Benutzer</div>
                                     </div>
                                 </div>
                             </div>
@@ -118,7 +150,7 @@ class CustomerManagement {
                                     </div>
                                     <div class="ms-3">
                                         <div class="fs-4 fw-bold text-warning" id="stat-active-blocks">0</div>
-                                        <div class="text-muted small">Active Blocks</div>
+                                        <div class="text-muted small">Aktive Blöcke</div>
                                     </div>
                                 </div>
                             </div>
@@ -133,7 +165,7 @@ class CustomerManagement {
                                     </div>
                                     <div class="ms-3">
                                         <div class="fs-4 fw-bold text-info" id="stat-sessions">0</div>
-                                        <div class="text-muted small">Total Sessions</div>
+                                        <div class="text-muted small">Behandlungen Gesamt</div>
                                     </div>
                                 </div>
                             </div>
@@ -153,17 +185,17 @@ class CustomerManagement {
                                     <input type="text" 
                                            class="form-control" 
                                            id="customer-search"
-                                           placeholder="Search by name, phone, email, or code..."
+                                           placeholder="Suchen nach Name, Telefon, E-Mail oder Code..."
                                            onkeyup="customerManagement.searchCustomers(this.value)">
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <select class="form-select" id="filter-status" onchange="customerManagement.filterByStatus(this.value)">
-                                    <option value="all">All Customers</option>
-                                    <option value="registered">App Users</option>
-                                    <option value="not_registered">Not Registered</option>
-                                    <option value="active_sessions">With Active Sessions</option>
-                                    <option value="no_sessions">No Active Sessions</option>
+                                    <option value="all">Alle Kunden</option>
+                                    <option value="registered">App Benutzer</option>
+                                    <option value="not_registered">Nicht registriert</option>
+                                    <option value="active_sessions">Mit aktiven Sessions</option>
+                                    <option value="no_sessions">Keine aktiven Sessions</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -183,7 +215,7 @@ class CustomerManagement {
                             <div class="col-md-2">
                                 <button class="btn btn-outline-secondary w-100" onclick="customerManagement.loadCustomers()">
                                     <i class="bi bi-arrow-clockwise me-1"></i>
-                                    Refresh
+                                    Aktualisieren
                                 </button>
                             </div>
                         </div>
@@ -194,7 +226,7 @@ class CustomerManagement {
                 <div id="customers-container">
                     <div class="text-center py-5">
                         <div class="spinner-border" role="status"></div>
-                        <p class="text-muted mt-2">Loading customers...</p>
+                        <p class="text-muted mt-2">Lade Kunden...</p>
                     </div>
                 </div>
             </div>
@@ -301,16 +333,16 @@ class CustomerManagement {
             return `
                 <div class="text-center py-5">
                     <i class="bi bi-people display-4 text-muted mb-3"></i>
-                    <h5 class="text-muted">No Customers Found</h5>
+                    <h5 class="text-muted">Keine Kunden gefunden</h5>
                     <p class="text-muted">
                         ${this.searchQuery || this.filterStatus !== 'all' ? 
-                            'No customers match your filters.' : 
-                            'Start by adding your first customer with a session package.'}
+                            'Keine Kunden entsprechen Ihren Filtern.' : 
+                            'Fügen Sie Ihren ersten Kunden mit einem Behandlungspaket hinzu.'}
                     </p>
                     ${!this.searchQuery && this.filterStatus === 'all' ? `
                         <button class="btn btn-primary mt-3" onclick="customerManagement.showAddCustomerModal()">
                             <i class="bi bi-plus-circle me-1"></i>
-                            Add First Customer
+                            Ersten Kunden hinzufügen
                         </button>
                     ` : ''}
                 </div>
@@ -345,18 +377,18 @@ class CustomerManagement {
                                 <h5 class="card-title mb-1">${customer.contact_first_name} ${customer.contact_last_name}</h5>
                                 <div class="d-flex gap-2 flex-wrap">
                                     ${customer.has_app_access ? 
-                                        '<span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-phone-fill me-1"></i>App User</span>' :
-                                        '<span class="badge bg-warning bg-opacity-10 text-warning"><i class="bi bi-clock me-1"></i>Not Registered</span>'}
+                                        '<span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-phone-fill me-1"></i>App Benutzer</span>' :
+                                        '<span class="badge bg-warning bg-opacity-10 text-warning"><i class="bi bi-clock me-1"></i>Nicht registriert</span>'}
                                     ${hasActiveSessions ? 
-                                        '<span class="badge bg-info bg-opacity-10 text-info"><i class="bi bi-check-circle me-1"></i>Active</span>' :
-                                        '<span class="badge bg-secondary bg-opacity-10 text-secondary">Inactive</span>'}
+                                        '<span class="badge bg-info bg-opacity-10 text-info"><i class="bi bi-check-circle me-1"></i>Aktiv</span>' :
+                                        '<span class="badge bg-secondary bg-opacity-10 text-secondary">Inaktiv</span>'}
                                 </div>
                             </div>
                         </div>
 
                         <!-- Registration Code -->
                         <div class="mb-3">
-                            <small class="text-muted d-block mb-1">Registration Code</small>
+                            <small class="text-muted d-block mb-1">Registrierungscode</small>
                             <div class="d-flex align-items-center">
                                 <span class="registration-code me-2">${customer.registration_code}</span>
                                 ${!customer.has_app_access ? `
@@ -371,7 +403,7 @@ class CustomerManagement {
 
                         <!-- Sessions Info -->
                         <div class="mb-3">
-                            <small class="text-muted d-block mb-1">Sessions</small>
+                            <small class="text-muted d-block mb-1">Behandlungen</small>
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <span class="fs-5 fw-bold ${hasActiveSessions ? 'text-info' : 'text-secondary'}">${customer.remaining_sessions}</span>
@@ -393,7 +425,7 @@ class CustomerManagement {
                         <!-- Action Buttons -->
                         <div class="d-grid gap-2">
                             <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); customerManagement.showCustomerDetails(${customer.id})">
-                                <i class="bi bi-eye me-1"></i>View Details
+                                <i class="bi bi-eye me-1"></i>Details anzeigen
                             </button>
                         </div>
                     </div>
@@ -410,13 +442,13 @@ class CustomerManagement {
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Customer</th>
-                                    <th>Registration Code</th>
-                                    <th>Sessions</th>
+                                    <th>Kunde</th>
+                                    <th>Registrierungscode</th>
+                                    <th>Behandlungen</th>
                                     <th>App Status</th>
-                                    <th>Contact</th>
-                                    <th>Since</th>
-                                    <th>Actions</th>
+                                    <th>Kontakt</th>
+                                    <th>Seit</th>
+                                    <th>Aktionen</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -432,8 +464,8 @@ class CustomerManagement {
     renderCustomerRow(customer) {
         const hasActiveSessions = customer.remaining_sessions > 0;
         const appStatusBadge = customer.has_app_access ? 
-            '<span class="badge bg-success"><i class="bi bi-phone me-1"></i>App User</span>' :
-            '<span class="badge bg-warning"><i class="bi bi-clock me-1"></i>Not Registered</span>';
+            '<span class="badge bg-success"><i class="bi bi-phone me-1"></i>App Benutzer</span>' :
+            '<span class="badge bg-warning"><i class="bi bi-clock me-1"></i>Nicht registriert</span>';
 
         return `
             <tr class="customer-row" data-customer-id="${customer.id}">
@@ -496,7 +528,7 @@ class CustomerManagement {
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="bi bi-person-plus me-2"></i>
-                                Add New Customer
+                                Neuen Kunden hinzufügen
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
@@ -504,20 +536,20 @@ class CustomerManagement {
                             <form id="add-customer-form">
                                 <div class="alert alert-info">
                                     <i class="bi bi-info-circle me-2"></i>
-                                    Customers must purchase a session package. They will receive a registration code for app access.
+                                    Kunden müssen ein Behandlungspaket kaufen. Sie erhalten einen Registrierungscode für den App-Zugang.
                                 </div>
                                 
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                        <label class="form-label">Vorname <span class="text-danger">*</span></label>
                                         <input type="text" class="form-control" id="customer-first-name" required>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                        <label class="form-label">Nachname <span class="text-danger">*</span></label>
                                         <input type="text" class="form-control" id="customer-last-name" required>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Phone <span class="text-danger">*</span></label>
+                                        <label class="form-label">Telefon <span class="text-danger">*</span></label>
                                         <input type="tel" class="form-control" id="customer-phone" required>
                                     </div>
                                     <div class="col-md-6">
@@ -528,14 +560,14 @@ class CustomerManagement {
 
                                 <hr class="my-4">
 
-                                <h6 class="mb-3">Session Package <span class="text-danger">*</span></h6>
+                                <h6 class="mb-3">Behandlungspaket <span class="text-danger">*</span></h6>
                                 <div class="row g-2">
                                     <div class="col-6 col-md-3">
                                         <div class="form-check card p-3 text-center">
                                             <input class="form-check-input" type="radio" name="sessionPackage" 
                                                    id="new-package-10" value="10" required>
                                             <label class="form-check-label w-100" for="new-package-10">
-                                                <strong>10</strong><br>Sessions
+                                                <strong>10</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -544,7 +576,7 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="sessionPackage" 
                                                    id="new-package-20" value="20" required checked>
                                             <label class="form-check-label w-100" for="new-package-20">
-                                                <strong>20</strong><br>Sessions
+                                                <strong>20</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -553,7 +585,7 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="sessionPackage" 
                                                    id="new-package-30" value="30" required>
                                             <label class="form-check-label w-100" for="new-package-30">
-                                                <strong>30</strong><br>Sessions
+                                                <strong>30</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -562,7 +594,7 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="sessionPackage" 
                                                    id="new-package-40" value="40" required>
                                             <label class="form-check-label w-100" for="new-package-40">
-                                                <strong>40</strong><br>Sessions
+                                                <strong>40</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -570,26 +602,26 @@ class CustomerManagement {
 
                                 <div class="row g-3 mt-3">
                                     <div class="col-md-6">
-                                        <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                                        <label class="form-label">Zahlungsart <span class="text-danger">*</span></label>
                                         <select class="form-select" id="customer-payment-method" required>
-                                            <option value="">Select method</option>
-                                            <option value="cash">Cash</option>
-                                            <option value="card">Card</option>
-                                            <option value="transfer">Bank Transfer</option>
+                                            <option value="">Methode wählen</option>
+                                            <option value="cash">Bar</option>
+                                            <option value="card">Karte</option>
+                                            <option value="transfer">Banküberweisung</option>
                                         </select>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Notes</label>
+                                        <label class="form-label">Notizen</label>
                                         <textarea class="form-control" id="customer-notes" rows="1"></textarea>
                                     </div>
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-primary" onclick="customerManagement.addCustomer()">
                                 <i class="bi bi-check-circle me-1"></i>
-                                Create Customer
+                                Kunde erstellen
                             </button>
                         </div>
                     </div>
@@ -603,7 +635,7 @@ class CustomerManagement {
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="bi bi-person me-2"></i>
-                                Customer Details
+                                Kundendetails
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
@@ -614,31 +646,31 @@ class CustomerManagement {
                 </div>
             </div>
 
-            <!-- Add Sessions Modal -->
+            <!-- Behandlungen hinzufügen Modal -->
             <div class="modal fade" id="addSessionsModal" tabindex="-1">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="bi bi-plus-circle me-2"></i>
-                                Add Session Package
+                                Behandlungspaket hinzufügen
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <form id="add-sessions-form">
                                 <div class="alert alert-info">
-                                    Adding sessions to: <strong id="sessions-customer-name"></strong>
+                                    Behandlungen hinzufügen für: <strong id="sessions-customer-name"></strong>
                                 </div>
                                 
-                                <h6 class="mb-3">Select Package <span class="text-danger">*</span></h6>
+                                <h6 class="mb-3">Paket auswählen <span class="text-danger">*</span></h6>
                                 <div class="row g-2">
                                     <div class="col-6">
                                         <div class="form-check card p-3 text-center">
                                             <input class="form-check-input" type="radio" name="addSessionPackage" 
                                                    id="add-package-10" value="10" required>
                                             <label class="form-check-label w-100" for="add-package-10">
-                                                <strong>10</strong><br>Sessions
+                                                <strong>10</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -647,7 +679,7 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="addSessionPackage" 
                                                    id="add-package-20" value="20" required checked>
                                             <label class="form-check-label w-100" for="add-package-20">
-                                                <strong>20</strong><br>Sessions
+                                                <strong>20</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -656,7 +688,7 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="addSessionPackage" 
                                                    id="add-package-30" value="30" required>
                                             <label class="form-check-label w-100" for="add-package-30">
-                                                <strong>30</strong><br>Sessions
+                                                <strong>30</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
@@ -665,33 +697,33 @@ class CustomerManagement {
                                             <input class="form-check-input" type="radio" name="addSessionPackage" 
                                                    id="add-package-40" value="40" required>
                                             <label class="form-check-label w-100" for="add-package-40">
-                                                <strong>40</strong><br>Sessions
+                                                <strong>40</strong><br>Behandlungen
                                             </label>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="mt-3">
-                                    <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                                    <label class="form-label">Zahlungsart <span class="text-danger">*</span></label>
                                     <select class="form-select" id="add-sessions-payment" required>
-                                        <option value="">Select method</option>
-                                        <option value="cash">Cash</option>
-                                        <option value="card">Card</option>
-                                        <option value="transfer">Bank Transfer</option>
+                                        <option value="">Methode wählen</option>
+                                        <option value="cash">Bar</option>
+                                        <option value="card">Karte</option>
+                                        <option value="transfer">Banküberweisung</option>
                                     </select>
                                 </div>
 
                                 <div class="mt-3">
-                                    <label class="form-label">Notes</label>
+                                    <label class="form-label">Notizen</label>
                                     <textarea class="form-control" id="add-sessions-notes" rows="2"></textarea>
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-primary" onclick="customerManagement.addSessions()">
                                 <i class="bi bi-plus-circle me-1"></i>
-                                Add Sessions
+                                Behandlungen hinzufügen
                             </button>
                         </div>
                     </div>
@@ -706,35 +738,35 @@ class CustomerManagement {
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="bi bi-dash-circle me-2"></i>
-                                Consume Sessions
+                                Behandlungen verbrauchen
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <form id="consume-sessions-form">
                                 <div class="alert alert-info">
-                                    <strong id="consume-remaining">0</strong> sessions remaining in active block
+                                    <strong id="consume-remaining">0</strong> Behandlungen verbleiben im aktiven Block
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label class="form-label">Sessions to Consume <span class="text-danger">*</span></label>
+                                    <label class="form-label">Zu verbrauchende Behandlungen <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control" id="sessions-to-consume" 
                                            min="1" max="10" value="1" required>
-                                    <small class="text-muted">Enter the number of sessions completed</small>
+                                    <small class="text-muted">Anzahl der abgeschlossenen Behandlungen eingeben</small>
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">Reason/Notes</label>
+                                    <label class="form-label">Grund/Notizen</label>
                                     <textarea class="form-control" id="consume-reason" rows="2" 
-                                              placeholder="e.g., Regular appointment, Make-up session"></textarea>
+                                              placeholder="z.B. Regulärer Termin, Nachholtermin"></textarea>
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-danger" onclick="customerManagement.consumeSessions()">
                                 <i class="bi bi-check-circle me-1"></i>
-                                Consume Sessions
+                                Behandlungen verbrauchen
                             </button>
                         </div>
                     </div>
@@ -748,7 +780,7 @@ class CustomerManagement {
                         <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="bi bi-plus-circle me-2"></i>
-                                Refund Sessions
+                                Behandlungen erstatten
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
@@ -756,28 +788,28 @@ class CustomerManagement {
                             <form id="refund-sessions-form">
                                 <div class="alert alert-warning">
                                     <i class="bi bi-exclamation-triangle me-2"></i>
-                                    This will add sessions back to the active block
+                                    Dies fügt Behandlungen zurück zum aktiven Block
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label class="form-label">Sessions to Refund <span class="text-danger">*</span></label>
+                                    <label class="form-label">Zu erstattende Behandlungen <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control" id="sessions-to-refund" 
                                            min="1" max="10" value="1" required>
-                                    <small class="text-muted">Number of sessions to add back</small>
+                                    <small class="text-muted">Anzahl der zurückzufügenden Behandlungen</small>
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">Reason <span class="text-danger">*</span></label>
+                                    <label class="form-label">Grund <span class="text-danger">*</span></label>
                                     <textarea class="form-control" id="refund-reason" rows="2" required
-                                              placeholder="e.g., Appointment cancelled, Error in consumption"></textarea>
+                                              placeholder="z.B. Termin abgesagt, Fehler beim Verbrauch"></textarea>
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-success" onclick="customerManagement.refundSessions()">
                                 <i class="bi bi-check-circle me-1"></i>
-                                Refund Sessions
+                                Behandlungen erstatten
                             </button>
                         </div>
                     </div>
@@ -819,7 +851,7 @@ class CustomerManagement {
             this.updateStatistics();
         } catch (error) {
             console.error('Error loading customers:', error);
-            this.showNotification('Failed to load customers', 'error');
+            this.showNotification('Fehler beim Laden der Kunden', 'error');
         } finally {
             this.isLoading = false;
             this.updateUI();
@@ -901,18 +933,13 @@ class CustomerManagement {
                                     <h3 class="mb-2">${customer.name}</h3>
                                     <div class="d-flex gap-3 flex-wrap">
                                         ${customer.has_app_access ? 
-                                            '<span class="badge bg-success"><i class="bi bi-phone-fill me-1"></i>App User</span>' :
+                                            '<span class="badge bg-success"><i class="bi bi-phone-fill me-1"></i>App Benutzer</span>' :
                                             '<span class="badge bg-warning"><i class="bi bi-clock me-1"></i>Not Registered</span>'}
                                         ${customer.remaining_sessions > 0 ? 
                                             '<span class="badge bg-info"><i class="bi bi-check-circle me-1"></i>Active</span>' :
                                             '<span class="badge bg-secondary">Inactive</span>'}
-                                        <span class="text-muted">Customer since ${new Date(customer.customer_since).toLocaleDateString()}</span>
+                                        <span class="text-muted">Kunde seit ${new Date(customer.customer_since).toLocaleDateString()}</span>
                                     </div>
-                                </div>
-                                <div class="text-end">
-                                    <button class="btn btn-primary" onclick="customerManagement.showAddSessionsModal(${customer.id})">
-                                        <i class="bi bi-plus-circle me-1"></i>Add Sessions
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -927,14 +954,14 @@ class CustomerManagement {
                                 </h5>
                                 <div class="mb-3">
                                     <label class="text-muted small">Phone</label>
-                                    <div class="fw-medium">${customer.phone || 'Not provided'}</div>
+                                    <div class="fw-medium">${customer.phone || 'Nicht angegeben'}</div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="text-muted small">Email</label>
-                                    <div class="fw-medium">${customer.email || 'Not provided'}</div>
+                                    <div class="fw-medium">${customer.email || 'Nicht angegeben'}</div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="text-muted small">Registration Code</label>
+                                    <label class="text-muted small">Registrierungscode</label>
                                     <div class="d-flex align-items-center">
                                         <span class="registration-code me-2">${customer.registration_code}</span>
                                         ${!customer.has_app_access ? `
@@ -956,15 +983,15 @@ class CustomerManagement {
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5 class="card-title mb-0">
-                                        <i class="bi bi-box-seam me-2"></i>Session Blocks
+                                        <i class="bi bi-box-seam me-2"></i>Behandlungsblöcke
                                     </h5>
                                     ${!pendingBlock ? `
                                         <button class="btn btn-sm btn-outline-primary" onclick="customerManagement.showAddSessionsModal(${customer.id})">
-                                            <i class="bi bi-plus"></i> Add Pending Block
+                                            <i class="bi bi-plus"></i> Wartenden Block hinzufügen
                                         </button>
                                     ` : `
                                         <button class="btn btn-sm btn-outline-danger" onclick="customerManagement.deletePendingBlock(${customer.id}, ${pendingBlock.id})">
-                                            <i class="bi bi-trash"></i> Delete Pending
+                                            <i class="bi bi-trash"></i> Wartenden Block löschen
                                         </button>
                                     `}
                                 </div>
@@ -1035,7 +1062,7 @@ class CustomerManagement {
                                         </div>
                                         <div class="d-flex justify-content-between mt-2">
                                             <small>Purchased: ${new Date(pendingBlock.purchase_date).toLocaleDateString()}</small>
-                                            <small>Payment: ${pendingBlock.payment_method || 'Unknown'}</small>
+                                            <small>Zahlung: ${pendingBlock.payment_method || 'Unbekannt'}</small>
                                         </div>
                                     </div>
                                 ` : ''}
@@ -1079,7 +1106,7 @@ class CustomerManagement {
                                                 <div class="d-flex justify-content-between">
                                                     <div>
                                                         <strong>${new Date(apt.appointment_date).toLocaleDateString()}</strong>
-                                                        <div class="text-muted small">${apt.appointment_time || 'Time TBD'}</div>
+                                                        <div class="text-muted small">${apt.appointment_time || 'Zeit folgt'}</div>
                                                     </div>
                                                     <div>
                                                         <span class="badge bg-${apt.status === 'confirmed' ? 'success' : 'warning'}">
@@ -1159,13 +1186,50 @@ class CustomerManagement {
                 </div>
             `;
 
+            // Ensure modal exists before trying to use it
+            this.ensureModalsExist();
+            
+            const modalContent = document.getElementById('customer-details-content');
+            if (!modalContent) {
+                console.error('customer-details-content element not found, creating modal structure');
+                // Force create the modal if it doesn't exist
+                const modalHTML = `
+                    <div class="modal fade" id="customerDetailsModal" tabindex="-1">
+                        <div class="modal-dialog modal-xl">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="bi bi-person me-2"></i>
+                                        Kundendetails
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" id="customer-details-content">
+                                    <!-- Content loaded dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Remove existing modal if any
+                const existingModal = document.getElementById('customerDetailsModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                // Add new modal to body
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+            }
+            
+            // Now set the content
             document.getElementById('customer-details-content').innerHTML = content;
             
             const modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
             modal.show();
         } catch (error) {
             console.error('Error loading customer details:', error);
-            this.showNotification('Failed to load customer details', 'error');
+            this.showNotification('Fehler beim Laden der Kundendetails', 'error');
         }
     }
 
@@ -1260,14 +1324,14 @@ class CustomerManagement {
         const notes = document.getElementById('customer-notes').value.trim();
 
         if (!firstName || !lastName || !phone || !sessionPackage || !paymentMethod) {
-            this.showNotification('Please fill all required fields', 'error');
+            this.showNotification('Bitte füllen Sie alle Pflichtfelder aus', 'error');
             return;
         }
 
         const studioId = this.getStudioId();
         if (!studioId) {
             console.error('Studio ID not set in CustomerManagement');
-            this.showNotification('Studio ID not set. Please refresh the page.', 'error');
+            this.showNotification('Studio-ID nicht gesetzt. Bitte laden Sie die Seite neu.', 'error');
             return;
         }
 
@@ -1308,7 +1372,7 @@ class CustomerManagement {
             await this.loadCustomers();
         } catch (error) {
             console.error('Error creating customer:', error);
-            this.showNotification('Failed to create customer', 'error');
+            this.showNotification('Fehler beim Erstellen des Kunden', 'error');
         }
     }
 
@@ -1330,7 +1394,7 @@ class CustomerManagement {
         const notes = document.getElementById('add-sessions-notes').value.trim();
 
         if (!sessionPackage || !paymentMethod) {
-            this.showNotification('Please select package and payment method', 'error');
+            this.showNotification('Bitte wählen Sie Paket und Zahlungsart aus', 'error');
             return;
         }
 
@@ -1369,7 +1433,7 @@ class CustomerManagement {
             }
             
             // Show success notification
-            this.showNotification(result.message || `Added ${sessionPackage} sessions successfully`, 'success');
+            this.showNotification(result.message || `${sessionPackage} Behandlungen erfolgreich hinzugefügt`, 'success');
             
             // Reset form
             const form = document.getElementById('add-sessions-form');
@@ -1391,7 +1455,7 @@ class CustomerManagement {
             
         } catch (error) {
             console.error('Error adding sessions:', error);
-            this.showNotification(error.message || 'Failed to add sessions', 'error');
+            this.showNotification(error.message || 'Fehler beim Hinzufügen der Behandlungen', 'error');
         } finally {
             // Re-enable the button
             submitBtn.disabled = false;
@@ -1403,7 +1467,7 @@ class CustomerManagement {
         // Try modern clipboard API first
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(code).then(() => {
-                this.showNotification(`Code ${code} copied to clipboard!`, 'success');
+                this.showNotification(`Code ${code} in Zwischenablage kopiert!`, 'success');
             }).catch(err => {
                 console.warn('Clipboard API failed, using fallback:', err.message);
                 this.fallbackCopyCode(code);
@@ -1426,7 +1490,7 @@ class CustomerManagement {
         
         try {
             document.execCommand('copy');
-            this.showNotification(`Code ${code} copied to clipboard!`, 'success');
+            this.showNotification(`Code ${code} in Zwischenablage kopiert!`, 'success');
         } catch (err) {
             console.error('Fallback copy failed:', err);
             this.showNotification(`Registration code: ${code} (copy manually)`, 'info');
@@ -1443,10 +1507,16 @@ class CustomerManagement {
             sessions: this.customers.reduce((sum, c) => sum + (c.remaining_sessions || 0), 0)
         };
 
-        document.getElementById('stat-total').textContent = stats.total;
-        document.getElementById('stat-registered').textContent = stats.registered;
-        document.getElementById('stat-active-blocks').textContent = stats.activeBlocks;
-        document.getElementById('stat-sessions').textContent = stats.sessions;
+        // Check if elements exist before updating
+        const totalEl = document.getElementById('stat-total');
+        const registeredEl = document.getElementById('stat-registered');
+        const activeBlocksEl = document.getElementById('stat-active-blocks');
+        const sessionsEl = document.getElementById('stat-sessions');
+
+        if (totalEl) totalEl.textContent = stats.total;
+        if (registeredEl) registeredEl.textContent = stats.registered;
+        if (activeBlocksEl) activeBlocksEl.textContent = stats.activeBlocks;
+        if (sessionsEl) sessionsEl.textContent = stats.sessions;
     }
 
     updateUI() {
@@ -1465,7 +1535,7 @@ class CustomerManagement {
                     container.innerHTML = `
                         <div class="alert alert-danger">
                             <i class="bi bi-exclamation-triangle me-2"></i>
-                            Error rendering customers. Please refresh the page.
+                            Fehler beim Anzeigen der Kunden. Bitte laden Sie die Seite neu.
                         </div>
                     `;
                 }
@@ -1519,7 +1589,7 @@ class CustomerManagement {
         const reason = document.getElementById('consume-reason').value.trim();
 
         if (!sessionsToConsume || sessionsToConsume < 1) {
-            this.showNotification('Please enter valid number of sessions', 'error');
+            this.showNotification('Bitte geben Sie eine gültige Anzahl von Behandlungen ein', 'error');
             return;
         }
 
@@ -1557,7 +1627,7 @@ class CustomerManagement {
 
         } catch (error) {
             console.error('Error consuming sessions:', error);
-            this.showNotification(error.message || 'Failed to consume sessions', 'error');
+            this.showNotification(error.message || 'Fehler beim Verbrauchen der Behandlungen', 'error');
         }
     }
 
@@ -1576,12 +1646,12 @@ class CustomerManagement {
         const reason = document.getElementById('refund-reason').value.trim();
 
         if (!sessionsToRefund || sessionsToRefund < 1) {
-            this.showNotification('Please enter valid number of sessions', 'error');
+            this.showNotification('Bitte geben Sie eine gültige Anzahl von Behandlungen ein', 'error');
             return;
         }
 
         if (!reason) {
-            this.showNotification('Please provide a reason for the refund', 'error');
+            this.showNotification('Bitte geben Sie einen Grund für die Erstattung an', 'error');
             return;
         }
 
@@ -1620,7 +1690,7 @@ class CustomerManagement {
 
         } catch (error) {
             console.error('Error refunding sessions:', error);
-            this.showNotification(error.message || 'Failed to refund sessions', 'error');
+            this.showNotification(error.message || 'Fehler beim Erstatten der Behandlungen', 'error');
         }
     }
 
@@ -1674,12 +1744,12 @@ class CustomerManagement {
 
         } catch (error) {
             console.error('Error deleting session block:', error);
-            this.showNotification(error.message || 'Failed to delete session block', 'error');
+            this.showNotification(error.message || 'Fehler beim Löschen des Behandlungsblocks', 'error');
         }
     }
 
     async deletePendingBlock(customerId, blockId) {
-        if (!confirm('Are you sure you want to delete this pending block? This action cannot be undone.')) {
+        if (!confirm('Sind Sie sicher, dass Sie diesen wartenden Block löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
             return;
         }
 
@@ -1698,7 +1768,7 @@ class CustomerManagement {
             }
 
             const result = await response.json();
-            this.showNotification(result.message || 'Pending block deleted successfully', 'success');
+            this.showNotification(result.message || 'Wartender Block erfolgreich gelöscht', 'success');
 
             // Refresh customer details immediately
             await this.showCustomerDetails(customerId);
@@ -1709,7 +1779,7 @@ class CustomerManagement {
 
         } catch (error) {
             console.error('Error deleting session block:', error);
-            this.showNotification('Error deleting session block: ' + error.message, 'error');
+            this.showNotification('Fehler beim Löschen des Behandlungsblocks: ' + error.message, 'error');
         }
     }
 

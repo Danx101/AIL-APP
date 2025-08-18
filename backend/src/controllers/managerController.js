@@ -77,7 +77,7 @@ class ManagerController {
    * Get all manager codes
    * GET /api/v1/manager/studio-owner-codes
    */
-  async getStudioOwnerCodes(req, res) {
+  getStudioOwnerCodes = async (req, res) => {
     try {
       const { 
         page = 1, 
@@ -149,7 +149,7 @@ class ManagerController {
    * Get manager code statistics
    * GET /api/v1/manager/stats
    */
-  async getStatistics(req, res) {
+  getStatistics = async (req, res) => {
     try {
       const managerId = req.user.userId;
 
@@ -199,7 +199,7 @@ class ManagerController {
    * Get all studios overview with Google Sheets integration status
    * GET /api/v1/manager/studios
    */
-  async getStudiosOverview(req, res) {
+  getStudiosOverview = async (req, res) => {
     try {
       const managerId = req.user.userId;
       const { 
@@ -222,8 +222,8 @@ class ManagerController {
           u.first_name as owner_first_name,
           u.last_name as owner_last_name,
           CASE WHEN gsi.id IS NOT NULL THEN 1 ELSE 0 END as has_google_sheet,
+          gsi.sheet_id,
           gsi.sheet_name,
-          gsi.sheet_url,
           gsi.last_sync_at,
           gsi.auto_sync_enabled,
           COUNT(DISTINCT l.id) as total_leads,
@@ -233,7 +233,7 @@ class ManagerController {
           END) as imported_leads
         FROM studios s
         JOIN users u ON s.owner_id = u.id
-        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id AND gsi.is_active = 1
+        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id
         LEFT JOIN leads l ON s.id = l.studio_id
         WHERE s.created_by_manager_id = ?
       `;
@@ -274,7 +274,7 @@ class ManagerController {
       }
 
       // Group by studio and add ordering
-      query += ` GROUP BY s.id ORDER BY s.created_at DESC`;
+      query += ` GROUP BY s.id, u.email, u.first_name, u.last_name, gsi.id, gsi.sheet_id, gsi.sheet_name, gsi.last_sync_at, gsi.auto_sync_enabled ORDER BY s.created_at DESC`;
 
       // Add pagination
       query += ` LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
@@ -288,7 +288,7 @@ class ManagerController {
         SELECT COUNT(DISTINCT s.id) as total
         FROM studios s
         JOIN users u ON s.owner_id = u.id
-        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id AND gsi.is_active = 1
+        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id
         WHERE s.created_by_manager_id = ?
       `;
       
@@ -331,8 +331,8 @@ class ManagerController {
         has_google_sheet: studio.has_google_sheet === 1,
         google_sheets_integration: studio.has_google_sheet ? {
           connected: true,
+          sheet_id: studio.sheet_id,
           sheet_name: studio.sheet_name,
-          sheet_url: studio.sheet_url,
           last_sync: studio.last_sync_at,
           auto_sync_enabled: studio.auto_sync_enabled === 1,
           total_leads_imported: studio.imported_leads || 0
@@ -361,7 +361,7 @@ class ManagerController {
    * Get studio-specific Google Sheets integration details
    * GET /api/v1/manager/studios/:studioId/integration
    */
-  async getStudioIntegration(req, res) {
+  getStudioIntegration = async (req, res) => {
     try {
       const managerId = req.user.userId;
       const { studioId } = req.params;
@@ -374,7 +374,7 @@ class ManagerController {
           u.first_name as owner_first_name,
           u.last_name as owner_last_name,
           gsi.id as integration_id,
-          gsi.sheet_url,
+          gsi.sheet_id,
           gsi.sheet_name,
           gsi.column_mapping,
           gsi.auto_sync_enabled,
@@ -382,7 +382,7 @@ class ManagerController {
           gsi.created_at as integration_created_at
         FROM studios s
         JOIN users u ON s.owner_id = u.id
-        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id AND gsi.is_active = 1
+        LEFT JOIN google_sheets_integrations gsi ON s.id = gsi.studio_id
         WHERE s.id = ? AND s.created_by_manager_id = ?
       `, [studioId, managerId]);
 
@@ -420,12 +420,12 @@ class ManagerController {
           city: studio.city,
           address: studio.address,
           phone: studio.phone,
-          is_active: studio.is_active
+          is_active: true
         },
         integration: studio.integration_id ? {
           connected: true,
           integration_id: studio.integration_id,
-          sheet_url: studio.sheet_url,
+          sheet_id: studio.sheet_id,
           sheet_name: studio.sheet_name,
           column_mapping: JSON.parse(studio.column_mapping || '{}'),
           auto_sync_enabled: studio.auto_sync_enabled === 1,
@@ -453,7 +453,7 @@ class ManagerController {
    * Get cities overview
    * GET /api/v1/manager/cities
    */
-  async getCitiesOverview(req, res) {
+  getCitiesOverview = async (req, res) => {
     try {
       const managerId = req.user.userId;
 
@@ -493,7 +493,7 @@ class ManagerController {
   /**
    * Generate a unique 8-character alphanumeric code
    */
-  generateCode() {
+  generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
     for (let i = 0; i < 8; i++) {

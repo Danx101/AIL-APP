@@ -146,7 +146,125 @@ class GoogleSheetsService {
   }
 
   /**
-   * Import leads from Google Sheets
+   * Import NEW leads from Google Sheets (only rows not previously synced)
+   */
+  async importNewLeads(studioId, sheetUrl, columnMapping, managerId, integrationId = null, worksheetIndex = 0) {
+    try {
+      const { doc, sheetId } = await this.connectToSheet(sheetUrl);
+      const sheet = doc.sheetsByIndex[worksheetIndex];
+      
+      if (!sheet) {
+        throw new Error('Worksheet not found');
+      }
+
+      await sheet.loadHeaderRow();
+      const rows = await sheet.getRows();
+
+      // Validate column mapping
+      const requiredFields = ['name', 'phone_number'];
+      
+      for (const field of requiredFields) {
+        if (!columnMapping[field]) {
+          throw new Error(`Missing required field mapping: ${field}`);
+        }
+        if (!sheet.headerValues.includes(columnMapping[field])) {
+          throw new Error(`Column '${columnMapping[field]}' not found in sheet`);
+        }
+      }
+
+      // Get existing synced row IDs for this studio and sheet
+      const existingRowIds = await this.getExistingSyncedRows(studioId, sheetId);
+      console.log(`Found ${existingRowIds.size} previously synced rows for studio ${studioId}`);
+
+      // Generate sync ID for this import
+      const syncId = `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Transform sheet data to lead objects (only new rows)
+      const leadsData = [];
+      const errors = [];
+      const skippedRows = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowId = i + 2; // Google Sheets is 1-indexed and we skip header
+        
+        // Skip if this row was already synced
+        if (existingRowIds.has(rowId)) {
+          skippedRows.push({
+            row: rowId,
+            reason: 'Already synced previously'
+          });
+          continue;
+        }
+        
+        try {
+          const leadData = {
+            name: row.get(columnMapping.name)?.trim(),
+            phone_number: this.normalizePhoneNumber(row.get(columnMapping.phone_number)?.trim()),
+            email: columnMapping.email ? row.get(columnMapping.email)?.trim() : null,
+            notes: columnMapping.notes ? row.get(columnMapping.notes)?.trim() : null,
+            row_id: rowId,
+            sheet_id: sheetId
+          };
+
+          // Validate required fields
+          if (!leadData.name || !leadData.phone_number) {
+            errors.push({
+              row: rowId,
+              error: 'Missing required fields (name or phone_number)',
+              data: leadData
+            });
+            continue;
+          }
+
+          leadsData.push(leadData);
+
+        } catch (error) {
+          errors.push({
+            row: rowId,
+            error: error.message,
+            rawData: row
+          });
+        }
+      }
+
+      console.log(`Processing ${leadsData.length} new leads, skipping ${skippedRows.length} existing rows`);
+
+      // Import only new leads to database
+      let importResult = {
+        imported: 0,
+        updated: 0,
+        errors: 0,
+        errorDetails: []
+      };
+
+      if (leadsData.length > 0) {
+        importResult = await Lead.bulkImport(studioId, leadsData, syncId, managerId);
+      }
+
+      // Update integration sync time
+      await this.updateIntegrationSyncTime(integrationId);
+
+      return {
+        success: true,
+        imported: importResult.imported || 0,
+        updated: importResult.updated || 0,
+        skipped: skippedRows.length,
+        errors: importResult.errors + errors.length,
+        errorDetails: [...(importResult.errorDetails || []), ...errors],
+        syncId,
+        totalRows: rows.length,
+        newRows: leadsData.length
+      };
+
+    } catch (error) {
+      console.error('Error importing new leads:', error);
+      throw new Error(`Failed to import new leads: ${error.message}`);
+    }
+  }
+
+  /**
+   * Import leads from Google Sheets (original method for initial setup)
    */
   async importLeads(studioId, sheetUrl, columnMapping, managerId, worksheetIndex = 0) {
     try {
@@ -242,13 +360,13 @@ class GoogleSheetsService {
   }
 
   /**
-   * Sync leads from Google Sheets (for scheduled updates)
+   * Sync leads from Google Sheets (manual or triggered sync)
    */
   async syncLeads(integrationId) {
     try {
       const integration = await this.getIntegrationById(integrationId);
-      if (!integration || !integration.auto_sync_enabled) {
-        throw new Error('Integration not found or auto-sync disabled');
+      if (!integration) {
+        throw new Error('Integration not found');
       }
 
       // Handle null or invalid column mapping
@@ -268,17 +386,27 @@ class GoogleSheetsService {
         };
       }
 
-      const result = await this.importLeads(
+      // Use importNewLeads to only sync new rows
+      const result = await this.importNewLeads(
         integration.studio_id,
         `https://docs.google.com/spreadsheets/d/${integration.sheet_id}`,
         columnMapping,
-        integration.manager_id
+        integration.manager_id,
+        integrationId,
+        0 // worksheetIndex
       );
 
-      // Update last sync time
-      await this.updateIntegrationSyncTime(integrationId);
+      console.log(`Sync completed for integration ${integrationId}:`, {
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors
+      });
 
-      return result;
+      return {
+        success: true,
+        importResults: result,
+        message: `Sync completed: ${result.imported} new leads imported, ${result.skipped} existing leads skipped`
+      };
 
     } catch (error) {
       console.error('Error syncing leads:', error);
@@ -347,6 +475,27 @@ class GoogleSheetsService {
         }
       });
     });
+  }
+
+  /**
+   * Get existing synced row IDs for a studio and sheet
+   */
+  async getExistingSyncedRows(studioId, sheetId) {
+    try {
+      const leads = await db.all(`
+        SELECT DISTINCT google_sheets_row_id 
+        FROM leads 
+        WHERE studio_id = ? 
+          AND google_sheets_row_id IS NOT NULL
+          AND source = 'google_sheets'
+      `, [studioId]);
+      
+      // Return as Set for efficient lookup
+      return new Set(leads.map(lead => lead.google_sheets_row_id));
+    } catch (error) {
+      console.error('Error getting existing synced rows:', error);
+      return new Set(); // Return empty set on error
+    }
   }
 
   /**

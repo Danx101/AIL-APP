@@ -12,7 +12,56 @@ class App {
         this.currentDate = new Date();
         this.selectedDate = new Date();
         this.currentStudioId = null;
+        this.isLoggingOut = false; // Prevent multiple logout calls
+        this.setupFetchInterceptor(); // Setup global 401 handler
         this.init();
+    }
+    
+    // Global fetch wrapper to handle 401 errors
+    setupFetchInterceptor() {
+        const originalFetch = window.fetch;
+        const self = this;
+        
+        window.fetch = async function(...args) {
+            const response = await originalFetch(...args);
+            
+            // Check for 401 Unauthorized response
+            if (response.status === 401 && !self.isLoggingOut) {
+                self.isLoggingOut = true;
+                
+                // Clear all auth data
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                localStorage.removeItem('userRole');
+                
+                // Show notification
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-warning alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                alertDiv.style.zIndex = '9999';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.body.appendChild(alertDiv);
+                
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove();
+                    }
+                }, 5000);
+                
+                // Redirect to login page after a short delay
+                setTimeout(() => {
+                    self.isLoggingOut = false;
+                    self.showLoginModal();
+                    self.updateUIForGuestUser();
+                }, 1000);
+            }
+            
+            return response;
+        };
     }
 
     async init() {
@@ -20,6 +69,32 @@ class App {
         this.initSidebar();
         this.checkAPIStatus();
         await this.checkAuthStatus();
+        
+        // Initialize CustomerManagement component for shared modal access
+        this.initializeCustomerManagement();
+    }
+
+    async initializeCustomerManagement() {
+        try {
+            // Check if CustomerManagement class is available
+            if (typeof CustomerManagement === 'undefined') {
+                console.log('CustomerManagement class not yet loaded, skipping initialization');
+                return;
+            }
+            
+            // Initialize CustomerManagement if not already done
+            if (!window.customerManagement) {
+                window.customerManagement = new CustomerManagement();
+            }
+            
+            // Initialize with skipTabSwitch=true so it doesn't interfere with current view
+            // This just ensures the modals are available
+            if (this.currentStudioId) {
+                await window.customerManagement.init(this.currentStudioId, true);
+            }
+        } catch (error) {
+            console.error('Error initializing CustomerManagement:', error);
+        }
     }
 
     async checkAuthStatus() {
@@ -996,7 +1071,7 @@ class App {
         }
 
         try {
-            // Update the header with selected date
+            // Update the header with selected date and add quick schedule button
             const selectedDateDisplayStr = selectedDate.toLocaleDateString('de-DE', { 
                 weekday: 'long', 
                 year: 'numeric', 
@@ -1005,7 +1080,15 @@ class App {
             });
             const headerElement = document.getElementById('selectedDateHeader');
             if (headerElement) {
-                headerElement.textContent = `Termine für ${selectedDateDisplayStr}`;
+                headerElement.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Termine für ${selectedDateDisplayStr}</span>
+                        <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
+                            <i class="fas fa-plus-circle me-1"></i>
+                            Neue Behandlung
+                        </button>
+                    </div>
+                `;
             }
 
             // Show loading
@@ -1529,7 +1612,7 @@ class App {
                                 <i class="fas fa-shopping-cart text-primary me-2"></i>
                                 Behandlungspaket kaufen
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">
@@ -1685,7 +1768,7 @@ class App {
                                     <i class="fas fa-calendar-day text-primary me-2"></i>
                                     Heutige Termine
                                 </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="row mb-3">
@@ -1854,7 +1937,7 @@ class App {
                                     <i class="fas fa-dumbbell text-primary me-2"></i>
                                     Meine Behandlungsblöcke
                                 </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="mb-3">
@@ -3472,64 +3555,138 @@ class App {
     }
 
     showAppointmentManagement(studioId) {
+        console.log('showAppointmentManagement called with studioId:', studioId);
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="container-fluid p-4">
-                <!-- Header Section -->
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="glass-card p-4">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h1 class="h3 mb-1">
-                                        <i class="fas fa-calendar-alt text-primary me-2"></i>
-                                        Termine verwalten
-                                    </h1>
-                                    <p class="text-muted mb-0">Verwalten Sie Ihre Termine und buchen Sie neue Behandlungen</p>
+                <!-- Header -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2 class="h3 mb-0">
+                            <i class="fas fa-calendar-alt text-primary me-2"></i>
+                            Termine verwalten
+                        </h2>
+                        <p class="text-muted mb-0">Verwalten Sie Ihre Termine und buchen Sie neue Behandlungen</p>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary active" id="calendarViewBtn">
+                            <i class="fas fa-calendar me-1"></i>Kalender
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="listViewBtn">
+                            <i class="fas fa-list me-1"></i>Liste
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Calendar View -->
+                <div id="calendarView" class="row">
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Kalender</h6>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" id="prevMonthBtn">‹</button>
+                                    <button class="btn btn-outline-primary" id="nextMonthBtn">›</button>
                                 </div>
-                                <div>
-                                    <button class="btn btn-primary" id="createAppointmentBtn">
-                                        <i class="fas fa-plus me-2"></i>
-                                        Neuer Termin
-                                    </button>
+                            </div>
+                            <div id="monthYearDisplay" class="text-center mb-3">
+                                <strong>Januar 2025</strong>
+                            </div>
+                            <div id="calendarGrid">
+                                <!-- Calendar will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card border-0 shadow-sm p-3 mb-3">
+                            <h6 id="selectedDateHeader" class="mb-3">Termine für heute</h6>
+                            <div id="appointmentsList">
+                                <div class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Lade Termine...</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Main Content -->
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="glass-card p-4">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="glass-card p-3 mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <h6 class="mb-0">Kalender</h6>
-                                            <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-primary" id="prevMonthBtn">‹</button>
-                                                <button class="btn btn-outline-primary" id="nextMonthBtn">›</button>
+
+                <!-- List View -->
+                <div id="listView" class="d-none">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <!-- Tab Navigation -->
+                            <ul class="nav nav-tabs" id="appointmentTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="upcoming-tab" data-bs-toggle="tab" data-bs-target="#upcoming" type="button" role="tab">
+                                        <i class="fas fa-calendar-check me-2"></i>Kommende Termine
+                                        <span class="badge bg-primary ms-2" id="upcomingCount">0</span>
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="past-tab" data-bs-toggle="tab" data-bs-target="#past" type="button" role="tab">
+                                        <i class="fas fa-history me-2"></i>Vergangene Termine
+                                        <span class="badge bg-secondary ms-2" id="pastCount">0</span>
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <!-- Tab Content -->
+                            <div class="tab-content" id="appointmentTabContent">
+                                <!-- Upcoming Appointments Tab -->
+                                <div class="tab-pane fade show active" id="upcoming" role="tabpanel">
+                                    <div class="row mt-3 mb-3">
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control" id="upcomingSearch" placeholder="Suche nach Kunde, Behandlung...">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select class="form-select" id="upcomingStatusFilter">
+                                                <option value="">Alle Status</option>
+                                                <option value="bestätigt">Bestätigt</option>
+                                                <option value="pending">Wartend</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <!-- Neuer Termin button removed from list view -->
+                                        </div>
+                                    </div>
+                                    <div id="upcomingAppointmentsList">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Loading...</span>
                                             </div>
-                                        </div>
-                                        <div id="monthYearDisplay" class="text-center mb-3">
-                                            <strong>Januar 2025</strong>
-                                        </div>
-                                        <div id="calendarGrid">
-                                            <!-- Calendar will be generated here -->
+                                            <p class="mt-2">Lade kommende Termine...</p>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-8">
-                                    <div class="glass-card p-3 mb-3">
-                                        <h6 id="selectedDateHeader" class="mb-3">Termine für heute</h6>
-                                        <div id="appointmentsList">
-                                            <div class="text-center">
-                                                <div class="spinner-border" role="status">
-                                                    <span class="visually-hidden">Loading...</span>
-                                                </div>
-                                                <p class="mt-2">Lade Termine...</p>
+
+                                <!-- Past Appointments Tab -->
+                                <div class="tab-pane fade" id="past" role="tabpanel">
+                                    <div class="row mt-3 mb-3">
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control" id="pastSearch" placeholder="Suche nach Kunde, Behandlung...">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select class="form-select" id="pastStatusFilter">
+                                                <option value="">Alle Status</option>
+                                                <option value="abgeschlossen">Abgeschlossen</option>
+                                                <option value="abgesagt">Abgesagt</option>
+                                                <option value="nicht erschienen">Nicht erschienen</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-outline-secondary w-100" id="exportPastBtn">
+                                                <i class="fas fa-download me-1"></i>Exportieren
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="pastAppointmentsList">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Loading...</span>
                                             </div>
+                                            <p class="mt-2">Lade vergangene Termine...</p>
                                         </div>
                                     </div>
                                 </div>
@@ -3540,26 +3697,59 @@ class App {
             </div>
         `;
 
+        // Replace placeholder with actual studio ID
+        content.innerHTML = content.innerHTML.replace(/__STUDIO_ID__/g, studioId);
+
         // Set current studio ID and reset dates
         this.currentStudioId = studioId;
         this.selectedDate = new Date(); // Reset to today when opening appointment management
+        
+        // Re-initialize CustomerManagement with new studio ID for modal access
+        this.initializeCustomerManagement(studioId);
+        
+        // Initialize view state
+        this.currentAppointmentView = 'calendar';
+        this.currentListTab = 'upcoming';
+        this.allAppointments = [];
+        this.upcomingAppointments = [];
+        this.pastAppointments = [];
 
-        // Event listeners
-        document.getElementById('createAppointmentBtn').addEventListener('click', () => {
-            this.showCreateAppointmentForm(studioId);
+        // View toggle event listeners
+        document.getElementById('calendarViewBtn').addEventListener('click', () => {
+            this.switchToCalendarView();
         });
 
-
-
-        document.getElementById('prevMonthBtn').addEventListener('click', () => {
-            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
-            this.renderCalendar();
+        document.getElementById('listViewBtn').addEventListener('click', () => {
+            this.switchToListView();
         });
 
-        document.getElementById('nextMonthBtn').addEventListener('click', () => {
-            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
-            this.renderCalendar();
-        });
+        // Calendar navigation event listeners
+        const prevBtn = document.getElementById('prevMonthBtn');
+        const nextBtn = document.getElementById('nextMonthBtn');
+        
+        if (prevBtn && nextBtn) {
+            prevBtn.addEventListener('click', () => {
+                console.log('Previous month clicked');
+                this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+                this.renderCalendar();
+                // Reload appointments for the new month
+                if (this.currentStudioId && this.currentAppointmentView === 'calendar') {
+                    this.loadAppointments(this.currentStudioId);
+                }
+            });
+
+            nextBtn.addEventListener('click', () => {
+                console.log('Next month clicked');
+                this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+                this.renderCalendar();
+                // Reload appointments for the new month
+                if (this.currentStudioId && this.currentAppointmentView === 'calendar') {
+                    this.loadAppointments(this.currentStudioId);
+                }
+            });
+        } else {
+            console.error('Calendar navigation buttons not found:', { prevBtn, nextBtn });
+        }
 
         // Initialize calendar and load appointments after DOM is ready
         setTimeout(() => {
@@ -3572,7 +3762,296 @@ class App {
             }
             this.renderCalendar();
             this.loadAppointments(studioId);
+            this.setupListViewEventListeners();
         }, 100);
+    }
+
+    switchToCalendarView() {
+        this.currentAppointmentView = 'calendar';
+        
+        // Update button states
+        document.getElementById('calendarViewBtn').classList.add('active');
+        document.getElementById('listViewBtn').classList.remove('active');
+        
+        // Show/hide views
+        document.getElementById('calendarView').classList.remove('d-none');
+        document.getElementById('listView').classList.add('d-none');
+    }
+
+    switchToListView() {
+        this.currentAppointmentView = 'list';
+        
+        // Update button states
+        document.getElementById('calendarViewBtn').classList.remove('active');
+        document.getElementById('listViewBtn').classList.add('active');
+        
+        // Show/hide views
+        document.getElementById('calendarView').classList.add('d-none');
+        document.getElementById('listView').classList.remove('d-none');
+        
+        // Load all appointments for list view 
+        console.log('switchToListView: currentStudioId =', this.currentStudioId);
+        if (this.currentStudioId) {
+            this.loadAllAppointments(this.currentStudioId);
+        } else {
+            console.error('No currentStudioId available for loading appointments');
+        }
+    }
+
+    setupListViewEventListeners() {
+        // Upcoming search
+        const upcomingSearch = document.getElementById('upcomingSearch');
+        if (upcomingSearch) {
+            let searchTimeout;
+            upcomingSearch.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.filterUpcomingAppointments(e.target.value);
+                }, 300);
+            });
+        }
+
+        // Upcoming status filter
+        const upcomingStatusFilter = document.getElementById('upcomingStatusFilter');
+        if (upcomingStatusFilter) {
+            upcomingStatusFilter.addEventListener('change', (e) => {
+                this.filterUpcomingAppointments(upcomingSearch?.value || '', e.target.value);
+            });
+        }
+
+        // Past search
+        const pastSearch = document.getElementById('pastSearch');
+        if (pastSearch) {
+            let searchTimeout;
+            pastSearch.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.filterPastAppointments(e.target.value);
+                }, 300);
+            });
+        }
+
+        // Past status filter
+        const pastStatusFilter = document.getElementById('pastStatusFilter');
+        if (pastStatusFilter) {
+            pastStatusFilter.addEventListener('change', (e) => {
+                this.filterPastAppointments(pastSearch?.value || '', e.target.value);
+            });
+        }
+
+        // Export button
+        const exportBtn = document.getElementById('exportPastBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportPastAppointments();
+            });
+        }
+    }
+
+    filterUpcomingAppointments(searchTerm = '', statusFilter = '') {
+        const searchLower = searchTerm.toLowerCase();
+        let filtered = this.upcomingAppointments;
+
+        if (searchTerm) {
+            filtered = filtered.filter(apt => {
+                const customerName = this.getCustomerDisplayName(apt).toLowerCase();
+                const appointmentType = (apt.appointment_type_name || '').toLowerCase();
+                const notes = (apt.notes || '').toLowerCase();
+                return customerName.includes(searchLower) || 
+                       appointmentType.includes(searchLower) || 
+                       notes.includes(searchLower);
+            });
+        }
+
+        if (statusFilter) {
+            filtered = filtered.filter(apt => apt.status === statusFilter);
+        }
+
+        this.renderFilteredUpcomingList(filtered);
+    }
+
+    filterPastAppointments(searchTerm = '', statusFilter = '') {
+        const searchLower = searchTerm.toLowerCase();
+        let filtered = this.pastAppointments;
+
+        if (searchTerm) {
+            filtered = filtered.filter(apt => {
+                const customerName = this.getCustomerDisplayName(apt).toLowerCase();
+                const appointmentType = (apt.appointment_type_name || '').toLowerCase();
+                const notes = (apt.notes || '').toLowerCase();
+                return customerName.includes(searchLower) || 
+                       appointmentType.includes(searchLower) || 
+                       notes.includes(searchLower);
+            });
+        }
+
+        if (statusFilter) {
+            filtered = filtered.filter(apt => apt.status === statusFilter);
+        }
+
+        this.renderFilteredPastList(filtered);
+    }
+
+    renderFilteredUpcomingList(appointments) {
+        const container = document.getElementById('upcomingAppointmentsList');
+        if (!container) return;
+        
+        if (appointments.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-search fa-3x mb-3"></i>
+                    <h6>Keine passenden Termine gefunden</h6>
+                    <p class="mb-0">Versuchen Sie andere Suchbegriffe oder Filter.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        
+        appointments.forEach(apt => {
+            const customerName = this.getCustomerDisplayName(apt);
+            const statusBadge = this.getListStatusBadge(apt.status);
+            const typeColor = apt.appointment_type_color || '#007bff';
+            const timeUntil = this.getTimeUntilAppointment(apt);
+            
+            html += `
+                <div class="list-group-item border-start" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge me-2" style="background-color: ${typeColor}">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                ${statusBadge}
+                                ${timeUntil ? `<small class="text-muted ms-2">${timeUntil}</small>` : ''}
+                            </div>
+                            <h6 class="mb-1">${customerName}</h6>
+                            <div class="text-muted small">
+                                <i class="fas fa-calendar me-1"></i>
+                                ${this.formatDate(apt.appointment_date)}
+                                <i class="fas fa-clock ms-3 me-1"></i>
+                                ${apt.start_time} - ${apt.end_time}
+                                ${apt.customer_phone ? `<i class="fas fa-phone ms-3 me-1"></i>${apt.customer_phone}` : ''}
+                            </div>
+                            ${apt.notes ? `<small class="text-muted d-block mt-1"><i class="fas fa-sticky-note me-1"></i>${apt.notes}</small>` : ''}
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="window.app.editAppointment(${apt.id})">
+                                    <i class="fas fa-edit me-2"></i>Bearbeiten
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" onclick="window.app.markAppointmentCompleted(${apt.id})">
+                                    <i class="fas fa-check me-2"></i>Als abgeschlossen markieren
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="window.app.cancelAppointment(${apt.id})">
+                                    <i class="fas fa-times me-2"></i>Absagen
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    renderFilteredPastList(appointments) {
+        const container = document.getElementById('pastAppointmentsList');
+        if (!container) return;
+        
+        if (appointments.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-search fa-3x mb-3"></i>
+                    <h6>Keine passenden Termine gefunden</h6>
+                    <p class="mb-0">Versuchen Sie andere Suchbegriffe oder Filter.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        
+        appointments.forEach(apt => {
+            const customerName = this.getCustomerDisplayName(apt);
+            const statusBadge = this.getListStatusBadge(apt.status);
+            const typeColor = apt.appointment_type_color || '#6c757d';
+            
+            html += `
+                <div class="list-group-item border-start" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important; opacity: 0.8;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge me-2" style="background-color: ${typeColor}; opacity: 0.8;">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                ${statusBadge}
+                            </div>
+                            <h6 class="mb-1">${customerName}</h6>
+                            <div class="text-muted small">
+                                <i class="fas fa-calendar me-1"></i>
+                                ${this.formatDate(apt.appointment_date)}
+                                <i class="fas fa-clock ms-3 me-1"></i>
+                                ${apt.start_time} - ${apt.end_time}
+                                ${apt.customer_phone ? `<i class="fas fa-phone ms-3 me-1"></i>${apt.customer_phone}` : ''}
+                            </div>
+                            ${apt.notes ? `<small class="text-muted d-block mt-1"><i class="fas fa-sticky-note me-1"></i>${apt.notes}</small>` : ''}
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="window.app.viewAppointmentDetails(${apt.id})">
+                                    <i class="fas fa-eye me-2"></i>Details anzeigen
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" onclick="window.app.addAppointmentNotes(${apt.id})">
+                                    <i class="fas fa-sticky-note me-2"></i>Notiz hinzufügen
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    exportPastAppointments() {
+        if (this.pastAppointments.length === 0) {
+            alert('Keine vergangenen Termine zum Exportieren verfügbar.');
+            return;
+        }
+
+        // Create CSV content
+        const headers = ['Datum', 'Zeit', 'Kunde', 'Behandlung', 'Status', 'Notizen'];
+        const csvContent = [
+            headers.join(','),
+            ...this.pastAppointments.map(apt => [
+                this.formatDate(apt.appointment_date),
+                `${apt.start_time} - ${apt.end_time}`,
+                `"${this.getCustomerDisplayName(apt)}"`,
+                `"${apt.appointment_type_name || 'Termin'}"`,
+                apt.status || '',
+                `"${apt.notes || ''}"`
+            ].join(','))
+        ].join('\n');
+
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `termine_export_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
     }
 
     async loadAppointments(studioId) {
@@ -3606,7 +4085,7 @@ class App {
             const data = await response.json();
             const appointments = data.appointments || [];
             
-            // Update the header with selected date
+            // Update the header with selected date and add quick schedule button
             const selectedDateDisplayStr = selectedDate.toLocaleDateString('de-DE', { 
                 weekday: 'long', 
                 year: 'numeric', 
@@ -3615,22 +4094,24 @@ class App {
             });
             const headerElement = document.getElementById('selectedDateHeader');
             if (headerElement) {
-                headerElement.textContent = `Termine für ${selectedDateDisplayStr}`;
+                headerElement.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Termine für ${selectedDateDisplayStr}</span>
+                        <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
+                            <i class="fas fa-plus-circle me-1"></i>
+                            Neue Behandlung
+                        </button>
+                    </div>
+                `;
             }
             
             if (appointments.length === 0) {
                 appointmentsDiv.innerHTML = `
-                    <div class="text-center text-muted">
-                        <p>Keine Termine für diesen Tag.</p>
-                        <button class="btn btn-primary" id="createAppointmentForDateBtn">
-                            Termin für ${selectedDate.toLocaleDateString('de-DE')} erstellen
-                        </button>
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-calendar-day fa-3x mb-3 text-muted"></i>
+                        <p class="mb-0">Keine Termine für diesen Tag.</p>
                     </div>
                 `;
-                
-                document.getElementById('createAppointmentForDateBtn').addEventListener('click', () => {
-                    this.showCreateAppointmentForm(studioId, selectedDate);
-                });
             } else {
                 // Create timeline view with colored appointment blocks
                 appointmentsDiv.innerHTML = this.renderTimelineView(appointments, selectedDate);
@@ -3643,6 +4124,322 @@ class App {
                 </div>
             `;
         }
+    }
+
+    async loadAllAppointments(studioId) {
+        if (!studioId) {
+            return;
+        }
+        
+        try {
+            // Fetch all appointments without date filter
+            const url = `${window.API_BASE_URL}/api/v1/appointments/studio/${studioId}`;
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load all appointments');
+            }
+            
+            const data = await response.json();
+            this.allAppointments = data.appointments || [];
+            
+            // Split into upcoming and past appointments
+            this.splitAppointments();
+            
+            // Render the current tab
+            this.renderListView();
+            
+        } catch (error) {
+            console.error('Error loading all appointments:', error);
+            this.showListViewError(error.message);
+        }
+    }
+
+    splitAppointments() {
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const currentTime = now.toTimeString().split(' ')[0];
+        
+        this.upcomingAppointments = [];
+        this.pastAppointments = [];
+        
+        this.allAppointments.forEach(apt => {
+            const aptDate = apt.appointment_date;
+            const aptTime = apt.start_time;
+            
+            // Convert date for comparison
+            let aptDateStr = aptDate;
+            if (aptDate instanceof Date) {
+                aptDateStr = aptDate.toISOString().split('T')[0];
+            } else if (aptDate.includes('T')) {
+                aptDateStr = aptDate.split('T')[0];
+            }
+            
+            if (aptDateStr > today || (aptDateStr === today && aptTime >= currentTime)) {
+                this.upcomingAppointments.push(apt);
+            } else {
+                this.pastAppointments.push(apt);
+            }
+        });
+        
+        // Sort upcoming appointments (earliest first)
+        this.upcomingAppointments.sort((a, b) => {
+            // Use ISO format for consistent date parsing
+            const dateA = new Date(a.appointment_date + 'T' + a.start_time);
+            const dateB = new Date(b.appointment_date + 'T' + b.start_time);
+            return dateA.getTime() - dateB.getTime(); // Earliest first
+        });
+        
+        // Sort past appointments (most recent first)
+        this.pastAppointments.sort((a, b) => {
+            // Use ISO format for consistent date parsing
+            const dateA = new Date(a.appointment_date + 'T' + a.start_time);
+            const dateB = new Date(b.appointment_date + 'T' + b.start_time);
+            return dateB.getTime() - dateA.getTime(); // Most recent first
+        });
+        
+        // Update tab counts
+        this.updateTabCounts();
+    }
+
+    updateTabCounts() {
+        const upcomingCountEl = document.getElementById('upcomingCount');
+        const pastCountEl = document.getElementById('pastCount');
+        
+        if (upcomingCountEl) {
+            upcomingCountEl.textContent = this.upcomingAppointments.length;
+        }
+        if (pastCountEl) {
+            pastCountEl.textContent = this.pastAppointments.length;
+        }
+    }
+
+    renderListView() {
+        this.renderUpcomingTab();
+        this.renderPastTab();
+    }
+
+    showListViewError(message) {
+        const upcomingList = document.getElementById('upcomingAppointmentsList');
+        const pastList = document.getElementById('pastAppointmentsList');
+        
+        const errorHtml = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Fehler beim Laden der Termine: ${message}
+            </div>
+        `;
+        
+        if (upcomingList) upcomingList.innerHTML = errorHtml;
+        if (pastList) pastList.innerHTML = errorHtml;
+    }
+
+    renderUpcomingTab() {
+        const container = document.getElementById('upcomingAppointmentsList');
+        if (!container) return;
+        
+        if (this.upcomingAppointments.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-calendar-check fa-3x mb-3"></i>
+                    <h6>Keine kommenden Termine</h6>
+                    <p class="mb-0">Alle Termine sind abgeschlossen oder es wurden noch keine Termine geplant.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        
+        this.upcomingAppointments.forEach(apt => {
+            const customerName = this.getCustomerDisplayName(apt);
+            const statusBadge = this.getListStatusBadge(apt.status);
+            const typeColor = apt.appointment_type_color || '#007bff';
+            const timeUntil = this.getTimeUntilAppointment(apt);
+            
+            html += `
+                <div class="list-group-item border-start" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge me-2" style="background-color: ${typeColor}">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                ${statusBadge}
+                                ${this.canMarkAsNoShow(apt) ? `
+                                    <button class="btn btn-sm btn-warning ms-2" 
+                                            onclick="window.app.markAsNoShow(${apt.id})"
+                                            title="Als nicht erschienen markieren">
+                                        <i class="fas fa-user-times"></i>
+                                    </button>
+                                ` : ''}
+                                ${timeUntil ? `<small class="text-muted ms-2">${timeUntil}</small>` : ''}
+                            </div>
+                            <h6 class="mb-1">
+                                <a href="#" onclick="event.stopPropagation(); window.app.showCustomerDetails(${apt.customer_ref_id || apt.customer_id})" 
+                                   class="text-decoration-none customer-name-link text-dark fw-bold">
+                                    ${customerName}
+                                </a>
+                            </h6>
+                            <div class="text-muted small">
+                                <i class="fas fa-calendar me-1"></i>
+                                ${this.formatDate(apt.appointment_date)}
+                                <i class="fas fa-clock ms-3 me-1"></i>
+                                ${apt.start_time} - ${apt.end_time}
+                                ${apt.customer_phone ? `<i class="fas fa-phone ms-3 me-1"></i>${apt.customer_phone}` : ''}
+                            </div>
+                            ${apt.notes ? `<small class="text-muted d-block mt-1"><i class="fas fa-sticky-note me-1"></i>${apt.notes}</small>` : ''}
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="window.app.editAppointment(${apt.id})">
+                                    <i class="fas fa-edit me-2"></i>Bearbeiten
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" onclick="window.app.markAppointmentCompleted(${apt.id})">
+                                    <i class="fas fa-check me-2"></i>Als abgeschlossen markieren
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="window.app.cancelAppointment(${apt.id})">
+                                    <i class="fas fa-times me-2"></i>Absagen
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    renderPastTab() {
+        const container = document.getElementById('pastAppointmentsList');
+        if (!container) return;
+        
+        if (this.pastAppointments.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-history fa-3x mb-3"></i>
+                    <h6>Keine vergangenen Termine</h6>
+                    <p class="mb-0">Es wurden noch keine Termine abgeschlossen.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        
+        this.pastAppointments.forEach(apt => {
+            const customerName = this.getCustomerDisplayName(apt);
+            const statusBadge = this.getListStatusBadge(apt.status);
+            const typeColor = apt.appointment_type_color || '#6c757d';
+            
+            html += `
+                <div class="list-group-item border-start clickable-card" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important; opacity: 0.8; cursor: pointer;" 
+                     onclick="window.app.viewAppointmentDetails(${apt.id})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge me-2" style="background-color: ${typeColor}; opacity: 0.8;">
+                                    ${apt.appointment_type_name || 'Termin'}
+                                </span>
+                                ${statusBadge}
+                            </div>
+                            <h6 class="mb-1">
+                                <a href="#" onclick="event.stopPropagation(); window.app.showCustomerDetails(${apt.customer_ref_id || apt.customer_id})" 
+                                   class="text-decoration-none customer-name-link text-dark fw-bold">
+                                    ${customerName}
+                                </a>
+                            </h6>
+                            <div class="text-muted small">
+                                <i class="fas fa-calendar me-1"></i>
+                                ${this.formatDate(apt.appointment_date)}
+                                <i class="fas fa-clock ms-3 me-1"></i>
+                                ${apt.start_time} - ${apt.end_time}
+                                ${apt.customer_phone ? `<i class="fas fa-phone ms-3 me-1"></i>${apt.customer_phone}` : ''}
+                            </div>
+                            ${apt.notes ? `<small class="text-muted d-block mt-1"><i class="fas fa-sticky-note me-1"></i>${apt.notes}</small>` : ''}
+                        </div>
+                        <div class="dropdown" onclick="event.stopPropagation()">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="window.app.viewAppointmentDetails(${apt.id})">
+                                    <i class="fas fa-eye me-2"></i>Details anzeigen
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" onclick="window.app.addAppointmentNotes(${apt.id})">
+                                    <i class="fas fa-sticky-note me-2"></i>Notiz hinzufügen
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    getCustomerDisplayName(appointment) {
+        if (appointment.person_type === 'lead') {
+            return `${appointment.customer_first_name || ''} ${appointment.customer_last_name || ''}`.trim() || 'Lead';
+        } else {
+            return `${appointment.customer_first_name || ''} ${appointment.customer_last_name || ''}`.trim() || 'Kunde';
+        }
+    }
+
+    getListStatusBadge(status) {
+        const statusMap = {
+            'confirmed': '<span class="badge bg-success">Bestätigt</span>',
+            'bestätigt': '<span class="badge bg-success">Bestätigt</span>',
+            'completed': '<span class="badge bg-info">Abgeschlossen</span>',
+            'abgeschlossen': '<span class="badge bg-info">Abgeschlossen</span>',
+            'cancelled': '<span class="badge bg-danger">Abgesagt</span>',
+            'abgesagt': '<span class="badge bg-danger">Abgesagt</span>',
+            'no_show': '<span class="badge bg-warning">Nicht erschienen</span>',
+            'nicht erschienen': '<span class="badge bg-warning">Nicht erschienen</span>',
+            'pending': '<span class="badge bg-secondary">Wartend</span>'
+        };
+        return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
+    }
+
+    getTimeUntilAppointment(appointment) {
+        const now = new Date();
+        const aptDateTime = new Date(`${appointment.appointment_date} ${appointment.start_time}`);
+        const diffMs = aptDateTime - now;
+        
+        if (diffMs <= 0) return null;
+        
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffDays > 0) {
+            return `in ${diffDays} Tag${diffDays > 1 ? 'en' : ''}`;
+        } else if (diffHours > 0) {
+            return `in ${diffHours} Stunde${diffHours > 1 ? 'n' : ''}`;
+        } else {
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            return `in ${diffMinutes} Minute${diffMinutes > 1 ? 'n' : ''}`;
+        }
+    }
+
+    canMarkAsNoShow(appointment) {
+        const now = new Date();
+        const startTime = new Date(appointment.appointment_date + 'T' + appointment.start_time);
+        const isStarted = now >= startTime;
+        const isValidStatus = ['bestätigt', 'confirmed'].includes(appointment.status);
+        return isStarted && isValidStatus;
     }
 
     getStatusBadgeClass(status) {
@@ -3695,7 +4492,8 @@ class App {
         } else if (currentStatus === 'abgeschlossen' || currentStatus === 'completed') {
             options.push({ value: 'abgeschlossen', englishValue: 'completed', label: 'Abgeschlossen' });
             
-            // From completed, can only change to no-show
+            // From completed, can change to no-show (important for correcting mistakes)
+            // This is always available for past/completed appointments
             options.push({ value: 'nicht erschienen', englishValue: 'no_show', label: 'Nicht erschienen' });
             
         } else if (currentStatus === 'nicht erschienen' || currentStatus === 'no_show') {
@@ -3834,73 +4632,115 @@ class App {
         const processedAppointments = this.detectOverlappingAppointments(appointments);
         
         let html = `
-            <div class="timeline-container" style="position: relative; height: ${totalHours * 80}px; border: 1px solid #dee2e6; background: #f8f9fa;">
-                <!-- Hour scale -->
-                <div class="hour-scale" style="position: absolute; left: 0; top: 0; width: 60px; height: 100%; background: #fff; border-right: 1px solid #dee2e6;">
+            <div class="timeline-container" style="position: relative; min-height: ${totalHours * 90}px; background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);">
+                <!-- Time grid background -->
+                <div class="time-grid" style="position: absolute; left: 80px; right: 0; top: 0; height: 100%;">
         `;
         
-        // Generate hour markers
+        // Generate hour grid lines
         for (let hour = startHour; hour <= endHour; hour++) {
-            const y = (hour - startHour) * 80;
+            const y = (hour - startHour) * 90;
+            const isHalfHour = hour % 2 === 0;
             html += `
-                <div style="position: absolute; top: ${y}px; left: 0; width: 100%; height: 80px; border-bottom: 1px solid #eee; display: flex; align-items: center; padding: 0 5px; font-size: 12px; color: #666;">
-                    ${hour.toString().padStart(2, '0')}:00
+                <div style="position: absolute; top: ${y}px; left: 0; right: 0; height: 1px; background: ${isHalfHour ? '#dee2e6' : '#f0f0f0'};"></div>
+                <div style="position: absolute; top: ${y + 45}px; left: 0; right: 0; height: 1px; background: #f8f8f8;"></div>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        // Hour scale on the left
+        html += `<div class="hour-scale" style="position: absolute; left: 0; top: 0; width: 80px; height: 100%;">`;
+        
+        for (let hour = startHour; hour <= endHour; hour++) {
+            const y = (hour - startHour) * 90;
+            const displayHour = hour.toString().padStart(2, '0');
+            html += `
+                <div style="position: absolute; top: ${y - 10}px; left: 0; width: 100%; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #495057;">
+                    ${displayHour}:00
                 </div>
             `;
         }
         
         html += `</div>`;
         
-        // Current time red line (only show if viewing today)
+        // Current time indicator (only show if viewing today)
         if (isToday && currentHour >= startHour && currentHour <= endHour) {
-            const currentY = ((currentHour - startHour) * 80) + ((currentMinute / 60) * 80);
+            const currentY = ((currentHour - startHour) * 90) + ((currentMinute / 60) * 90);
             html += `
-                <div class="current-time-line" style="position: absolute; left: 60px; right: 0; top: ${currentY}px; height: 2px; background: #dc3545; z-index: 100;">
-                    <div style="position: absolute; right: 5px; top: -10px; background: #dc3545; color: white; padding: 1px 5px; font-size: 10px; border-radius: 2px;">
-                        ${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}
+                <div class="current-time-indicator" style="position: absolute; left: 70px; right: 0; top: ${currentY}px; z-index: 200;">
+                    <div style="position: absolute; left: 0; width: 12px; height: 12px; background: #dc3545; border-radius: 50%; margin-top: -6px; margin-left: -6px;"></div>
+                    <div style="position: absolute; left: 0; right: 0; height: 2px; background: #dc3545;"></div>
+                    <div style="position: absolute; right: 10px; top: -12px; background: #dc3545; color: white; padding: 2px 8px; font-size: 11px; border-radius: 3px; font-weight: 500;">
+                        JETZT ${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}
                     </div>
                 </div>
             `;
         }
         
-        // Appointment blocks with overlap handling
-        html += `<div class="appointments-area" style="position: absolute; left: 60px; right: 0; top: 0; height: 100%;">`;
+        // Appointment blocks area
+        html += `<div class="appointments-area" style="position: absolute; left: 85px; right: 10px; top: 0; height: 100%;">`;
         
+        // Add time slot hints for empty spaces
+        for (let hour = startHour; hour < endHour; hour++) {
+            const y = (hour - startHour) * 90;
+            const hasAppointmentAtHour = processedAppointments.some(apt => {
+                const startHour = parseInt(apt.start_time.split(':')[0]);
+                return startHour === hour;
+            });
+            
+            if (!hasAppointmentAtHour) {
+                html += `
+                    <div class="empty-slot-hint" 
+                         style="position: absolute; left: 0; right: 0; top: ${y}px; height: 90px; 
+                                display: flex; align-items: center; justify-content: center;"
+                         onclick="window.app.quickScheduleAppointment('${this.currentStudioId}', '${this.formatDateForInput(selectedDate)}', '${hour.toString().padStart(2, '0')}:00')">
+                        <div style="opacity: 0; transition: opacity 0.2s; padding: 8px 16px; background: rgba(0,123,255,0.1); border: 2px dashed rgba(0,123,255,0.3); border-radius: 6px; cursor: pointer; color: #007bff; font-size: 13px;"
+                             onmouseover="this.style.opacity='1'" 
+                             onmouseout="this.style.opacity='0'">
+                            <i class="fas fa-plus-circle me-1"></i>
+                            Behandlung hinzufügen
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Render appointment blocks
         processedAppointments.forEach((appointment, index) => {
-            const startTime = appointment.start_time; // e.g., "09:30"
-            const endTime = appointment.end_time; // e.g., "10:30"
+            const startTime = appointment.start_time;
+            const endTime = appointment.end_time;
             
             const [startHours, startMinutes] = startTime.split(':').map(Number);
             const [endHours, endMinutes] = endTime.split(':').map(Number);
             
             // Calculate position and height
-            const startY = ((startHours - startHour) * 80) + ((startMinutes / 60) * 80);
-            const endY = ((endHours - startHour) * 80) + ((endMinutes / 60) * 80);
-            const height = endY - startY;
+            const startY = ((startHours - startHour) * 90) + ((startMinutes / 60) * 90);
+            const endY = ((endHours - startHour) * 90) + ((endMinutes / 60) * 90);
+            const height = Math.max(endY - startY, 30); // Minimum height for visibility
             
             // Skip if outside business hours
             if (startHours < startHour || endHours > endHour) return;
             
-            // Color based on status
-            const statusColors = {
-                // German statuses (primary)
-                'bestätigt': '#28a745',
-                'abgeschlossen': '#17a2b8', 
-                'abgesagt': '#dc3545',
-                'nicht erschienen': '#6c757d',
-                // English fallbacks
-                'confirmed': '#28a745',
-                'cancelled': '#dc3545',
-                'completed': '#17a2b8',
-                'no_show': '#6c757d'
+            // Enhanced color scheme based on status
+            const statusStyles = {
+                'bestätigt': { bg: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', border: '#28a745' },
+                'abgeschlossen': { bg: 'linear-gradient(135deg, #17a2b8 0%, #20c9b8 100%)', border: '#17a2b8' },
+                'abgesagt': { bg: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)', border: '#dc3545' },
+                'nicht erschienen': { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' },
+                'confirmed': { bg: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', border: '#28a745' },
+                'cancelled': { bg: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)', border: '#dc3545' },
+                'completed': { bg: 'linear-gradient(135deg, #17a2b8 0%, #20c9b8 100%)', border: '#17a2b8' },
+                'no_show': { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' }
             };
-            const color = statusColors[appointment.status] || '#6c757d';
+            const style = statusStyles[appointment.status] || { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' };
             
-            // Handle overlapping appointments with card stack effect
+            // Handle overlapping appointments
             const overlapOffset = appointment.overlapIndex || 0;
-            const leftOffset = 5 + (overlapOffset * 20); // Stack cards 20px to the right
-            const topOffset = startY + (overlapOffset * 5); // Stack cards 5px down
-            const zIndex = 10 + overlapOffset; // Higher z-index for overlapping cards
+            const totalOverlaps = appointment.overlapCount || 1;
+            const width = totalOverlaps > 1 ? `calc((100% - ${totalOverlaps * 5}px) / ${totalOverlaps})` : 'calc(100% - 10px)';
+            const leftOffset = overlapOffset * ((100 / totalOverlaps)) + '%';
+            const zIndex = 10 + overlapOffset;
             
             // Show overlap indicator if this appointment has overlaps
             const overlapBadge = appointment.overlapCount > 1 ? 
@@ -3911,14 +4751,14 @@ class App {
             html += `
                 <div class="appointment-block" 
                      style="position: absolute; 
-                            left: ${leftOffset}px; 
-                            right: ${5 + (appointment.overlapCount > 1 ? 20 : 0)}px; 
-                            top: ${topOffset}px; 
+                            left: ${leftOffset}; 
+                            width: ${width};
+                            top: ${startY}px; 
                             height: ${height}px; 
-                            background: ${color}; 
-                            border: 1px solid rgba(0,0,0,0.2); 
-                            border-radius: 4px; 
-                            padding: 5px; 
+                            background: ${style.bg}; 
+                            border-left: 4px solid ${style.border};
+                            border-radius: 6px; 
+                            padding: 8px 12px; 
                             color: white; 
                             font-size: 12px; 
                             cursor: pointer;
@@ -4085,57 +4925,120 @@ class App {
         return html;
     }
 
-    showCreateAppointmentForm(studioId, preselectedDate = null) {
+    async showCreateAppointmentForm(studioId, preselectedDate = null) {
         const content = document.getElementById('content');
+        
+        // Store customers data for search
+        this.allCustomers = [];
+        this.selectedCustomerId = null;
+        
         content.innerHTML = `
             <div class="row">
-                <div class="col-md-8 mx-auto">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4>Neuen Termin erstellen</h4>
-                            <button class="btn btn-outline-secondary" id="backToAppointmentsBtn">
-                                Zurück zu Terminen
+                <div class="col-lg-8 mx-auto">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">
+                                <i class="fas fa-calendar-plus me-2"></i>
+                                Neue Behandlung erstellen
+                            </h4>
+                            <button class="btn btn-light btn-sm" id="backToAppointmentsBtn">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Zurück
                             </button>
                         </div>
                         <div class="card-body">
                             <div id="createAppointmentError" class="alert alert-danger d-none"></div>
                             <div id="createAppointmentSuccess" class="alert alert-success d-none"></div>
-                            <form id="createAppointmentForm">
+                            
+                            <!-- Date Display (readonly) -->
+                            <div class="mb-4">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="appointmentDate" class="form-label">Datum *</label>
-                                            <input type="date" class="form-control" id="appointmentDate" required>
+                                        <label class="form-label fw-bold">Datum</label>
+                                        <div class="p-3 bg-light rounded border">
+                                            <i class="fas fa-calendar me-2 text-primary"></i>
+                                            <span id="displayDate" class="fw-bold"></span>
                                         </div>
+                                        <input type="hidden" id="appointmentDate" required>
                                     </div>
                                     <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="appointmentStartTime" class="form-label">Start Zeit *</label>
-                                            <input type="time" class="form-control" id="appointmentStartTime" required>
-                                            <div class="form-text">Dauer: 60 Minuten (automatisch berechnet)</div>
-                                        </div>
+                                        <label for="appointmentStartTime" class="form-label fw-bold">Uhrzeit *</label>
+                                        <input type="time" 
+                                               class="form-control form-control-lg" 
+                                               id="appointmentStartTime" 
+                                               step="900"
+                                               required>
+                                        <div class="form-text">15-Minuten-Intervalle • Dauer: 60 Minuten</div>
                                     </div>
                                 </div>
+                            </div>
+                            
+                            <!-- Customer Selection -->
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Kunde auswählen *</label>
+                                
+                                <!-- Customer Search -->
                                 <div class="mb-3">
-                                    <label for="customerId" class="form-label">Kunde *</label>
-                                    <select class="form-select" id="customerId" required>
-                                        <option value="">Kunde auswählen...</option>
-                                    </select>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-search"></i>
+                                        </span>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="customerSearch" 
+                                               placeholder="Name oder Telefonnummer eingeben..."
+                                               autocomplete="off">
+                                    </div>
+                                    <div id="customerSearchResults" class="position-relative"></div>
                                 </div>
-                                <div class="mb-3">
-                                    <label for="appointmentTypeId" class="form-label">Termin Typ</label>
-                                    <select class="form-select" id="appointmentTypeId" required>
-                                        <option value="">Typ auswählen...</option>
-                                    </select>
-                                    <div class="form-text">Standard: Behandlung (60 Min)</div>
+                                
+                                <!-- Selected Customer Display -->
+                                <div id="selectedCustomerInfo" class="d-none">
+                                    <div class="alert alert-success d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-user-check me-2"></i>
+                                            <strong>Ausgewählter Kunde:</strong>
+                                            <span id="selectedCustomerName"></span>
+                                            <span class="badge bg-success ms-2" id="selectedCustomerSessions"></span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="changeCustomerBtn">
+                                            <i class="fas fa-exchange-alt"></i> Ändern
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="mb-3">
-                                    <label for="appointmentNotes" class="form-label">Notizen</label>
-                                    <textarea class="form-control" id="appointmentNotes" rows="3"></textarea>
+                                
+                                <!-- Customer List -->
+                                <div id="customerListSection">
+                                    <h6 class="text-muted mb-2">Alle aktiven Kunden</h6>
+                                    <div id="allCustomers" class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                        <div class="text-muted p-2">Lädt...</div>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100" id="createAppointmentSubmitBtn">
-                                    Termin erstellen
-                                </button>
+                            </div>
+                            
+                            <!-- Notes -->
+                            <div class="mb-4">
+                                <label for="appointmentNotes" class="form-label fw-bold">Notizen</label>
+                                <textarea class="form-control" id="appointmentNotes" rows="3" 
+                                          placeholder="Besondere Anmerkungen oder Behandlungsdetails..."></textarea>
+                            </div>
+                            
+                            <form id="createAppointmentForm">
+                                <input type="hidden" id="customerId" required>
+                                <input type="hidden" id="appointmentDuration" value="60">
+                                <input type="hidden" id="appointmentTypeId" value="1">
+                                <input type="hidden" id="appointmentStatus" value="bestätigt">
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" id="cancelBtn">
+                                        <i class="fas fa-times me-1"></i>
+                                        Abbrechen
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg" id="createAppointmentSubmitBtn" disabled>
+                                        <i class="fas fa-check me-1"></i>
+                                        Behandlung erstellen
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -4145,20 +5048,60 @@ class App {
 
         // Set default date to preselected date or today using timezone-safe formatting
         const defaultDate = preselectedDate ? this.formatDateForInput(preselectedDate) : this.formatDateForInput(new Date());
+        const selectedDateObj = preselectedDate || new Date();
+        
         document.getElementById('appointmentDate').value = defaultDate;
+        
+        // Set display date (readonly)
+        const displayDateStr = selectedDateObj.toLocaleDateString('de-DE', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        document.getElementById('displayDate').textContent = displayDateStr;
 
         // Event listeners
         document.getElementById('backToAppointmentsBtn').addEventListener('click', () => {
+            this.showAppointmentManagement(studioId);
+        });
+        
+        document.getElementById('cancelBtn').addEventListener('click', () => {
             this.showAppointmentManagement(studioId);
         });
 
         document.getElementById('createAppointmentForm').addEventListener('submit', (e) => {
             this.handleCreateAppointment(e, studioId);
         });
+        
+        // Customer search functionality
+        const customerSearchInput = document.getElementById('customerSearch');
+        const searchResultsDiv = document.getElementById('customerSearchResults');
+        
+        customerSearchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            if (searchTerm.length < 2) {
+                searchResultsDiv.innerHTML = '';
+                return;
+            }
+            
+            const filteredCustomers = this.allCustomers.filter(customer => {
+                const fullName = `${customer.contact_first_name} ${customer.contact_last_name}`.toLowerCase();
+                const phone = (customer.contact_phone || '').toLowerCase();
+                return fullName.includes(searchTerm) || phone.includes(searchTerm);
+            });
+            
+            this.renderCustomerSearchResults(filteredCustomers);
+        });
+        
+        // Change customer button
+        document.getElementById('changeCustomerBtn').addEventListener('click', () => {
+            this.resetCustomerSelection();
+        });
 
-        // Load customers and appointment types
-        this.loadCustomers(studioId);
-        this.loadAppointmentTypes(studioId);
+        // Load customers for search and populate lists
+        await this.loadCustomersForSearch(studioId);
+        this.loadAllCustomers(studioId);
     }
 
     async loadCustomers(studioId) {
@@ -4263,23 +5206,246 @@ class App {
             typeSelect.innerHTML = '<option value="">Fehler beim Laden der Typen</option>';
         }
     }
+    
+    async loadCustomersForSearch(studioId) {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load customers');
+            }
+            
+            const data = await response.json();
+            this.allCustomers = data.customers || [];
+            
+            // Filter to only show customers with active sessions
+            this.allCustomers = this.allCustomers.filter(c => c.remaining_sessions > 0);
+            
+        } catch (error) {
+            console.error('Error loading customers for search:', error);
+            this.allCustomers = [];
+        }
+    }
+    
+    loadAllCustomers(studioId) {
+        try {
+            const allCustomersDiv = document.getElementById('allCustomers');
+            if (!allCustomersDiv) return;
+            
+            // Filter customers with active sessions
+            const activeCustomers = this.allCustomers.filter(customer => customer.remaining_sessions > 0);
+            
+            if (activeCustomers.length > 0) {
+                allCustomersDiv.innerHTML = activeCustomers.map(customer => `
+                    <button type="button" class="list-group-item list-group-item-action" 
+                            onclick="window.app.selectCustomerForAppointment(${customer.id})">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${customer.contact_first_name} ${customer.contact_last_name}</strong>
+                                <br>
+                                <small class="text-muted">${customer.contact_phone || 'Keine Telefonnummer'}</small>
+                            </div>
+                            <span class="badge bg-primary">${customer.remaining_sessions} Sessions</span>
+                        </div>
+                    </button>
+                `).join('');
+            } else {
+                allCustomersDiv.innerHTML = '<div class="text-muted p-2">Keine aktiven Kunden verfügbar</div>';
+            }
+            
+        } catch (error) {
+            console.error('Error loading all customers:', error);
+            const allCustomersDiv = document.getElementById('allCustomers');
+            if (allCustomersDiv) {
+                allCustomersDiv.innerHTML = '<div class="text-danger p-2">Fehler beim Laden</div>';
+            }
+        }
+    }
+    
+    renderCustomerSearchResults(customers) {
+        const searchResultsDiv = document.getElementById('customerSearchResults');
+        
+        if (customers.length === 0) {
+            searchResultsDiv.innerHTML = `
+                <div class="position-absolute w-100 mt-1 bg-white border rounded shadow-sm p-2" style="z-index: 1000;">
+                    <div class="text-muted">Keine Kunden gefunden</div>
+                </div>
+            `;
+            return;
+        }
+        
+        searchResultsDiv.innerHTML = `
+            <div class="position-absolute w-100 mt-1 bg-white border rounded shadow-sm" style="z-index: 1000; max-height: 300px; overflow-y: auto;">
+                ${customers.slice(0, 10).map(customer => `
+                    <button type="button" class="list-group-item list-group-item-action border-0" 
+                            onclick="window.app.selectCustomerForAppointment(${customer.id})">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${customer.contact_first_name} ${customer.contact_last_name}</strong>
+                                <br>
+                                <small class="text-muted">${customer.contact_phone || 'Keine Telefonnummer'}</small>
+                            </div>
+                            <span class="badge bg-success">${customer.remaining_sessions} Sessions</span>
+                        </div>
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    selectCustomerForAppointment(customerId) {
+        const customer = this.allCustomers.find(c => c.id === customerId);
+        if (!customer) return;
+        
+        this.selectedCustomerId = customerId;
+        
+        // Update hidden input
+        document.getElementById('customerId').value = customerId;
+        
+        // Hide search and show selected customer
+        document.getElementById('customerSearch').value = '';
+        document.getElementById('customerSearchResults').innerHTML = '';
+        document.getElementById('selectedCustomerInfo').classList.remove('d-none');
+        document.getElementById('selectedCustomerName').textContent = `${customer.contact_first_name} ${customer.contact_last_name}`;
+        document.getElementById('selectedCustomerSessions').textContent = `${customer.remaining_sessions} Behandlungen verfügbar`;
+        
+        // Hide customer list section and enable submit button
+        document.getElementById('customerListSection').style.display = 'none';
+        document.getElementById('createAppointmentSubmitBtn').disabled = false;
+    }
+    
+    resetCustomerSelection() {
+        this.selectedCustomerId = null;
+        document.getElementById('customerId').value = '';
+        document.getElementById('selectedCustomerInfo').classList.add('d-none');
+        document.getElementById('customerSearch').value = '';
+        
+        // Show customer list section and disable submit button
+        document.getElementById('customerListSection').style.display = 'block';
+        document.getElementById('createAppointmentSubmitBtn').disabled = true;
+    }
+    
+    // Day schedule preview removed for simplified interface
+    
+    renderDayTimelineView(appointments, selectedDate) {
+        const hours = [];
+        for (let i = 8; i <= 20; i++) {
+            hours.push(i);
+        }
+        
+        let html = '<div class="timeline-view">';
+        
+        hours.forEach(hour => {
+            const hourStr = hour.toString().padStart(2, '0');
+            const hasAppointment = appointments.find(apt => {
+                const startHour = parseInt(apt.start_time.split(':')[0]);
+                return startHour === hour;
+            });
+            
+            html += `
+                <div class="d-flex border-bottom py-2">
+                    <div class="text-muted" style="width: 60px;">${hourStr}:00</div>
+                    <div class="flex-grow-1 ps-3">
+            `;
+            
+            if (hasAppointment) {
+                const statusClass = this.getStatusBadgeClass(hasAppointment.status);
+                html += `
+                    <div class="alert alert-info py-1 px-2 mb-0">
+                        <small>
+                            <strong>${hasAppointment.start_time} - ${hasAppointment.end_time}</strong>
+                            ${hasAppointment.customer_first_name} ${hasAppointment.customer_last_name}
+                            <span class="badge ${statusClass} ms-2">${this.getStatusText(hasAppointment.status)}</span>
+                        </small>
+                    </div>
+                `;
+            } else {
+                html += `<small class="text-muted">Verfügbar</small>`;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        return html;
+    }
 
+    quickScheduleAppointment(studioId, date, time) {
+        // Navigate to create appointment form with pre-filled date and time
+        this.showCreateAppointmentForm(studioId, new Date(date + 'T00:00:00'));
+        
+        // Wait for form to load then set time
+        setTimeout(() => {
+            const timeInput = document.getElementById('appointmentStartTime');
+            if (timeInput) {
+                timeInput.value = time;
+            }
+        }, 100);
+    }
+    
     async handleCreateAppointment(e, studioId) {
         e.preventDefault();
         
-        // Calculate end time (start time + 60 minutes)
+        // Get duration from form
+        const duration = parseInt(document.getElementById('appointmentDuration').value);
         const startTime = document.getElementById('appointmentStartTime').value;
-        const endTime = this.calculateEndTime(startTime, 60);
+        const endTime = this.calculateEndTime(startTime, duration);
+        
+        // Debug: Check date value
+        const appointmentDateElement = document.getElementById('appointmentDate');
+        const appointmentDate = appointmentDateElement ? appointmentDateElement.value : '';
+        
+        console.log('Debug - appointmentDate element:', appointmentDateElement);
+        console.log('Debug - appointmentDate value:', appointmentDate);
+        
+        if (!appointmentDate) {
+            alert('Fehler: Kein Datum ausgewählt. Bitte wählen Sie ein Datum aus.');
+            return;
+        }
+        
+        // Validate appointment date is not in the past
+        const selectedDate = new Date(appointmentDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+        
+        if (selectedDate < today) {
+            alert('Fehler: Termine können nicht in der Vergangenheit geplant werden. Bitte wählen Sie ein heutiges oder zukünftiges Datum.');
+            return;
+        }
+        
+        const customerId = parseInt(document.getElementById('customerId').value);
+        
+        if (!customerId) {
+            alert('Fehler: Kein Kunde ausgewählt. Bitte wählen Sie einen Kunden aus.');
+            return;
+        }
+        
+        if (!startTime) {
+            alert('Fehler: Keine Startzeit angegeben. Bitte wählen Sie eine Uhrzeit aus.');
+            return;
+        }
         
         const formData = {
             studio_id: studioId,
-            customer_id: parseInt(document.getElementById('customerId').value),
-            appointment_type_id: parseInt(document.getElementById('appointmentTypeId').value),
-            appointment_date: document.getElementById('appointmentDate').value,
+            customer_id: customerId,
+            appointment_type_id: 1, // Default to "Behandlung" type
+            appointment_date: appointmentDate,
             start_time: startTime,
             end_time: endTime,
+            status: document.getElementById('appointmentStatus').value || 'bestätigt',
             notes: document.getElementById('appointmentNotes').value
         };
+        
+        console.log('Debug - formData being sent:', formData);
+        console.log('Debug - API_BASE_URL:', window.API_BASE_URL);
+        console.log('Debug - authToken exists:', !!localStorage.getItem('authToken'));
         
         const submitBtn = document.getElementById('createAppointmentSubmitBtn');
         const errorDiv = document.getElementById('createAppointmentError');
@@ -4287,9 +5453,12 @@ class App {
         
         try {
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Erstelle Termin...';
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Erstelle Behandlung...';
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
+            
+            console.log('Debug - Making fetch request to:', `${window.API_BASE_URL}/api/v1/appointments`);
+            console.log('Debug - Request body:', JSON.stringify(formData, null, 2));
             
             const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments`, {
                 method: 'POST',
@@ -4300,31 +5469,46 @@ class App {
                 body: JSON.stringify(formData)
             });
             
+            console.log('Debug - Response status:', response.status);
+            console.log('Debug - Response headers:', Object.fromEntries(response.headers.entries()));
+            
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Fehler beim Erstellen des Termins');
+                let errorMessage = 'Fehler beim Erstellen der Behandlung';
+                try {
+                    const errorData = await response.json();
+                    console.log('Server error response:', errorData);
+                    errorMessage = errorData.message || errorData.error || errorMessage;
+                } catch (parseError) {
+                    console.log('Could not parse error response as JSON');
+                    const errorText = await response.text();
+                    console.log('Error response text:', errorText);
+                    errorMessage = `Server error (${response.status}): ${errorText}`;
+                }
+                throw new Error(errorMessage);
             }
             
             const data = await response.json();
             
-            successDiv.textContent = 'Termin erfolgreich erstellt!';
+            successDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                Behandlung erfolgreich erstellt!
+            `;
             successDiv.classList.remove('d-none');
-            
-            // Reset form
-            document.getElementById('createAppointmentForm').reset();
-            document.getElementById('appointmentDate').value = new Date().toISOString().split('T')[0];
             
             // Redirect after success
             setTimeout(() => {
                 this.showAppointmentManagement(studioId);
-            }, 2000);
+            }, 1500);
             
         } catch (error) {
-            errorDiv.textContent = error.message;
+            console.error('Error creating appointment:', error);
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${error.message}
+            `;
             errorDiv.classList.remove('d-none');
-        } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Termin erstellen';
+            submitBtn.innerHTML = '<i class="fas fa-check me-1"></i>Behandlung erstellen';
         }
     }
 
@@ -4441,7 +5625,7 @@ class App {
                                     </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body">
                             <!-- Date & Time with inline edit button -->
@@ -4573,7 +5757,7 @@ class App {
                             <h5 class="modal-title" id="appointmentEditModalLabel">
                                 <i class="fas fa-edit me-2"></i>Termin bearbeiten
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body">
                             <form id="editAppointmentForm">
@@ -4815,7 +5999,7 @@ class App {
                             <h5 class="modal-title" id="rescheduleModalLabel">
                                 <i class="fas fa-calendar-alt me-2"></i>Termin umplanen
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body">
                             <div class="alert alert-info">
@@ -5072,7 +6256,7 @@ class App {
                             <h5 class="modal-title" id="statusChangeModalLabel">
                                 <i class="fas fa-exchange-alt me-2"></i>Status ändern
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">
@@ -5177,6 +6361,250 @@ class App {
         }
     }
 
+    async markAppointmentCompleted(appointmentId) {
+        if (!confirm('Termin als abgeschlossen markieren?')) {
+            return;
+        }
+        
+        try {
+            await this.updateAppointmentStatus(appointmentId, 'abgeschlossen');
+            
+            // Refresh list view if we're in list mode
+            if (this.currentAppointmentView === 'list') {
+                await this.loadAllAppointments(this.currentStudioId);
+            }
+            
+            this.showSuccessMessage('Erfolg!', 'Termin wurde als abgeschlossen markiert.');
+        } catch (error) {
+            console.error('Error marking appointment as completed:', error);
+            alert('Fehler beim Markieren als abgeschlossen: ' + error.message);
+        }
+    }
+
+    async markAsNoShow(appointmentId) {
+        if (!confirm('Termin als "nicht erschienen" markieren?\n\nDadurch wird eine Session verbraucht.')) {
+            return;
+        }
+        
+        try {
+            await this.updateAppointmentStatus(appointmentId, 'nicht erschienen');
+            
+            // Refresh list view if we're in list mode
+            if (this.currentAppointmentView === 'list') {
+                await this.loadAllAppointments(this.currentStudioId);
+            }
+            
+            this.showSuccessMessage('Erfolg!', 'Termin wurde als "nicht erschienen" markiert und eine Session wurde verbraucht.');
+        } catch (error) {
+            console.error('Error marking appointment as no-show:', error);
+            alert('Fehler beim Markieren als "nicht erschienen": ' + error.message);
+        }
+    }
+
+    async viewAppointmentDetails(appointmentId) {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Termin nicht gefunden');
+            }
+            
+            const data = await response.json();
+            const appointment = data.appointment;
+            
+            // Show appointment details modal
+            this.showAppointmentDetailsModal(appointment);
+            
+        } catch (error) {
+            console.error('Error loading appointment details:', error);
+            alert('Fehler beim Laden der Termindetails: ' + error.message);
+        }
+    }
+
+    showAppointmentDetailsModal(appointment) {
+        const customerName = this.getCustomerDisplayName(appointment);
+        const statusBadge = this.getListStatusBadge(appointment.status);
+        
+        // Calculate customer initials for avatar
+        const firstName = appointment.customer_first_name || '';
+        const lastName = appointment.customer_last_name || '';
+        const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || '??';
+        
+        // Check if appointment is in the past to determine if rescheduling is allowed
+        const now = new Date();
+        const appointmentStart = new Date(`${appointment.appointment_date}T${appointment.start_time}`);
+        const isPast = appointmentStart < now;
+        
+        const modalHtml = `
+            <div class="modal fade" id="appointmentDetailsModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header p-0">
+                            <!-- Customer Header (Prominent and Clickable) -->
+                            <div class="w-100 bg-light p-4 border-bottom position-relative" style="cursor: pointer;" onclick="event.preventDefault(); window.app.dismissModalAndShowCustomer(${appointment.customer_ref_id || appointment.customer_id})">
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-weight: bold; font-size: 1.5rem;">
+                                        ${initials}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h4 class="mb-1 text-dark">${customerName}</h4>
+                                        <div class="text-muted">
+                                            ${appointment.customer_email ? `<i class="fas fa-envelope me-2"></i>${appointment.customer_email}` : ''}
+                                            ${appointment.customer_phone ? `<br><i class="fas fa-phone me-2"></i>${appointment.customer_phone}` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Schließen" onclick="event.stopPropagation()"></button>
+                            </div>
+                        </div>
+                        <div class="modal-body p-4">
+                            <!-- Treatment Type -->
+                            <div class="row mb-4">
+                                <div class="col-sm-4"><strong>Termin:</strong></div>
+                                <div class="col-sm-8">
+                                    <span class="badge fs-6 px-3 py-2" style="background-color: ${appointment.appointment_type_color || '#007bff'}">
+                                        ${appointment.appointment_type_name || 'Termin'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <!-- Date & Time Combined -->
+                            <div class="row mb-4">
+                                <div class="col-sm-4"><strong>Datum & Zeit:</strong></div>
+                                <div class="col-sm-8 d-flex justify-content-between align-items-center">
+                                    <span>${this.formatDate(appointment.appointment_date)} um ${appointment.start_time} - ${appointment.end_time}</span>
+                                    ${!isPast ? `
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="window.app.rescheduleAppointment(${appointment.id})" data-bs-dismiss="modal">
+                                            <i class="fas fa-edit me-1"></i>Umplanen
+                                        </button>
+                                    ` : `
+                                        <small class="text-muted"><i class="fas fa-history me-1"></i>Vergangen</small>
+                                    `}
+                                </div>
+                            </div>
+                            
+                            <!-- Status -->
+                            <div class="row mb-4">
+                                <div class="col-sm-4"><strong>Status:</strong></div>
+                                <div class="col-sm-8">${statusBadge}</div>
+                            </div>
+                            
+                            ${appointment.duration_minutes ? `
+                                <div class="row mb-4">
+                                    <div class="col-sm-4"><strong>Dauer:</strong></div>
+                                    <div class="col-sm-8">${appointment.duration_minutes} Minuten</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${appointment.notes ? `
+                                <div class="row mb-4">
+                                    <div class="col-sm-4"><strong>Notizen:</strong></div>
+                                    <div class="col-sm-8">
+                                        <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this)">
+                                            <div class="notes-display bg-light p-3 rounded" style="cursor: pointer;">
+                                                <i class="fas fa-sticky-note me-2 text-muted"></i>${appointment.notes}
+                                                <small class="text-muted d-block mt-1"><i class="fas fa-edit me-1"></i>Klicken zum Bearbeiten</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="row mb-4">
+                                    <div class="col-sm-4"><strong>Notizen:</strong></div>
+                                    <div class="col-sm-8">
+                                        <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this)">
+                                            <div class="notes-display bg-light p-3 rounded text-muted" style="cursor: pointer;">
+                                                <i class="fas fa-plus me-2"></i>Notiz hinzufügen...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if present
+        const existingModal = document.getElementById('appointmentDetailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add new modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('appointmentDetailsModal'));
+        modal.show();
+    }
+
+    async addAppointmentNotes(appointmentId) {
+        // Get current appointment to prefill notes
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Termin nicht gefunden');
+            }
+            
+            const data = await response.json();
+            const appointment = data.appointment;
+            
+            const notes = prompt('Notiz hinzufügen oder bearbeiten:', appointment.notes || '');
+            
+            if (notes !== null) {
+                await this.updateAppointmentNotes(appointmentId, notes);
+            }
+            
+        } catch (error) {
+            console.error('Error loading appointment for notes:', error);
+            
+            // Fallback: just ask for new notes
+            const notes = prompt('Notiz hinzufügen:');
+            if (notes !== null) {
+                await this.updateAppointmentNotes(appointmentId, notes);
+            }
+        }
+    }
+
+    async updateAppointmentNotes(appointmentId, notes) {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ notes })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Fehler beim Speichern der Notiz');
+            }
+            
+            // Refresh list view if we're in list mode
+            if (this.currentAppointmentView === 'list') {
+                await this.loadAllAppointments(this.currentStudioId);
+            }
+            
+            this.showSuccessMessage('Erfolg!', 'Notiz wurde gespeichert.');
+            
+        } catch (error) {
+            console.error('Error updating appointment notes:', error);
+            alert('Fehler beim Speichern der Notiz: ' + error.message);
+        }
+    }
+
     calculateEndTime(startTime, durationMinutes) {
         if (!startTime) return '';
         
@@ -5244,58 +6672,6 @@ class App {
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="container-fluid p-4">
-                <!-- Header Section -->
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="glass-card p-4">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h1 class="h3 mb-1">Kunden Management</h1>
-                                    <p class="text-muted mb-0">Verwalten Sie Ihre Kunden und deren Behandlungen</p>
-                                </div>
-                                <div>
-                                    <button class="btn btn-primary" id="addCustomerBtn">
-                                        <i class="fas fa-plus me-2"></i>
-                                        Neuer Kunde
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search and Filter Bar -->
-                <div class="customer-search-bar">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <div class="search-input-group">
-                                <i class="fas fa-search search-icon"></i>
-                                <input 
-                                    type="text" 
-                                    class="search-input" 
-                                    id="customerSearch" 
-                                    placeholder="Kunden suchen nach Name, E-Mail oder Telefon..."
-                                >
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="flex-1">
-                                    <select class="filter-select" id="statusFilter">
-                                        <option value="all">Alle Status</option>
-                                        <option value="neu">Neu</option>
-                                        <option value="aktiv">Aktiv</option>
-                                    </select>
-                                </div>
-                                <div class="text-muted small" id="customerCount">
-                                    <i class="fas fa-users me-1"></i>
-                                    <span id="customerCountNumber">0</span> Kunden
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Customers Content -->
                 <div id="customersContent">
                     <!-- CustomerManagement component will be initialized here -->
@@ -5812,6 +7188,98 @@ class App {
         return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
     }
 
+    async dismissModalAndShowCustomer(customerId) {
+        try {
+            // Close appointment details modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (modal) modal.hide();
+            
+            // Wait for modal to close, then show customer details using shared CustomerManagement modal
+            setTimeout(async () => {
+                // Ensure CustomerManagement is initialized
+                if (!window.customerManagement) {
+                    if (typeof CustomerManagement !== 'undefined') {
+                        window.customerManagement = new CustomerManagement();
+                        if (this.currentStudioId) {
+                            await window.customerManagement.init(this.currentStudioId, true);
+                        }
+                    } else {
+                        console.error('CustomerManagement class not available');
+                        alert('Fehler: Kundenverwaltung nicht verfügbar');
+                        return;
+                    }
+                }
+                
+                if (window.customerManagement && window.customerManagement.showCustomerDetails) {
+                    await window.customerManagement.showCustomerDetails(customerId);
+                } else {
+                    console.error('CustomerManagement.showCustomerDetails not available');
+                    alert('Fehler: Kundenverwaltung nicht verfügbar');
+                }
+            }, 300);
+        } catch (error) {
+            console.error('Error in dismissModalAndShowCustomer:', error);
+        }
+    }
+
+    editNotesInline(appointmentId, container) {
+        const display = container.querySelector('.notes-display');
+        const currentText = display.textContent.replace('Klicken zum Bearbeiten', '').replace('Notiz hinzufügen...', '').trim();
+        
+        // Create textarea
+        const textarea = document.createElement('textarea');
+        textarea.className = 'form-control';
+        textarea.value = currentText;
+        textarea.rows = 3;
+        
+        // Replace display with textarea
+        container.innerHTML = '';
+        container.appendChild(textarea);
+        textarea.focus();
+        
+        // Save on blur
+        textarea.addEventListener('blur', async () => {
+            await this.saveNotesInline(appointmentId, textarea.value, container);
+        });
+        
+        // Save on Escape
+        textarea.addEventListener('keydown', async (e) => {
+            if (e.key === 'Escape') {
+                await this.saveNotesInline(appointmentId, textarea.value, container);
+            }
+        });
+    }
+
+    async saveNotesInline(appointmentId, notes, container) {
+        try {
+            // API call to update notes
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ notes })
+            });
+            
+            if (!response.ok) throw new Error('Failed to save notes');
+            
+            // Restore display
+            container.innerHTML = notes ? 
+                `<div class="notes-display bg-light p-3 rounded" style="cursor: pointer;">
+                    <i class="fas fa-sticky-note me-2 text-muted"></i>${notes}
+                    <small class="text-muted d-block mt-1"><i class="fas fa-edit me-1"></i>Klicken zum Bearbeiten</small>
+                </div>` :
+                `<div class="notes-display bg-light p-3 rounded text-muted" style="cursor: pointer;">
+                    <i class="fas fa-plus me-2"></i>Notiz hinzufügen...
+                </div>`;
+                
+        } catch (error) {
+            console.error('Error saving notes:', error);
+            alert('Fehler beim Speichern der Notiz');
+        }
+    }
+
     async showCustomerDetails(customerId) {
         const customer = this.allCustomers.find(c => c.id === customerId);
         if (!customer) {
@@ -5831,23 +7299,16 @@ class App {
         const firstName = customer.contact_first_name || customer.first_name || customer.firstName || '';
         const lastName = customer.contact_last_name || customer.last_name || customer.lastName || '';
         
-        // Check if modal already exists
+        // Remove any existing customer modal to prevent conflicts
         let existingModal = document.getElementById('customerDetailsModal');
-        let modal;
-        
         if (existingModal) {
-            // Update existing modal content
-            this.updateCustomerModalContent(customer, safeSessionBlocks, customerId);
-            modal = bootstrap.Modal.getInstance(existingModal);
-            if (!modal) {
-                modal = new bootstrap.Modal(existingModal);
-            }
-        } else {
-            // Create new modal
-            const modalHTML = this.createCustomerModalHTML(customer, safeSessionBlocks, customerId);
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-            modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
+            existingModal.remove();
         }
+        
+        // Always create fresh modal
+        const modalHTML = this.createCustomerModalHTML(customer, safeSessionBlocks, customerId);
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        const modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
 
         // Show modal
         modal.show();
@@ -5869,7 +7330,7 @@ class App {
                                 <i class="fas fa-user me-2"></i>
                                 <span id="customerModalName">${firstName} ${lastName}</span>
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                         </div>
                         <div class="modal-body" id="customerModalBody">
                             ${this.createCustomerModalBodyContent(customer, safeSessionBlocks, customerId)}
@@ -6090,7 +7551,7 @@ class App {
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <div class="h3 mb-1 ${remainingSessions > 0 ? 'text-primary' : 'text-muted'}">${block.remaining_sessions}</div>
-                                        <small class="text-muted">Sessions verfügbar</small>
+                                        <small class="text-muted">Behandlungen verfügbar</small>
                                         ${block.remaining_sessions === 0 ? '<div class="mt-2"><span class="badge bg-success">Abgeschlossen</span></div>' : ''}
                                     </div>
                                 </div>
@@ -6213,17 +7674,41 @@ class App {
 
     async getCurrentStudioId() {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
+        console.log('getCurrentStudioId: user role is', user.role);
         let studioId = user.studio_id;
         
         if (!studioId) {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
+            let endpoint;
+            
+            // Use different endpoints based on user role
+            if (user.role === 'manager') {
+                endpoint = `${window.API_BASE_URL}/api/v1/manager/studios`;
+            } else if (user.role === 'studio_owner') {
+                endpoint = `${window.API_BASE_URL}/api/v1/studios/my-studio`;
+            } else {
+                return null;
+            }
+            
+            const response = await fetch(endpoint, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
+            
             if (response.ok) {
                 const data = await response.json();
-                studioId = data.studio.id;
+                if (user.role === 'manager') {
+                    const studios = data.studios || [];
+                    if (studios.length > 0) {
+                        studioId = studios[0].id;
+                        this.currentStudioId = studioId; // Also set the class property
+                        console.log('Set currentStudioId for manager:', this.currentStudioId);
+                    }
+                } else if (user.role === 'studio_owner') {
+                    studioId = data.studio.id;
+                    this.currentStudioId = studioId; // Also set the class property
+                    console.log('Set currentStudioId for studio owner:', this.currentStudioId);
+                }
             }
         }
         
@@ -7077,10 +8562,6 @@ class App {
                     <span class="badge" style="background-color: #10b981; font-size: 10px; margin-right: 4px;">K</span>
                     Kunden Termine
                 </span>
-                <span class="d-flex align-items-center">
-                    <span class="badge" style="background-color: #e879f9; font-size: 10px; margin-right: 4px;">M</span>
-                    Gemischt
-                </span>
             </div>
         `;
         
@@ -7266,7 +8747,7 @@ class App {
         // Use different colors for leads vs customers
         const leadColor = '#f59e0b'; // Amber for leads (trial appointments)
         const customerColor = '#10b981'; // Green for customers (paid sessions)
-        const mixedColor = '#e879f9'; // Purple for mixed days
+        const mixedColor = '#B8A8D8'; // Pastel grau-lila for mixed days
         
         let baseColor;
         if (leadCount > 0 && customerCount > 0) {
@@ -7276,7 +8757,7 @@ class App {
         } else if (customerCount > 0) {
             baseColor = customerColor; // Only customers
         } else {
-            baseColor = '#e879f9'; // Default
+            baseColor = '#B8A8D8'; // Default
         }
         
         const fillHeight = Math.round(density * 100); // Percentage fill from bottom
@@ -7379,8 +8860,12 @@ class App {
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
         
-        sidebar.classList.remove('show');
-        sidebarOverlay.classList.remove('show');
+        if (sidebar) {
+            sidebar.classList.remove('show');
+        }
+        if (sidebarOverlay) {
+            sidebarOverlay.classList.remove('show');
+        }
     }
 
     async loadUserStudios() {
@@ -7662,7 +9147,7 @@ class App {
                         { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
                         { icon: 'fas fa-calendar-alt', text: 'Termine', section: 'termine' },
                         { icon: 'fas fa-users', text: 'Kunden', section: 'kunden' },
-                        { icon: 'fas fa-user-plus', text: 'Lead Listen', section: 'leads' },
+                        { icon: 'fas fa-user-plus', text: 'Leads', section: 'leads' },
                         { icon: 'fas fa-chart-bar', text: 'Berichte', section: 'berichte' }
                     ];
                     break;
@@ -7753,10 +9238,13 @@ class App {
                 break;
             case 'calendar':
             case 'termine':
+                console.log('Navigating to appointments, currentStudioId:', this.currentStudioId);
                 if (this.currentStudioId) {
                     this.showAppointmentManagement(this.currentStudioId);
                 } else {
+                    console.log('Getting studio ID from API...');
                     this.getCurrentStudioId().then(studioId => {
+                        console.log('Got studio ID:', studioId);
                         if (studioId) this.showAppointmentManagement(studioId);
                     });
                 }
@@ -7831,7 +9319,19 @@ class App {
         if (this.currentStudioId) return this.currentStudioId;
         
         try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/my-studio`, {
+            let endpoint;
+            const user = this.currentUser || JSON.parse(localStorage.getItem('user') || '{}');
+            
+            // Use different endpoints based on user role
+            if (user.role === 'manager') {
+                endpoint = `${window.API_BASE_URL}/api/v1/manager/studios`;
+            } else if (user.role === 'studio_owner') {
+                endpoint = `${window.API_BASE_URL}/api/v1/studios/my-studio`;
+            } else {
+                return null; // No studio access for other roles
+            }
+            
+            const response = await fetch(endpoint, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
@@ -7839,8 +9339,17 @@ class App {
             
             if (response.ok) {
                 const data = await response.json();
-                this.currentStudioId = data.studio.id;
-                return this.currentStudioId;
+                if (user.role === 'manager') {
+                    // For managers, get the first studio from the list
+                    const studios = data.studios || [];
+                    if (studios.length > 0) {
+                        this.currentStudioId = studios[0].id;
+                        return this.currentStudioId;
+                    }
+                } else if (user.role === 'studio_owner') {
+                    this.currentStudioId = data.studio.id;
+                    return this.currentStudioId;
+                }
             }
         } catch (error) {
             console.error('Error getting studio ID:', error);

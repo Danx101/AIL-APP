@@ -415,36 +415,45 @@ class Appointment {
   static async updatePastAppointmentStatuses() {
     return new Promise(async (resolve, reject) => {
       try {
-        // Use NOW() directly in MySQL for proper timezone handling
+        // Get current date and time for comparison
+        const now = new Date();
+        const currentDate = now.toISOString().split('T')[0];
+        const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+        
+        console.log(`Checking for past appointments to auto-complete. Current date/time: ${currentDate} ${currentTime}`);
+        
         // First, get all confirmed appointments that have ended (end time has passed)
         const appointmentsToComplete = await new Promise((resolveQuery, rejectQuery) => {
           const query = `
             SELECT a.*, at.consumes_session 
             FROM appointments a
             LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-            WHERE CONCAT(a.appointment_date, ' ', a.end_time) < NOW() 
-              AND a.status = 'confirmed'
+            WHERE (a.appointment_date < ? OR (a.appointment_date = ? AND a.end_time <= ?))
+              AND (a.status = 'confirmed' OR a.status = 'bestätigt')
           `;
 
-          db.all(query, [], (err, rows) => {
+          db.all(query, [currentDate, currentDate, currentTime], (err, rows) => {
             if (err) rejectQuery(err);
-            else resolveQuery(rows);
+            else resolveQuery(rows || []);
           });
         });
 
         if (appointmentsToComplete.length === 0) {
+          console.log('No appointments to auto-complete');
           return resolve(0);
         }
 
-        // Update appointment statuses to 'completed' (MySQL English status)
+        console.log(`Found ${appointmentsToComplete.length} appointments to auto-complete`);
+
+        // Update appointment statuses to 'abgeschlossen' (German completed status)
         const updateQuery = `
           UPDATE appointments 
-          SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-          WHERE CONCAT(appointment_date, ' ', end_time) < NOW() 
-            AND status = 'confirmed'
+          SET status = 'abgeschlossen', updated_at = CURRENT_TIMESTAMP
+          WHERE (appointment_date < ? OR (appointment_date = ? AND end_time <= ?))
+            AND (status = 'confirmed' OR status = 'bestätigt')
         `;
 
-        db.run(updateQuery, [], async (err) => {
+        db.run(updateQuery, [currentDate, currentDate, currentTime], async (err) => {
           if (err) {
             return reject(err);
           }

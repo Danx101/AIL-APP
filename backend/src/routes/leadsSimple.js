@@ -164,6 +164,155 @@ router.get('/studio/:studioId/stats', async (req, res) => {
   }
 });
 
+// Get lead history for a studio
+router.get('/studio/:studioId/history', async (req, res) => {
+  try {
+    const { studioId } = req.params;
+    const { 
+      page = 1, 
+      limit = 50, 
+      activity_type, 
+      lead_id, 
+      date_from, 
+      date_to,
+      search 
+    } = req.query;
+
+    // Verify user owns this studio
+    const studio = await db.get(
+      'SELECT * FROM studios WHERE id = ? AND owner_id = ?',
+      [studioId, req.user.userId]
+    );
+
+    if (!studio) {
+      return res.status(404).json({ message: 'Studio not found or access denied' });
+    }
+    
+    // Build dynamic query with 12-month default filter
+    let query = `
+      SELECT 
+        la.*,
+        l.name as lead_name,
+        l.phone_number as lead_phone,
+        l.email as lead_email,
+        u.first_name,
+        u.last_name
+      FROM lead_activities la
+      LEFT JOIN leads l ON la.lead_id = l.id
+      LEFT JOIN users u ON la.created_by = u.id
+      WHERE la.studio_id = ? 
+      AND la.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    `;
+    
+    const queryParams = [studioId];
+    
+    // Add filters
+    if (activity_type) {
+      query += ' AND la.activity_type = ?';
+      queryParams.push(activity_type);
+    }
+    
+    if (lead_id) {
+      query += ' AND la.lead_id = ?';
+      queryParams.push(lead_id);
+    }
+    
+    if (date_from) {
+      query += ' AND la.created_at >= ?';
+      queryParams.push(date_from);
+    }
+    
+    if (date_to) {
+      query += ' AND la.created_at <= ?';
+      queryParams.push(date_to);
+    }
+    
+    if (search) {
+      query += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
+      const searchPattern = `%${search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern);
+    }
+    
+    // Add ordering and pagination
+    query += ' ORDER BY la.created_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    // Get total count for pagination (with 12-month filter)
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM lead_activities la
+      LEFT JOIN leads l ON la.lead_id = l.id
+      WHERE la.studio_id = ?
+      AND la.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    `;
+    
+    const countParams = [studioId];
+    
+    if (activity_type) {
+      countQuery += ' AND la.activity_type = ?';
+      countParams.push(activity_type);
+    }
+    
+    if (lead_id) {
+      countQuery += ' AND la.lead_id = ?';
+      countParams.push(lead_id);
+    }
+    
+    if (date_from) {
+      countQuery += ' AND la.created_at >= ?';
+      countParams.push(date_from);
+    }
+    
+    if (date_to) {
+      countQuery += ' AND la.created_at <= ?';
+      countParams.push(date_to);
+    }
+    
+    if (search) {
+      countQuery += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
+      const searchPattern = `%${search}%`;
+      countParams.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    // Execute queries with error handling
+    let activities = [];
+    let countResult = { total: 0 };
+    
+    try {
+      [activities, countResult] = await Promise.all([
+        db.all(query, queryParams),
+        db.get(countQuery, countParams)
+      ]);
+    } catch (tableError) {
+      console.log('Lead activities table might not exist or be empty, returning empty result:', tableError.message);
+      // Return empty results if table doesn't exist
+      activities = [];
+      countResult = { total: 0 };
+    }
+
+    res.json({
+      history: activities || [],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult ? countResult.total : 0,
+        totalPages: Math.ceil((countResult ? countResult.total : 0) / parseInt(limit))
+      },
+      filters: {
+        activity_type,
+        lead_id,
+        date_from,
+        date_to,
+        search
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting studio history:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Create a new lead (optimized)
 router.post('/', async (req, res) => {
   try {

@@ -19,12 +19,17 @@ class LeadKanban {
         };
         this.metrics = {};
         this.draggedLead = null;
-        this.showArchived = false;
+        this.draggedFromStatus = null;
+        this.showArchived = true; // Always show archive
+        this.currentView = 'kanban'; // 'kanban' or 'verlauf'
         this.searchQuery = '';
         this.selectedLead = null;
         this.selectedArchivedLeads = new Set();
         this.archiveSearchQuery = '';
         this.archiveStatusFilter = 'all';
+        this.historyData = [];
+        this.historyPagination = {};
+        this.historyFilters = {};
     }
 
     async init(studioId) {
@@ -54,15 +59,22 @@ class LeadKanban {
                     <div>
                         <h2 class="h3 mb-0">
                             <i class="bi bi-kanban text-primary me-2"></i>
-                            Lead Management Kanban
+                            Lead Management
                         </h2>
-                        <p class="text-muted mb-0">Drag and drop to move leads through stages</p>
+                        <p class="text-muted mb-0">Leads durch Phasen ziehen und ablegen</p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap" style="min-width: 250px;">
-                        <button class="btn ${this.showArchived ? 'btn-secondary' : 'btn-outline-dark'}" onclick="leadKanban.toggleArchived()" id="toggle-archive-btn" style="white-space: nowrap; border-width: 2px;">
-                            <i class="bi bi-archive me-1"></i>
-                            ${this.showArchived ? 'Hide' : 'Show'} Archive
-                        </button>
+                        <!-- View Toggle -->
+                        <div class="btn-group" role="group">
+                            <button class="btn ${this.currentView === 'kanban' ? 'btn-primary' : 'btn-outline-primary'}" onclick="leadKanban.switchView('kanban')">
+                                <i class="bi bi-kanban me-1"></i>
+                                Kanban
+                            </button>
+                            <button class="btn ${this.currentView === 'verlauf' ? 'btn-primary' : 'btn-outline-primary'}" onclick="leadKanban.switchView('verlauf')">
+                                <i class="bi bi-clock-history me-1"></i>
+                                Verlauf
+                            </button>
+                        </div>
                         <div class="dropdown">
                             <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-plus-circle me-1"></i>
@@ -72,13 +84,13 @@ class LeadKanban {
                                 <li>
                                     <a class="dropdown-item" href="#" onclick="leadKanban.showAddLeadModal(); return false;">
                                         <i class="bi bi-person-plus me-2"></i>
-                                        New Lead
+                                        Neuer Lead
                                     </a>
                                 </li>
                                 <li>
                                     <a class="dropdown-item" href="#" onclick="leadKanban.showWalkInTrialModal(); return false;">
                                         <i class="bi bi-door-open me-2"></i>
-                                        Walk-in Trial
+                                        Walk-in Probebehandlung
                                     </a>
                                 </li>
                             </ul>
@@ -99,7 +111,7 @@ class LeadKanban {
                                         <div class="fs-4 fw-bold text-primary" id="metric-total-active">
                                             ${this.metrics.total_active || 0}
                                         </div>
-                                        <div class="text-muted small">Active Leads</div>
+                                        <div class="text-muted small">Aktive Leads</div>
                                     </div>
                                 </div>
                             </div>
@@ -116,7 +128,7 @@ class LeadKanban {
                                         <div class="fs-4 fw-bold text-success" id="metric-converted">
                                             ${this.metrics.total_converted || 0}
                                         </div>
-                                        <div class="text-muted small">Converted</div>
+                                        <div class="text-muted small">Konvertiert</div>
                                     </div>
                                 </div>
                             </div>
@@ -133,7 +145,7 @@ class LeadKanban {
                                         <div class="fs-4 fw-bold text-info" id="metric-conversion-rate">
                                             ${Math.round((this.metrics.conversion_rate || 0) * 100)}%
                                         </div>
-                                        <div class="text-muted small">Conversion Rate</div>
+                                        <div class="text-muted small">Konversionsrate</div>
                                     </div>
                                 </div>
                             </div>
@@ -150,7 +162,7 @@ class LeadKanban {
                                         <div class="fs-4 fw-bold text-warning" id="metric-avg-time">
                                             ${this.metrics.avg_time_to_convert || '0d'}
                                         </div>
-                                        <div class="text-muted small">Avg. Time to Convert</div>
+                                        <div class="text-muted small">Durchschn. Konversionszeit</div>
                                     </div>
                                 </div>
                             </div>
@@ -158,31 +170,26 @@ class LeadKanban {
                     </div>
                 </div>
 
-                <!-- Search Bar -->
-                <div class="mb-3">
-                    <div class="input-group">
-                        <span class="input-group-text">
-                            <i class="bi bi-search"></i>
-                        </span>
-                        <input type="text" 
-                               class="form-control" 
-                               id="kanban-search"
-                               placeholder="Search leads by name, phone, or email..."
-                               onkeyup="leadKanban.filterLeads(this.value)">
-                    </div>
-                </div>
 
-                <!-- Kanban Board -->
-                <div class="kanban-board">
-                    <div class="row g-3">
-                        ${this.renderKanbanColumns()}
+                <!-- Main Content Area -->
+                ${this.currentView === 'kanban' ? `
+                    <!-- Kanban Board -->
+                    <div class="kanban-board">
+                        <div class="row g-3">
+                            ${this.renderKanbanColumns()}
+                        </div>
                     </div>
-                </div>
 
-                <!-- Archive Panel -->
-                <div class="archive-panel ${this.showArchived ? 'show' : ''}" id="archive-panel">
-                    ${this.renderArchivePanel()}
-                </div>
+                    <!-- Archive Panel (Always Visible) -->
+                    <div class="archive-panel show mt-4" id="archive-panel">
+                        ${this.renderArchivePanel()}
+                    </div>
+                ` : `
+                    <!-- History View -->
+                    <div class="history-view mt-3">
+                        ${this.renderHistoryView()}
+                    </div>
+                `}
             </div>
 
             <!-- Modals -->
@@ -238,8 +245,21 @@ class LeadKanban {
                     opacity: 0.5;
                 }
                 .kanban-column.drag-over {
-                    background: #e9ecef;
-                    border: 2px dashed #adb5bd;
+                    background: #e3f2fd;
+                    border: 2px dashed #2196f3;
+                    transition: all 0.2s ease;
+                }
+                .kanban-cards.drag-over::after {
+                    content: "Hier ablegen";
+                    display: block;
+                    text-align: center;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border: 2px dashed #dee2e6;
+                    border-radius: 6px;
+                    color: #6c757d;
+                    font-weight: 500;
+                    margin-top: 10px;
                 }
                 .archive-panel {
                     margin-top: 30px;
@@ -248,9 +268,111 @@ class LeadKanban {
                 .archive-panel.show {
                     display: block;
                 }
+                
+                /* Modern Archive Styling */
+                .archive-container {
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+                    border: 1px solid #dee2e6;
+                    overflow: hidden;
+                }
+                
+                .archive-header {
+                    background: rgba(255, 255, 255, 0.8);
+                    padding: 20px 24px;
+                    border-bottom: 1px solid #e9ecef;
+                }
+                
+                .archive-title {
+                    color: #495057;
+                    font-weight: 600;
+                    font-size: 1.1rem;
+                }
+                
+                .archive-count {
+                    background: #6c757d;
+                    color: white;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    font-size: 0.8rem;
+                    font-weight: 500;
+                    margin-left: 8px;
+                }
+                
+                .archive-content {
+                    background: white;
+                    padding: 0;
+                }
+                
+                .archive-empty {
+                    text-align: center;
+                    padding: 60px 20px;
+                    color: #6c757d;
+                }
+                
+                .archive-empty i {
+                    font-size: 3rem;
+                    color: #adb5bd;
+                    margin-bottom: 16px;
+                    display: block;
+                }
+                
+                .archive-empty p {
+                    margin: 0;
+                    font-size: 1rem;
+                }
+                
+                .archive-table-container {
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                }
+                
+                .archive-table-container .table thead th {
+                    background: #f1f3f4;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                    font-weight: 600;
+                    font-size: 0.875rem;
+                    padding: 12px 16px;
+                }
+                
+                .archive-table-container .table tbody td {
+                    padding: 12px 16px;
+                    vertical-align: middle;
+                    border-bottom: 1px solid #f1f3f4;
+                }
+                
+                .archive-table-container .table tbody tr:hover {
+                    background-color: #f8f9fa;
+                }
                 .lead-badge {
                     font-size: 11px;
                     padding: 2px 6px;
+                }
+                
+                /* Auto-save status styling */
+                .save-status {
+                    min-height: 1.2rem;
+                    transition: opacity 0.3s ease;
+                }
+                
+                .save-status small {
+                    font-size: 0.75rem;
+                    display: inline-flex;
+                    align-items: center;
+                }
+                
+                .save-status .text-muted {
+                    opacity: 0.8;
+                }
+                
+                .save-status .text-success {
+                    opacity: 1;
+                }
+                
+                .save-status .text-danger {
+                    opacity: 1;
                 }
                 .lead-actions {
                     opacity: 0;
@@ -265,10 +387,10 @@ class LeadKanban {
 
     renderKanbanColumns() {
         const columns = [
-            { key: 'new', title: 'New', color: 'primary', icon: 'star' },
-            { key: 'working', title: 'Working', color: 'warning', icon: 'telephone' },
-            { key: 'qualified', title: 'Qualified', color: 'success', icon: 'check2-circle' },
-            { key: 'trial_scheduled', title: 'Trial Scheduled', color: 'purple', icon: 'calendar-check' }
+            { key: 'new', title: 'Neu', color: 'primary', icon: 'star' },
+            { key: 'working', title: 'In Bearbeitung', color: 'warning', icon: 'telephone' },
+            { key: 'qualified', title: 'Qualifiziert', color: 'success', icon: 'check2-circle' },
+            { key: 'trial_scheduled', title: 'Probebehandlung geplant', color: 'purple', icon: 'calendar-check' }
         ];
 
         return columns.map(col => `
@@ -296,10 +418,17 @@ class LeadKanban {
 
     renderLeadCards(leads) {
         if (!leads || leads.length === 0) {
-            return '<div class="text-center text-muted py-4">No leads</div>';
+            return '<div class="text-center text-muted py-4">Keine Leads</div>';
         }
 
-        return leads.map(lead => `
+        // Sort leads so that oldest (by stage_entered_at) appear first, newest at bottom
+        const sortedLeads = [...leads].sort((a, b) => {
+            const dateA = new Date(a.stage_entered_at || 0);
+            const dateB = new Date(b.stage_entered_at || 0);
+            return dateA - dateB; // Ascending order (oldest first)
+        });
+
+        return sortedLeads.map(lead => `
             <div class="lead-card" 
                  draggable="true"
                  data-lead-id="${lead.id}"
@@ -324,10 +453,7 @@ class LeadKanban {
                         ${lead.email}
                     </div>
                 ` : ''}
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                    <span class="lead-badge badge bg-light text-dark">
-                        ${lead.contact_attempts || 0} contacts
-                    </span>
+                <div class="d-flex justify-content-end align-items-center mt-2">
                     <small class="text-muted">${this.getTimeInStage(lead.stage_entered_at)}</small>
                 </div>
             </div>
@@ -363,23 +489,23 @@ class LeadKanban {
         const hasSelection = this.selectedArchivedLeads.size > 0;
 
         return `
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-transparent">
+            <div class="archive-container">
+                <div class="archive-header">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">
-                            <i class="bi bi-clock-history me-2"></i>
-                            Archive History
-                            <span class="badge bg-secondary ms-2">${allArchived.length}</span>
+                        <h5 class="mb-0 archive-title">
+                            <i class="bi bi-archive me-2"></i>
+                            Archiv
+                            <span class="archive-count">${allArchived.length}</span>
                         </h5>
                         <div class="d-flex gap-2">
                             ${hasSelection ? `
                                 <button class="btn btn-primary btn-sm" onclick="leadKanban.reactivateSelectedLeads()">
                                     <i class="bi bi-arrow-counterclockwise me-1"></i>
-                                    Reactivate Selected (${this.selectedArchivedLeads.size})
+                                    Reaktivieren (${this.selectedArchivedLeads.size})
                                 </button>
                                 <button class="btn btn-danger btn-sm" onclick="leadKanban.deleteSelectedLeads()">
                                     <i class="bi bi-trash me-1"></i>
-                                    Delete Selected (${this.selectedArchivedLeads.size})
+                                    Löschen (${this.selectedArchivedLeads.size})
                                 </button>
                             ` : ''}
                         </div>
@@ -394,7 +520,7 @@ class LeadKanban {
                                 </span>
                                 <input type="text" 
                                        class="form-control form-control-sm" 
-                                       placeholder="Search by name, phone, or email..."
+                                       placeholder="Nach Name, Telefon oder E-Mail suchen..."
                                        value="${this.archiveSearchQuery}"
                                        onkeyup="leadKanban.filterArchive(this.value, null)">
                             </div>
@@ -402,36 +528,36 @@ class LeadKanban {
                         <div class="col-md-3">
                             <select class="form-select form-select-sm" 
                                     onchange="leadKanban.filterArchive(null, this.value)">
-                                <option value="all">All Statuses</option>
-                                <option value="converted" ${this.archiveStatusFilter === 'converted' ? 'selected' : ''}>Converted</option>
-                                <option value="lost" ${this.archiveStatusFilter === 'lost' ? 'selected' : ''}>Lost After Trial</option>
-                                <option value="not_interested" ${this.archiveStatusFilter === 'not_interested' ? 'selected' : ''}>Not Interested</option>
-                                <option value="unreachable" ${this.archiveStatusFilter === 'unreachable' ? 'selected' : ''}>Unreachable</option>
-                                <option value="wrong_number" ${this.archiveStatusFilter === 'wrong_number' ? 'selected' : ''}>Wrong Number</option>
+                                <option value="all">Alle Status</option>
+                                <option value="converted" ${this.archiveStatusFilter === 'converted' ? 'selected' : ''}>Konvertiert</option>
+                                <option value="lost" ${this.archiveStatusFilter === 'lost' ? 'selected' : ''}>Nach Probebehandlung verloren</option>
+                                <option value="not_interested" ${this.archiveStatusFilter === 'not_interested' ? 'selected' : ''}>Nicht interessiert</option>
+                                <option value="unreachable" ${this.archiveStatusFilter === 'unreachable' ? 'selected' : ''}>Nicht erreichbar</option>
+                                <option value="wrong_number" ${this.archiveStatusFilter === 'wrong_number' ? 'selected' : ''}>Falsche Nummer</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             ${hasSelection ? `
                                 <button class="btn btn-outline-secondary btn-sm w-100" onclick="leadKanban.clearSelection()">
-                                    Clear Selection
+                                    Auswahl aufheben
                                 </button>
                             ` : `
                                 <button class="btn btn-outline-primary btn-sm w-100" onclick="leadKanban.selectAllVisible()">
-                                    Select All
+                                    Alle auswählen
                                 </button>
                             `}
                         </div>
                     </div>
                 </div>
-                <div class="card-body">
+                <div class="archive-content">
                     ${allArchived.length === 0 ? `
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-inbox fs-1"></i>
-                            <p class="mt-2">No archived leads ${this.archiveStatusFilter !== 'all' || this.archiveSearchQuery ? 'matching your criteria' : ''}</p>
+                        <div class="archive-empty">
+                            <i class="bi bi-inbox"></i>
+                            <p>Keine archivierten Leads ${this.archiveStatusFilter !== 'all' || this.archiveSearchQuery ? 'gefunden' : ''}</p>
                         </div>
                     ` : `
-                        <div class="table-responsive">
-                            <table class="table table-hover">
+                        <div class="archive-table-container">
+                            <table class="table table-hover mb-0">
                                 <thead>
                                     <tr>
                                         <th width="40">
@@ -441,9 +567,9 @@ class LeadKanban {
                                                    ${this.selectedArchivedLeads.size === allArchived.length && allArchived.length > 0 ? 'checked' : ''}>
                                         </th>
                                         <th>Name</th>
-                                        <th>Contact Information</th>
+                                        <th>Kontaktinformationen</th>
                                         <th>Status</th>
-                                        <th>Archived Date</th>
+                                        <th>Archivierungsdatum</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -802,6 +928,8 @@ class LeadKanban {
 
     handleDragStart(event, leadId) {
         this.draggedLead = leadId;
+        // Store the current status of the dragged lead
+        this.draggedFromStatus = this.findLeadStatus(leadId);
         event.dataTransfer.effectAllowed = 'move';
         event.target.classList.add('dragging');
     }
@@ -810,16 +938,372 @@ class LeadKanban {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
         const column = event.currentTarget.closest('.kanban-column');
+        const cardsContainer = event.currentTarget;
+        
         if (column) {
             column.classList.add('drag-over');
+        }
+        if (cardsContainer) {
+            cardsContainer.classList.add('drag-over');
         }
     }
 
     handleDragLeave(event) {
         const column = event.currentTarget.closest('.kanban-column');
+        const cardsContainer = event.currentTarget;
+        
         if (column) {
             column.classList.remove('drag-over');
         }
+        if (cardsContainer) {
+            cardsContainer.classList.remove('drag-over');
+        }
+    }
+
+    // View switching methods
+    switchView(view) {
+        this.currentView = view;
+        if (view === 'verlauf') {
+            this.loadHistoryData();
+        }
+        this.render();
+        this.setupEventListeners();
+    }
+
+    async loadHistoryData(filters = {}) {
+        try {
+            const token = localStorage.getItem('authToken');
+            
+            // Build query parameters
+            const params = new URLSearchParams({
+                page: filters.page || 1,
+                limit: filters.limit || 50,
+                ...filters
+            });
+            
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/leads/studio/${this.studioId}/history?${params}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.historyData = data.history || [];
+                this.historyPagination = data.pagination || {};
+                this.historyFilters = data.filters || {};
+            } else {
+                console.warn('Failed to load history data');
+                this.historyData = [];
+                this.historyPagination = {};
+            }
+        } catch (error) {
+            console.error('Error loading history data:', error);
+            this.historyData = [];
+            this.historyPagination = {};
+        }
+    }
+
+    renderHistoryView() {
+        return `
+            <div class="row">
+                <div class="col-12">
+                    <!-- Filters Panel -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted">Suchen</label>
+                                    <input type="text" class="form-control" id="history-search" 
+                                           placeholder="Lead oder Beschreibung..." 
+                                           value="${this.historyFilters.search || ''}"
+                                           onchange="leadKanban.filterHistory()">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small text-muted">Aktivität</label>
+                                    <select class="form-select" id="history-activity-filter" onchange="leadKanban.filterHistory()">
+                                        <option value="">Alle Aktivitäten</option>
+                                        <option value="status_change" ${this.historyFilters.activity_type === 'status_change' ? 'selected' : ''}>Status geändert</option>
+                                        <option value="note" ${this.historyFilters.activity_type === 'note' ? 'selected' : ''}>Notiz</option>
+                                        <option value="call" ${this.historyFilters.activity_type === 'call' ? 'selected' : ''}>Anruf</option>
+                                        <option value="conversion" ${this.historyFilters.activity_type === 'conversion' ? 'selected' : ''}>Konvertierung</option>
+                                        <option value="archive" ${this.historyFilters.activity_type === 'archive' ? 'selected' : ''}>Archiviert</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small text-muted">Von Datum</label>
+                                    <input type="date" class="form-control" id="history-date-from" 
+                                           value="${this.historyFilters.date_from || ''}"
+                                           onchange="leadKanban.filterHistory()">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small text-muted">Bis Datum</label>
+                                    <input type="date" class="form-control" id="history-date-to" 
+                                           value="${this.historyFilters.date_to || ''}"
+                                           onchange="leadKanban.filterHistory()">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small text-muted">Einträge pro Seite</label>
+                                    <select class="form-select" id="history-limit" onchange="leadKanban.filterHistory()">
+                                        <option value="25" ${(this.historyPagination.limit || 50) == 25 ? 'selected' : ''}>25</option>
+                                        <option value="50" ${(this.historyPagination.limit || 50) == 50 ? 'selected' : ''}>50</option>
+                                        <option value="100" ${(this.historyPagination.limit || 50) == 100 ? 'selected' : ''}>100</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label small text-muted">&nbsp;</label>
+                                    <button class="btn btn-outline-secondary w-100" onclick="leadKanban.clearHistoryFilters()">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- History Data -->
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0">
+                                    <i class="bi bi-clock-history me-2"></i>
+                                    Lead-Verlauf (Letzte 12 Monate)
+                                    <span class="badge bg-primary ms-2">${this.historyPagination.total || this.historyData.length}</span>
+                                </h5>
+                                <small class="text-muted">Zeigt Aktivitäten der letzten 12 Monate</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-primary btn-sm" onclick="leadKanban.exportHistory()" title="Export als CSV">
+                                    <i class="bi bi-download me-1"></i>
+                                    Export
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="leadKanban.refreshHistory()" title="Aktualisieren">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            ${this.historyData.length === 0 ? this.renderEmptyHistoryState() : this.renderHistoryTable()}
+                        </div>
+                        ${this.renderHistoryPagination()}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    renderEmptyHistoryState() {
+        return `
+            <div class="text-center py-5">
+                <i class="bi bi-clock-history display-1 text-muted mb-3"></i>
+                <h5>Keine Verlaufsdaten verfügbar</h5>
+                <p class="text-muted">Hier werden Lead-Aktivitäten der letzten 12 Monate angezeigt, sobald Daten verfügbar sind.</p>
+                <small class="text-muted">Ältere Aktivitäten werden automatisch ausgeblendet, um die Performance zu optimieren.</small>
+            </div>
+        `;
+    }
+    
+    renderHistoryTable() {
+        return `
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 140px;">Datum/Zeit</th>
+                            <th style="width: 200px;">Lead</th>
+                            <th style="width: 150px;">Aktivität</th>
+                            <th style="width: 120px;">Von</th>
+                            <th style="width: 120px;">Nach</th>
+                            <th style="width: 120px;">Benutzer</th>
+                            <th>Beschreibung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.historyData.map(item => this.renderHistoryRow(item)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    renderHistoryPagination() {
+        if (!this.historyPagination || this.historyPagination.totalPages <= 1) {
+            return '';
+        }
+        
+        const currentPage = this.historyPagination.page || 1;
+        const totalPages = this.historyPagination.totalPages || 1;
+        const total = this.historyPagination.total || 0;
+        
+        let paginationHtml = `
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    Zeige ${((currentPage - 1) * this.historyPagination.limit) + 1} - ${Math.min(currentPage * this.historyPagination.limit, total)} von ${total} Einträgen
+                </small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+        `;
+        
+        // Previous button
+        paginationHtml += `
+            <li class="page-item ${currentPage <= 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="leadKanban.goToHistoryPage(${currentPage - 1}); return false;">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+        `;
+        
+        // Page numbers
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        
+        if (startPage > 1) {
+            paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="leadKanban.goToHistoryPage(1); return false;">1</a></li>`;
+            if (startPage > 2) {
+                paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHtml += `
+                <li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="leadKanban.goToHistoryPage(${i}); return false;">${i}</a>
+                </li>
+            `;
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="leadKanban.goToHistoryPage(${totalPages}); return false;">${totalPages}</a></li>`;
+        }
+        
+        // Next button
+        paginationHtml += `
+            <li class="page-item ${currentPage >= totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="leadKanban.goToHistoryPage(${currentPage + 1}); return false;">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        `;
+        
+        paginationHtml += `
+                    </ul>
+                </nav>
+            </div>
+        `;
+        
+        return paginationHtml;
+    }
+
+    renderHistoryRow(item) {
+        const date = new Date(item.created_at);
+        const dateStr = date.toLocaleDateString('de-DE');
+        const timeStr = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        
+        const statusTranslations = {
+            'new': 'Neu',
+            'working': 'In Bearbeitung', 
+            'qualified': 'Qualifiziert',
+            'trial_scheduled': 'Probebehandlung geplant',
+            'converted': 'Konvertiert',
+            'not_interested': 'Nicht interessiert',
+            'unreachable': 'Nicht erreichbar',
+            'wrong_number': 'Falsche Nummer',
+            'lost': 'Nach Probebehandlung verloren'
+        };
+
+        const actionTranslations = {
+            'status_change': 'Status geändert',
+            'note': 'Notiz hinzugefügt',
+            'call': 'Anruf',
+            'email': 'E-Mail',
+            'sms': 'SMS',
+            'appointment_scheduled': 'Termin geplant',
+            'appointment_completed': 'Termin abgeschlossen',
+            'conversion': 'Konvertiert',
+            'archive': 'Archiviert'
+        };
+        
+        const activityIcons = {
+            'status_change': 'bi-arrow-right-circle',
+            'note': 'bi-chat-text',
+            'call': 'bi-telephone',
+            'email': 'bi-envelope',
+            'sms': 'bi-chat-dots',
+            'appointment_scheduled': 'bi-calendar-plus',
+            'appointment_completed': 'bi-calendar-check',
+            'conversion': 'bi-star-fill',
+            'archive': 'bi-archive'
+        };
+        
+        const activityColors = {
+            'status_change': 'bg-info',
+            'note': 'bg-secondary',
+            'call': 'bg-success',
+            'email': 'bg-primary',
+            'sms': 'bg-warning',
+            'appointment_scheduled': 'bg-info',
+            'appointment_completed': 'bg-success',
+            'conversion': 'bg-success',
+            'archive': 'bg-dark'
+        };
+
+        const userName = item.first_name && item.last_name 
+            ? `${item.first_name} ${item.last_name}` 
+            : (item.user_name || 'System');
+
+        return `
+            <tr class="history-row" style="cursor: pointer;" onclick="leadKanban.showHistoryDetails(${item.id})">
+                <td>
+                    <div class="fw-medium">${dateStr}</div>
+                    <small class="text-muted">${timeStr}</small>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div>
+                            <div class="fw-medium">${item.lead_name || 'Unbekannt'}</div>
+                            ${item.lead_phone ? `<small class="text-muted">${item.lead_phone}</small>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge ${activityColors[item.activity_type] || 'bg-secondary'} d-inline-flex align-items-center">
+                        <i class="bi ${activityIcons[item.activity_type] || 'bi-circle'} me-1"></i>
+                        ${actionTranslations[item.activity_type] || item.activity_type}
+                    </span>
+                </td>
+                <td>
+                    ${item.from_status ? `
+                        <span class="badge bg-light text-dark border">
+                            ${statusTranslations[item.from_status] || item.from_status}
+                        </span>
+                    ` : '<span class="text-muted">-</span>'}
+                </td>
+                <td>
+                    ${item.to_status ? `
+                        <span class="badge bg-primary">
+                            ${statusTranslations[item.to_status] || item.to_status}
+                        </span>
+                    ` : '<span class="text-muted">-</span>'}
+                </td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" 
+                             style="width: 24px; height: 24px; font-size: 0.7rem;">
+                            ${userName.charAt(0).toUpperCase()}
+                        </div>
+                        <small>${userName}</small>
+                    </div>
+                </td>
+                <td>
+                    <div class="text-truncate" style="max-width: 200px;" title="${item.description || ''}">
+                        ${item.description || '-'}
+                    </div>
+                    ${item.metadata ? `<small class="text-muted d-block">Details verfügbar</small>` : ''}
+                </td>
+            </tr>
+        `;
     }
 
     async handleDrop(event, toStatus) {
@@ -831,6 +1315,13 @@ class LeadKanban {
         }
 
         if (!this.draggedLead) return;
+
+        // Prevent same-column drops
+        if (this.draggedFromStatus === toStatus) {
+            this.showNotification('Lead ist bereits in dieser Spalte', 'warning');
+            this.resetDragState();
+            return;
+        }
 
         // Special handling for trial_scheduled - show modal
         if (toStatus === 'trial_scheduled') {
@@ -844,11 +1335,22 @@ class LeadKanban {
         // Move the lead
         await this.moveLead(this.draggedLead, toStatus);
         
+        this.resetDragState();
+    }
+
+    resetDragState() {
         // Reset dragging state
         document.querySelectorAll('.lead-card.dragging').forEach(card => {
             card.classList.remove('dragging');
         });
+        document.querySelectorAll('.kanban-column.drag-over').forEach(column => {
+            column.classList.remove('drag-over');
+        });
+        document.querySelectorAll('.kanban-cards.drag-over').forEach(container => {
+            container.classList.remove('drag-over');
+        });
         this.draggedLead = null;
+        this.draggedFromStatus = null;
     }
 
     async moveLead(leadId, toStatus, appointmentData = null) {
@@ -876,7 +1378,7 @@ class LeadKanban {
 
             // Success - reload data and update UI
             await this.loadKanbanData();
-            this.showNotification('Lead moved successfully', 'success');
+            this.showNotification('Lead erfolgreich verschoben', 'success');
             
             // Reset dragging state
             this.draggedLead = null;
@@ -888,10 +1390,7 @@ class LeadKanban {
             this.showNotification(error.message, 'error');
             
             // Reset dragging state even on error
-            this.draggedLead = null;
-            document.querySelectorAll('.lead-card.dragging').forEach(card => {
-                card.classList.remove('dragging');
-            });
+            this.resetDragState();
             
             // Reload to reset state
             await this.loadKanbanData();
@@ -917,7 +1416,7 @@ class LeadKanban {
         const endTime = document.getElementById('trial-end-time').value;
 
         if (!date || !startTime || !endTime) {
-            this.showNotification('Please fill all required fields', 'error');
+            this.showNotification('Bitte alle erforderlichen Felder ausfüllen', 'error');
             return;
         }
 
@@ -931,7 +1430,7 @@ class LeadKanban {
         const leadId = this.draggedLead || (this.selectedLead ? this.selectedLead.id : null);
         
         if (!leadId) {
-            this.showNotification('No lead selected', 'error');
+            this.showNotification('Kein Lead ausgewählt', 'error');
             return;
         }
 
@@ -953,10 +1452,19 @@ class LeadKanban {
         if (!lead) return;
 
         this.selectedLead = lead;
-        document.getElementById('convert-lead-name').textContent = lead.name || 'Unknown';
         
-        const modal = new bootstrap.Modal(document.getElementById('convertModal'));
-        modal.show();
+        // Close the lead details modal first to prevent z-index issues
+        const leadDetailsModal = bootstrap.Modal.getInstance(document.getElementById('leadDetailsModal'));
+        if (leadDetailsModal) {
+            leadDetailsModal.hide();
+        }
+        
+        // Wait a moment for the modal to close, then show convert modal
+        setTimeout(() => {
+            document.getElementById('convert-lead-name').textContent = lead.name || 'Unknown';
+            const modal = new bootstrap.Modal(document.getElementById('convertModal'));
+            modal.show();
+        }, 300);
     }
 
     async confirmConversion() {
@@ -964,40 +1472,68 @@ class LeadKanban {
         const paymentMethod = document.getElementById('payment-method').value;
         const notes = document.getElementById('conversion-notes').value;
 
+        console.log('Conversion data:', { sessionPackage, paymentMethod, notes, leadId: this.selectedLead?.id });
+
         if (!sessionPackage || !paymentMethod) {
-            this.showNotification('Please select session package and payment method', 'error');
+            this.showNotification('Bitte Behandlungspaket und Zahlungsmethode auswählen', 'error');
+            return;
+        }
+
+        if (!this.selectedLead || !this.selectedLead.id) {
+            this.showNotification('Kein Lead ausgewählt', 'error');
             return;
         }
 
         try {
             const token = localStorage.getItem('authToken');
+            const requestBody = {
+                sessionPackage: parseInt(sessionPackage, 10),
+                paymentMethod: paymentMethod,
+                notes: notes || null
+            };
+
+            console.log('Sending conversion request:', requestBody);
+
             const response = await fetch(`${window.API_BASE_URL}/api/v1/leads/${this.selectedLead.id}/convert`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    sessionPackage: parseInt(sessionPackage),
-                    paymentMethod: paymentMethod,
-                    notes: notes
-                })
+                body: JSON.stringify(requestBody)
             });
 
+            console.log('Response status:', response.status);
+
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to convert lead');
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                
+                let errorMessage = 'Fehler beim Konvertieren des Leads';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    console.error('Could not parse error response:', e);
+                }
+                
+                throw new Error(errorMessage);
             }
+
+            const result = await response.json();
+            console.log('Conversion successful:', result);
 
             // Show success message
             this.showNotification(
-                `Lead converted to customer successfully!`,
+                `Lead erfolgreich zu Kunde konvertiert!`,
                 'success'
             );
 
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('convertModal'));
-            modal.hide();
+            if (modal) {
+                modal.hide();
+            }
             
             // Reset form
             document.getElementById('convert-form').reset();
@@ -1006,12 +1542,12 @@ class LeadKanban {
             await this.loadKanbanData();
         } catch (error) {
             console.error('Error converting lead:', error);
-            this.showNotification(error.message, 'error');
+            this.showNotification(error.message || 'Unbekannter Fehler beim Konvertieren', 'error');
         }
     }
 
     async reactivateLead(leadId) {
-        if (!confirm('Reactivate this lead and move it to Working status?')) return;
+        if (!confirm('Diesen Lead reaktivieren und zu "In Bearbeitung" verschieben?')) return;
 
         try {
             const token = localStorage.getItem('authToken');
@@ -1042,10 +1578,10 @@ class LeadKanban {
                 }
             }
             
-            this.showNotification('Lead reactivated successfully', 'success');
+            this.showNotification('Lead erfolgreich reaktiviert', 'success');
         } catch (error) {
             console.error('Error reactivating lead:', error);
-            this.showNotification(error.message || 'Failed to reactivate lead', 'error');
+            this.showNotification(error.message || 'Lead konnte nicht reaktiviert werden', 'error');
             // Reload to ensure UI is in sync
             await this.loadKanbanData();
         }
@@ -1053,13 +1589,13 @@ class LeadKanban {
 
     async archiveLead(leadId, archiveStatus) {
         const statusMessages = {
-            'not_interested': 'Mark as Not Interested?',
-            'unreachable': 'Mark as Unreachable?',
-            'wrong_number': 'Mark as Wrong Number?',
-            'lost': 'Mark as Lost After Trial?'
+            'not_interested': 'Als "Nicht interessiert" markieren?',
+            'unreachable': 'Als "Nicht erreichbar" markieren?',
+            'wrong_number': 'Als "Falsche Nummer" markieren?',
+            'lost': 'Als "Nach Probebehandlung verloren" markieren?'
         };
 
-        if (!confirm(statusMessages[archiveStatus] || 'Archive this lead?')) return;
+        if (!confirm(statusMessages[archiveStatus] || 'Diesen Lead archivieren?')) return;
 
         try {
             const token = localStorage.getItem('authToken');
@@ -1096,10 +1632,10 @@ class LeadKanban {
                 }
             }
             
-            this.showNotification('Lead archived successfully', 'success');
+            this.showNotification('Lead erfolgreich archiviert', 'success');
         } catch (error) {
             console.error('Error archiving lead:', error);
-            this.showNotification(error.message || 'Failed to archive lead', 'error');
+            this.showNotification(error.message || 'Lead konnte nicht archiviert werden', 'error');
             // Reload to ensure UI is in sync
             await this.loadKanbanData();
         }
@@ -1117,7 +1653,7 @@ class LeadKanban {
         const notes = document.getElementById('lead-notes').value.trim();
 
         if (!name || !phone) {
-            this.showNotification('Name and phone are required', 'error');
+            this.showNotification('Name und Telefon sind erforderlich', 'error');
             return;
         }
 
@@ -1154,10 +1690,10 @@ class LeadKanban {
             }
 
             await this.loadKanbanData();
-            this.showNotification('Lead added successfully', 'success');
+            this.showNotification('Lead erfolgreich hinzugefügt', 'success');
         } catch (error) {
             console.error('Error adding lead:', error);
-            this.showNotification('Failed to add lead', 'error');
+            this.showNotification('Lead konnte nicht hinzugefügt werden', 'error');
         }
     }
 
@@ -1173,99 +1709,77 @@ class LeadKanban {
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">Lead Details</h5>
+                            <h5 class="modal-title">Lead-Details</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <div class="row">
                                 <div class="col-md-8">
-                                    <!-- Tabs for Details and Activities -->
-                                    <ul class="nav nav-tabs mb-3" id="leadDetailsTabs" role="tablist">
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab">
-                                                <i class="bi bi-person-circle me-1"></i>
-                                                Details
-                                            </button>
-                                        </li>
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="activities-tab" data-bs-toggle="tab" data-bs-target="#activities" type="button" role="tab" onclick="leadKanban.loadLeadActivities(${leadId})">
-                                                <i class="bi bi-clock-history me-1"></i>
-                                                Activities
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    
-                                    <div class="tab-content" id="leadDetailsTabContent">
-                                        <!-- Details Tab -->
-                                        <div class="tab-pane fade show active" id="details" role="tabpanel">
-                                            <h4>${lead.name}</h4>
-                                            <div class="mb-3">
-                                                <label class="text-muted">Phone:</label>
-                                                <div>${lead.phone_number ? `<a href="tel:${lead.phone_number}">${this.formatPhone(lead.phone_number)}</a>` : 'N/A'}</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="text-muted">Email:</label>
-                                                <div>${lead.email ? `<a href="mailto:${lead.email}">${lead.email}</a>` : 'N/A'}</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="text-muted">Current Status:</label>
-                                                <div><span class="badge bg-primary">${lead.status.replace('_', ' ').toUpperCase()}</span></div>
-                                            </div>
-                                            ${lead.notes ? `
-                                                <div class="mb-3">
-                                                    <label class="text-muted">Notes:</label>
-                                                    <div>${lead.notes}</div>
-                                                </div>
-                                            ` : ''}
+                                    <!-- Lead Details -->
+                                    <div>
+                                        <h4>${lead.name}</h4>
+                                        <div class="mb-3">
+                                            <label class="text-muted">Telefon:</label>
+                                            <div>${lead.phone_number ? `<a href="tel:${lead.phone_number}">${this.formatPhone(lead.phone_number)}</a>` : 'N/A'}</div>
                                         </div>
-                                        
-                                        <!-- Activities Tab -->
-                                        <div class="tab-pane fade" id="activities" role="tabpanel">
-                                            <div id="leadActivitiesContainer">
-                                                <div class="text-center">
-                                                    <div class="spinner-border" role="status">
-                                                        <span class="visually-hidden">Loading activities...</span>
-                                                    </div>
-                                                </div>
+                                        <div class="mb-3">
+                                            <label class="text-muted">E-Mail:</label>
+                                            <div>${lead.email ? `<a href="mailto:${lead.email}">${lead.email}</a>` : 'N/A'}</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="text-muted">Aktueller Status:</label>
+                                            <div><span class="badge bg-primary">${this.getGermanStatus(lead.status)}</span></div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="text-muted">Notizen:</label>
+                                            <div class="position-relative">
+                                                <textarea class="form-control" 
+                                                         id="lead-notes-${leadId}" 
+                                                         rows="3" 
+                                                         placeholder="Notizen hier eingeben..."
+                                                         onblur="leadKanban.autoSaveNotes(${leadId})"
+                                                         data-original-value="">${lead.notes || ''}</textarea>
+                                                <div id="save-status-${leadId}" class="save-status mt-1"></div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <h6 class="mb-3">Quick Actions</h6>
                                     ${lead.status === 'qualified' || lead.status === 'trial_scheduled' ? `
+                                        <h6 class="mb-3">Schnellaktionen</h6>
                                         <button class="btn btn-success w-100 mb-2" onclick="leadKanban.showConvertModal(${leadId})">
                                             <i class="bi bi-check-circle me-2"></i>
-                                            Convert to Customer
+                                            Zu Kunde konvertieren
                                         </button>
+                                        <hr class="my-3">
                                     ` : ''}
                                     
-                                    <hr class="my-3">
-                                    
-                                    <h6 class="mb-3">Archive Lead</h6>
-                                    <button class="btn btn-outline-warning w-100 mb-2" onclick="leadKanban.archiveLead(${leadId}, 'not_interested')">
-                                        <i class="bi bi-x-circle me-2"></i>
-                                        Not Interested
-                                    </button>
+                                    <h6 class="mb-3">Lead archivieren</h6>
+                                    ${lead.status !== 'trial_scheduled' ? `
+                                        <button class="btn btn-outline-warning w-100 mb-2" onclick="leadKanban.archiveLead(${leadId}, 'not_interested')">
+                                            <i class="bi bi-x-circle me-2"></i>
+                                            Nicht interessiert
+                                        </button>
+                                        <button class="btn btn-outline-danger w-100 mb-2" onclick="leadKanban.archiveLead(${leadId}, 'wrong_number')">
+                                            <i class="bi bi-exclamation-triangle me-2"></i>
+                                            Falsche Nummer
+                                        </button>
+                                    ` : ''}
                                     <button class="btn btn-outline-secondary w-100 mb-2" onclick="leadKanban.archiveLead(${leadId}, 'unreachable')">
                                         <i class="bi bi-telephone-x me-2"></i>
-                                        Unreachable
-                                    </button>
-                                    <button class="btn btn-outline-danger w-100 mb-2" onclick="leadKanban.archiveLead(${leadId}, 'wrong_number')">
-                                        <i class="bi bi-exclamation-triangle me-2"></i>
-                                        Wrong Number
+                                        Nicht erreichbar
                                     </button>
                                     ${lead.status === 'trial_scheduled' ? `
                                         <button class="btn btn-outline-danger w-100" onclick="leadKanban.archiveLead(${leadId}, 'lost')">
                                             <i class="bi bi-person-x me-2"></i>
-                                            Lost After Trial
+                                            Nach Probebehandlung verloren
                                         </button>
                                     ` : ''}
                                 </div>
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
                         </div>
                     </div>
                 </div>
@@ -1424,30 +1938,7 @@ class LeadKanban {
         }
     }
 
-    toggleArchived() {
-        this.showArchived = !this.showArchived;
-        console.log('Toggle archive, showArchived is now:', this.showArchived);
-        console.log('Current archived data:', this.archived);
-        
-        const panel = document.getElementById('archive-panel');
-        if (panel) {
-            panel.classList.toggle('show');
-            // Re-render the archive panel content when showing
-            if (this.showArchived) {
-                panel.innerHTML = this.renderArchivePanel();
-            }
-        }
-        
-        // Update button text and style
-        const button = document.getElementById('toggle-archive-btn');
-        if (button) {
-            button.className = `btn ${this.showArchived ? 'btn-secondary' : 'btn-outline-dark'}`;
-            button.innerHTML = `
-                <i class="bi bi-archive me-1"></i>
-                ${this.showArchived ? 'Hide' : 'Show'} Archive
-            `;
-        }
-    }
+    // Archive is now always visible, no toggle needed
 
     filterLeads(query) {
         this.searchQuery = query.toLowerCase();
@@ -1464,6 +1955,15 @@ class LeadKanban {
         return null;
     }
 
+    findLeadStatus(leadId) {
+        // Find which status column contains this lead
+        for (const status in this.leads) {
+            const lead = this.leads[status].find(l => l.id === leadId);
+            if (lead) return status;
+        }
+        return null;
+    }
+
 
     formatPhone(phone) {
         // Simple phone formatting
@@ -1471,15 +1971,90 @@ class LeadKanban {
     }
 
     getTimeInStage(enteredAt) {
-        if (!enteredAt) return 'Just added';
+        if (!enteredAt) return 'Gerade hinzugefügt';
         
         const now = new Date();
         const entered = new Date(enteredAt);
         const days = Math.floor((now - entered) / (1000 * 60 * 60 * 24));
         
-        if (days === 0) return 'Today';
-        if (days === 1) return '1 day';
-        return `${days} days`;
+        if (days === 0) return 'Heute';
+        if (days === 1) return '1 Tag';
+        return `${days} Tage`;
+    }
+
+    getGermanStatus(status) {
+        const statusTranslations = {
+            'new': 'Neu',
+            'working': 'In Bearbeitung',
+            'qualified': 'Qualifiziert', 
+            'trial_scheduled': 'Probebehandlung geplant',
+            'converted': 'Konvertiert',
+            'not_interested': 'Nicht interessiert',
+            'unreachable': 'Nicht erreichbar',
+            'wrong_number': 'Falsche Nummer',
+            'lost': 'Nach Probebehandlung verloren'
+        };
+        return statusTranslations[status] || status.replace('_', ' ').toUpperCase();
+    }
+
+    async autoSaveNotes(leadId) {
+        const notesTextarea = document.getElementById(`lead-notes-${leadId}`);
+        const statusDiv = document.getElementById(`save-status-${leadId}`);
+        
+        if (!notesTextarea) {
+            return;
+        }
+
+        const notes = notesTextarea.value;
+        
+        // Show saving status
+        if (statusDiv) {
+            statusDiv.innerHTML = '<small class="text-muted"><i class="bi bi-cloud-upload me-1"></i>Speichert...</small>';
+        }
+
+        try {
+            const token = localStorage.getItem('authToken');
+            
+            // Use the existing leadKanban addLeadNote endpoint
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/leads/${leadId}/notes`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    note: notes || ''
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Fehler beim Speichern');
+            }
+
+            // Update the lead object in memory
+            const lead = this.findLeadById(leadId);
+            if (lead) {
+                lead.notes = notes;
+            }
+
+            // Show success status
+            if (statusDiv) {
+                statusDiv.innerHTML = '<small class="text-success"><i class="bi bi-check-circle me-1"></i>Gespeichert</small>';
+                setTimeout(() => {
+                    if (statusDiv) {
+                        statusDiv.innerHTML = '';
+                    }
+                }, 2000);
+            }
+
+        } catch (error) {
+            console.error('Error auto-saving notes:', error);
+            
+            // Show error status
+            if (statusDiv) {
+                statusDiv.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Fehler</small>';
+            }
+        }
     }
 
     showWalkInTrialModal() {
@@ -1501,7 +2076,7 @@ class LeadKanban {
         const notes = document.getElementById('walk-in-notes').value.trim();
 
         if (!name || !phone || !date || !startTime || !endTime) {
-            this.showNotification('Please fill all required fields', 'error');
+            this.showNotification('Bitte alle erforderlichen Felder ausfüllen', 'error');
             return;
         }
 
@@ -1557,15 +2132,15 @@ class LeadKanban {
             document.getElementById('walk-in-trial-form').reset();
 
             await this.loadKanbanData();
-            this.showNotification('Walk-in trial scheduled successfully!', 'success');
+            this.showNotification('Walk-in Probebehandlung erfolgreich geplant!', 'success');
         } catch (error) {
             console.error('Error creating walk-in trial:', error);
-            this.showNotification('Failed to create walk-in trial', 'error');
+            this.showNotification('Walk-in Probebehandlung konnte nicht erstellt werden', 'error');
         }
     }
 
     confirmDeleteLead(leadId) {
-        if (confirm('Are you sure you want to permanently delete this lead from the archive?')) {
+        if (confirm('Sind Sie sicher, dass Sie diesen Lead dauerhaft aus dem Archiv löschen möchten?')) {
             this.deleteLead(leadId);
         }
     }
@@ -1583,10 +2158,10 @@ class LeadKanban {
             if (!response.ok) throw new Error('Failed to delete lead');
 
             await this.loadKanbanData();
-            this.showNotification('Lead deleted successfully', 'success');
+            this.showNotification('Lead erfolgreich gelöscht', 'success');
         } catch (error) {
             console.error('Error deleting lead:', error);
-            this.showNotification('Failed to delete lead', 'error');
+            this.showNotification('Lead konnte nicht gelöscht werden', 'error');
         }
     }
 
@@ -1595,7 +2170,7 @@ class LeadKanban {
         if (count === 0) return;
         
         // Note: Including converted leads for reactivation
-        if (!confirm(`Are you sure you want to reactivate ${count} selected lead(s)? This will move them back to 'Working' status.`)) {
+        if (!confirm(`Sind Sie sicher, dass Sie ${count} ausgewählte Lead(s) reaktivieren möchten? Diese werden zurück zu 'In Bearbeitung' verschoben.`)) {
             return;
         }
 
@@ -1633,13 +2208,13 @@ class LeadKanban {
             }
             
             if (allSucceeded) {
-                this.showNotification(`Reactivated ${count} lead(s) successfully`, 'success');
+                this.showNotification(`${count} Lead(s) erfolgreich reaktiviert`, 'success');
             } else {
-                this.showNotification(`Some leads could not be reactivated. Please check the results.`, 'warning');
+                this.showNotification(`Einige Leads konnten nicht reaktiviert werden. Bitte prüfen Sie die Ergebnisse.`, 'warning');
             }
         } catch (error) {
             console.error('Error reactivating selected leads:', error);
-            this.showNotification('Failed to reactivate selected leads', 'error');
+            this.showNotification('Ausgewählte Leads konnten nicht reaktiviert werden', 'error');
             // Reload to ensure UI is in sync
             await this.loadKanbanData();
         }
@@ -1732,7 +2307,7 @@ class LeadKanban {
         const count = this.selectedArchivedLeads.size;
         if (count === 0) return;
         
-        if (!confirm(`Are you sure you want to permanently delete ${count} selected lead(s)?`)) {
+        if (!confirm(`Sind Sie sicher, dass Sie ${count} ausgewählte Lead(s) dauerhaft löschen möchten?`)) {
             return;
         }
 
@@ -1753,10 +2328,10 @@ class LeadKanban {
             
             this.selectedArchivedLeads.clear();
             await this.loadKanbanData();
-            this.showNotification(`Deleted ${count} lead(s) successfully`, 'success');
+            this.showNotification(`${count} Lead(s) erfolgreich gelöscht`, 'success');
         } catch (error) {
             console.error('Error deleting selected leads:', error);
-            this.showNotification('Failed to delete selected leads', 'error');
+            this.showNotification('Ausgewählte Leads konnten nicht gelöscht werden', 'error');
         }
     }
 
@@ -1773,6 +2348,207 @@ class LeadKanban {
         setTimeout(() => {
             notification.remove();
         }, 3000);
+    }
+
+    // History view methods
+    async filterHistory() {
+        const search = document.getElementById('history-search')?.value || '';
+        const activity_type = document.getElementById('history-activity-filter')?.value || '';
+        const date_from = document.getElementById('history-date-from')?.value || '';
+        const date_to = document.getElementById('history-date-to')?.value || '';
+        const limit = document.getElementById('history-limit')?.value || 50;
+        
+        const filters = {
+            search,
+            activity_type,
+            date_from,
+            date_to,
+            limit,
+            page: 1 // Reset to first page when filtering
+        };
+        
+        await this.loadHistoryData(filters);
+        this.render();
+        this.setupEventListeners();
+    }
+    
+    clearHistoryFilters() {
+        document.getElementById('history-search').value = '';
+        document.getElementById('history-activity-filter').value = '';
+        document.getElementById('history-date-from').value = '';
+        document.getElementById('history-date-to').value = '';
+        document.getElementById('history-limit').value = '50';
+        
+        this.filterHistory();
+    }
+    
+    async goToHistoryPage(page) {
+        if (page < 1 || (this.historyPagination.totalPages && page > this.historyPagination.totalPages)) {
+            return;
+        }
+        
+        const currentFilters = {
+            search: this.historyFilters.search || '',
+            activity_type: this.historyFilters.activity_type || '',
+            date_from: this.historyFilters.date_from || '',
+            date_to: this.historyFilters.date_to || '',
+            limit: this.historyPagination.limit || 50,
+            page: page
+        };
+        
+        await this.loadHistoryData(currentFilters);
+        this.render();
+        this.setupEventListeners();
+    }
+    
+    async refreshHistory() {
+        const currentFilters = {
+            search: this.historyFilters.search || '',
+            activity_type: this.historyFilters.activity_type || '',
+            date_from: this.historyFilters.date_from || '',
+            date_to: this.historyFilters.date_to || '',
+            limit: this.historyPagination.limit || 50,
+            page: this.historyPagination.page || 1
+        };
+        
+        await this.loadHistoryData(currentFilters);
+        this.render();
+        this.setupEventListeners();
+        this.showNotification('Verlauf aktualisiert', 'success');
+    }
+    
+    showHistoryDetails(activityId) {
+        const activity = this.historyData.find(item => item.id === activityId);
+        if (!activity) return;
+        
+        const modalHtml = `
+            <div class="modal fade" id="historyDetailsModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-clock-history me-2"></i>
+                                Aktivitäts-Details
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Lead Information</h6>
+                                    <p><strong>${activity.lead_name || 'Unbekannt'}</strong></p>
+                                    ${activity.lead_phone ? `<p class="text-muted mb-1">${activity.lead_phone}</p>` : ''}
+                                    ${activity.lead_email ? `<p class="text-muted mb-3">${activity.lead_email}</p>` : ''}
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Aktivität</h6>
+                                    <p class="mb-1">${activity.activity_type}</p>
+                                    <p class="text-muted">${new Date(activity.created_at).toLocaleString('de-DE')}</p>
+                                </div>
+                            </div>
+                            
+                            ${activity.description ? `
+                                <div class="mt-3">
+                                    <h6 class="text-muted">Beschreibung</h6>
+                                    <p>${activity.description}</p>
+                                </div>
+                            ` : ''}
+                            
+                            ${activity.from_status || activity.to_status ? `
+                                <div class="mt-3">
+                                    <h6 class="text-muted">Status-Änderung</h6>
+                                    <p>
+                                        ${activity.from_status ? `Von: <span class="badge bg-light text-dark">${activity.from_status}</span>` : ''}
+                                        ${activity.from_status && activity.to_status ? ' → ' : ''}
+                                        ${activity.to_status ? `Nach: <span class="badge bg-primary">${activity.to_status}</span>` : ''}
+                                    </p>
+                                </div>
+                            ` : ''}
+                            
+                            ${activity.metadata ? `
+                                <div class="mt-3">
+                                    <h6 class="text-muted">Zusätzliche Informationen</h6>
+                                    <pre class="bg-light p-2 rounded"><code>${JSON.stringify(JSON.parse(activity.metadata), null, 2)}</code></pre>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="mt-3">
+                                <h6 class="text-muted">Durchgeführt von</h6>
+                                <p>${activity.first_name && activity.last_name ? `${activity.first_name} ${activity.last_name}` : 'System'}</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                            ${activity.lead_id ? `
+                                <button type="button" class="btn btn-primary" onclick="leadKanban.showLeadDetails(${activity.lead_id}); bootstrap.Modal.getInstance(document.getElementById('historyDetailsModal')).hide();">
+                                    Lead anzeigen
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('historyDetailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('historyDetailsModal'));
+        modal.show();
+    }
+    
+    exportHistory() {
+        if (this.historyData.length === 0) {
+            this.showNotification('Keine Daten zum Exportieren verfügbar', 'warning');
+            return;
+        }
+        
+        // Prepare CSV data
+        const headers = ['Datum', 'Zeit', 'Lead', 'Telefon', 'Aktivität', 'Von Status', 'Nach Status', 'Benutzer', 'Beschreibung'];
+        const csvData = [headers];
+        
+        this.historyData.forEach(item => {
+            const date = new Date(item.created_at);
+            const row = [
+                date.toLocaleDateString('de-DE'),
+                date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+                item.lead_name || 'Unbekannt',
+                item.lead_phone || '',
+                item.activity_type || '',
+                item.from_status || '',
+                item.to_status || '',
+                item.first_name && item.last_name ? `${item.first_name} ${item.last_name}` : 'System',
+                item.description || ''
+            ];
+            csvData.push(row);
+        });
+        
+        // Convert to CSV string
+        const csvContent = csvData.map(row => 
+            row.map(field => `"${field}"`).join(',')
+        ).join('\n');
+        
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `lead-verlauf-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        this.showNotification('Verlauf erfolgreich exportiert', 'success');
     }
 }
 

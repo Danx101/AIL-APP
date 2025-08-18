@@ -229,7 +229,7 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     // Determine person type and validate
-    let actualPersonType = person_type;
+    let actualPersonType = person_type || 'customer'; // Default to customer
     let actualCustomerId = customer_ref_id || customer_id; // Support both for migration
     let actualLeadId = lead_id;
 
@@ -238,8 +238,22 @@ router.post('/', async (req, res) => {
       actualPersonType = actualLeadId ? 'lead' : 'customer';
     }
 
+    // Convert string IDs to integers
+    const studioId = parseInt(studio_id);
+    let appointmentTypeId = parseInt(appointment_type_id);  // Changed to let to allow reassignment
+    
+    console.log('Appointment creation data:', {
+      studioId,
+      actualCustomerId,
+      actualPersonType,
+      appointmentTypeId,
+      appointment_date,
+      start_time,
+      calculatedEndTime: end_time
+    });
+    
     // Basic validation
-    if (!studio_id || !appointment_type_id || !appointment_date || !start_time) {
+    if (!studioId || !appointmentTypeId || !appointment_date || !start_time) {
       return res.status(400).json({ 
         message: 'Missing required fields: studio_id, appointment_type_id, appointment_date, start_time' 
       });
@@ -253,13 +267,49 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'lead_id is required for lead appointments' });
     }
 
+    // Validate appointment date is not in the past
+    const appointmentDate = new Date(appointment_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    
+    if (appointmentDate < today) {
+      return res.status(400).json({ 
+        message: 'Termine können nicht in der Vergangenheit geplant werden' 
+      });
+    }
+
+    // Validate appointment type exists for this studio
+    console.log('Checking appointment type:', appointmentTypeId, 'for studio:', studioId);
+    const appointmentTypeCheck = await db.get(
+      'SELECT * FROM appointment_types WHERE id = ? AND studio_id = ?',
+      [appointmentTypeId, studioId]
+    );
+    
+    if (!appointmentTypeCheck) {
+      // Try to find default appointment type for this studio
+      const defaultType = await db.get(
+        'SELECT * FROM appointment_types WHERE studio_id = ? LIMIT 1',
+        [studioId]
+      );
+      
+      if (!defaultType) {
+        return res.status(400).json({ 
+          message: `No appointment types found for studio ${studioId}. Please create appointment types first.` 
+        });
+      }
+      
+      console.log('Using default appointment type:', defaultType.id);
+      // Override with the studio's actual appointment type
+      appointmentTypeId = defaultType.id;
+    }
+    
     // Calculate end time if not provided
     let calculatedEndTime = end_time;
     if (!end_time) {
       // Get appointment type to determine duration
       const appointmentType = await db.get(
         'SELECT duration_minutes FROM appointment_types WHERE id = ? AND studio_id = ?',
-        [appointment_type_id, studio_id]
+        [appointmentTypeId, studioId]
       );
       
       if (!appointmentType) {
@@ -275,12 +325,36 @@ router.post('/', async (req, res) => {
       calculatedEndTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}:00`;
     }
 
+    // Get the user_id for the customer (needed for the foreign key constraint)
+    let customerUserId = null;
+    if (actualPersonType === 'customer' && actualCustomerId) {
+      console.log('Looking up customer with ID:', actualCustomerId);
+      const customer = await db.get(
+        'SELECT * FROM customers WHERE id = ?',
+        [actualCustomerId]
+      );
+      console.log('Customer lookup result:', customer);
+      
+      if (!customer) {
+        return res.status(400).json({ message: `Customer not found with ID: ${actualCustomerId}` });
+      }
+      
+      customerUserId = customer.user_id;
+      
+      if (!customerUserId) {
+        // Customer exists but has no user_id - this is valid for customers created without app access
+        // Use the creating user's ID as a fallback to satisfy the trigger
+        console.log('Customer has no user_id (not registered in app), using creating user ID as fallback');
+        customerUserId = req.user.userId;
+      }
+    }
+
     // Get active session block for customer appointments that consume sessions
     let sessionBlockId = null;
     if (actualPersonType === 'customer') {
       const appointmentType = await db.get(
         'SELECT consumes_session FROM appointment_types WHERE id = ?',
-        [appointment_type_id]
+        [appointmentTypeId]
       );
       
       if (appointmentType && appointmentType.consumes_session) {
@@ -300,12 +374,12 @@ router.post('/', async (req, res) => {
         status, created_by_user_id, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
-        studio_id,
-        req.user.userId,  // Use current user ID for the legacy customer_id field
-        actualPersonType === 'customer' ? actualCustomerId : null,
+        studioId,
+        actualPersonType === 'customer' ? customerUserId : null,  // customer_id references users table
+        actualPersonType === 'customer' ? actualCustomerId : null,  // customer_ref_id references customers table
         actualPersonType === 'lead' ? actualLeadId : null,
         actualPersonType,
-        appointment_type_id,
+        appointmentTypeId,
         appointment_date,
         start_time,
         calculatedEndTime,
@@ -316,12 +390,19 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       message: 'Appointment created successfully',
-      appointmentId: result.lastID
+      appointmentId: result.insertId || result.lastID
     });
 
   } catch (error) {
     console.error('Error creating appointment:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sql: error.sql
+    });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
 

@@ -141,7 +141,17 @@ const db = {
       while (retries > 0) {
         try {
           connection = await this.getPoolConnection();
-          const [result] = await connection.execute(query, params);
+          let result;
+          
+          // Use query() for transaction control statements instead of execute()
+          if (query.trim().toUpperCase().startsWith('START TRANSACTION') || 
+              query.trim().toUpperCase().startsWith('COMMIT') || 
+              query.trim().toUpperCase().startsWith('ROLLBACK')) {
+            [result] = await connection.query(query);
+          } else {
+            [result] = await connection.execute(query, params);
+          }
+          
           return {
             lastID: result.insertId,
             changes: result.affectedRows,

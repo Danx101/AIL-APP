@@ -321,6 +321,70 @@ class ManagerAPI {
 
         throw new Error('Invalid Google Sheets URL format');
     }
+
+    // Trigger manual sync for a Google Sheets integration
+    async triggerSync(integrationId) {
+        try {
+            const response = await fetch(`${this.baseURL}/manager/google-sheets/${integrationId}/sync`, {
+                method: 'POST',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to trigger sync: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error triggering sync:', error);
+            throw error;
+        }
+    }
+
+    // Delete a Google Sheets integration
+    async deleteIntegration(integrationId) {
+        try {
+            const response = await fetch(`${this.baseURL}/manager/google-sheets/${integrationId}`, {
+                method: 'DELETE',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to delete integration: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error deleting integration:', error);
+            throw error;
+        }
+    }
+
+    // Get all Google Sheets integrations for the manager
+    async getGoogleSheetsIntegrations() {
+        try {
+            const response = await fetch(`${this.baseURL}/manager/google-sheets`, {
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to get integrations: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error getting integrations:', error);
+            throw error;
+        }
+    }
+
+    // Sync Google Sheet (alias for triggerSync for backward compatibility)
+    async syncGoogleSheet(integrationId) {
+        return this.triggerSync(integrationId);
+    }
 }
 
 // Global instance for manager operations
