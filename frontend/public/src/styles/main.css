@@ -751,6 +751,21 @@ body {
     box-shadow: 0 4px 15px rgba(184, 168, 216, 0.3);
 }
 
+.btn-outline-primary.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 15px rgba(184, 168, 216, 0.3);
+}
+
+.btn-outline-primary.active:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(184, 168, 216, 0.3);
+}
+
 .btn-outline-primary span {
     position: relative;
     z-index: 1;

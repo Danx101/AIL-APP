@@ -453,6 +453,11 @@ class StudioController {
     try {
       const { id } = req.params;
 
+      // Add cache-busting headers to prevent stale data
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+
       // Check if studio exists and user owns it
       const studio = await Studio.findById(id);
       if (!studio) {
@@ -463,63 +468,88 @@ class StudioController {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      // Get dashboard statistics
-      const stats = await new Promise((resolve, reject) => {
-        const today = new Date().toISOString().split('T')[0];
-        
-        db.get(
-          `SELECT 
-             COUNT(DISTINCT CASE WHEN cs.remaining_sessions > 0 AND cs.status = 'active' THEN u.id END) as active_customers,
-             COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('confirmed', 'pending', 'bestätigt') THEN a.id END) as today_remaining_appointments,
-             COUNT(DISTINCT CASE WHEN a.appointment_date = ? AND a.status IN ('completed', 'abgeschlossen') THEN a.id END) as today_completed_appointments,
-             COUNT(DISTINCT a.id) as total_appointments_this_week
-           FROM users u
-           JOIN activation_codes ac ON u.id = ac.used_by_user_id
-           LEFT JOIN customer_sessions cs ON u.id = cs.customer_id AND cs.studio_id = ?
-           LEFT JOIN appointments a ON u.id = a.customer_id AND a.studio_id = ?
-           WHERE ac.studio_id = ? AND u.role = 'customer'`,
-          [today, today, id, id, id],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      // Get customer stats from customers and customer_sessions tables
+      const totalCustomersResult = await db.get(
+        'SELECT COUNT(*) as total_customers FROM customers WHERE studio_id = ?',
+        [id]
+      );
+      
+      const activeCustomersResult = await db.get(
+        `SELECT COUNT(DISTINCT customer_id) as active_customers 
+         FROM customer_sessions 
+         WHERE studio_id = ? AND status = 'active' AND remaining_sessions > 0`,
+        [id]
+      );
+      
+      console.log(`Dashboard customer stats for studio ${id}: Total=${totalCustomersResult.total_customers}, Active=${activeCustomersResult.active_customers}`);
+      
+      const customerStats = {
+        total_customers: totalCustomersResult.total_customers,
+        active_customers: activeCustomersResult.active_customers
+      };
 
-      // Calculate utilization (simplified - based on appointments vs theoretical capacity)
-      const utilization = await new Promise((resolve, reject) => {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const weekStartStr = weekStart.toISOString().split('T')[0];
-        
-        db.get(
-          `SELECT COUNT(*) as weekly_appointments
-           FROM appointments 
+      // Get appointment statistics (including both customer and lead appointments)
+      const today = new Date().toISOString().split('T')[0];
+      
+      const appointmentStats = await db.get(
+        `SELECT 
+           COUNT(CASE WHEN appointment_date = ? AND status IN ('confirmed', 'pending', 'bestätigt', 'geplant') THEN 1 END) as today_remaining_appointments,
+           COUNT(CASE WHEN appointment_date = ? AND status IN ('completed', 'abgeschlossen') THEN 1 END) as today_completed_appointments,
+           COUNT(CASE WHEN appointment_date = ? THEN 1 END) as today_total_appointments,
+           COUNT(*) as total_appointments_this_week
+         FROM (
+           SELECT appointment_date, status FROM appointments WHERE studio_id = ?
+           UNION ALL
+           SELECT appointment_date, status FROM lead_appointments WHERE studio_id = ?
+         ) unified_appointments`,
+        [today, today, today, id, id]
+      );
+
+      const stats = {
+        active_customers: customerStats.active_customers,
+        total_customers: customerStats.total_customers,
+        today_remaining_appointments: appointmentStats.today_remaining_appointments,
+        today_completed_appointments: appointmentStats.today_completed_appointments,
+        today_total_appointments: appointmentStats.today_total_appointments,
+        total_appointments_this_week: appointmentStats.total_appointments_this_week
+      };
+
+      // Calculate utilization based on expected weekly appointments
+      // Include both customer and lead appointments
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+      
+      const weeklyAppointmentsResult = await db.get(
+        `SELECT COUNT(*) as weekly_appointments
+         FROM (
+           SELECT appointment_date, status FROM appointments 
            WHERE studio_id = ? 
            AND appointment_date >= ? 
-           AND status IN ('confirmed', 'completed', 'bestätigt', 'abgeschlossen')`,
-          [id, weekStartStr],
-          (err, row) => {
-            if (err) reject(err);
-            else {
-              // 5 working days × 8 appointments + 1 working day × 5 appointments = 45 theoretical capacity
-              const theoreticalCapacity = 45;
-              const utilizationRate = Math.round((row.weekly_appointments / theoreticalCapacity) * 100);
-              resolve(Math.min(utilizationRate, 100)); // Cap at 100%
-            }
-          }
-        );
-      });
+           AND status IN ('confirmed', 'completed', 'bestätigt', 'abgeschlossen')
+           UNION ALL
+           SELECT appointment_date, status FROM lead_appointments 
+           WHERE studio_id = ? 
+           AND appointment_date >= ? 
+           AND status IN ('geplant', 'abgeschlossen')
+         ) unified_weekly_appointments`,
+        [id, weekStartStr, id, weekStartStr]
+      );
+      
+      // Use expected weekly appointments from studio settings instead of machine count
+      const expectedWeeklyAppointments = studio.expected_weekly_appointments || 40;
+      const utilizationRate = Math.round((weeklyAppointmentsResult.weekly_appointments / expectedWeeklyAppointments) * 100);
+      const utilization = Math.min(utilizationRate, 100); // Cap at 100%
 
       res.json({
         stats: {
           activeCustomers: {
             value: stats.active_customers || 0,
-            change: `${stats.active_customers || 0} registriert`,
+            change: `${stats.total_customers || 0} gesamt`,
             changeType: 'neutral'
           },
           todayAppointments: {
-            value: stats.today_remaining_appointments || 0,
+            value: stats.today_total_appointments || 0,
             change: `${stats.today_remaining_appointments || 0} verbleibend`,
             changeType: 'neutral'
           },
@@ -561,6 +591,7 @@ class StudioController {
           cancellation_advance_hours: studio.cancellation_advance_hours || 48,
           postponement_advance_hours: studio.postponement_advance_hours || 48,
           max_advance_booking_days: studio.max_advance_booking_days || 30,
+          expected_weekly_appointments: studio.expected_weekly_appointments || 40,
           settings_updated_at: studio.settings_updated_at
         }
       });
@@ -586,16 +617,12 @@ class StudioController {
       const { 
         cancellation_advance_hours, 
         postponement_advance_hours, 
-        max_advance_booking_days 
+        max_advance_booking_days,
+        expected_weekly_appointments
       } = req.body;
 
       // Authorization check - only studio owner can update their studio settings
-      const studio = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [id, req.user.userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const studio = await db.get('SELECT * FROM studios WHERE id = ? AND owner_id = ?', [id, req.user.userId]);
 
       if (!studio) {
         return res.status(404).json({ message: 'Studio not found or access denied' });
@@ -620,6 +647,11 @@ class StudioController {
         values.push(max_advance_booking_days);
       }
 
+      if (expected_weekly_appointments !== undefined) {
+        updates.push('expected_weekly_appointments = ?');
+        values.push(expected_weekly_appointments);
+      }
+
       if (updates.length === 0) {
         return res.status(400).json({ message: 'No settings provided to update' });
       }
@@ -630,20 +662,10 @@ class StudioController {
 
       const query = `UPDATE studios SET ${updates.join(', ')} WHERE id = ?`;
 
-      await new Promise((resolve, reject) => {
-        db.run(query, values, function(err) {
-          if (err) reject(err);
-          else resolve(this.changes);
-        });
-      });
+      await db.run(query, values);
 
       // Fetch updated settings
-      const updatedStudio = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM studios WHERE id = ?', [id], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const updatedStudio = await db.get('SELECT * FROM studios WHERE id = ?', [id]);
 
       res.json({
         message: 'Studio settings updated successfully',
@@ -651,6 +673,7 @@ class StudioController {
           cancellation_advance_hours: updatedStudio.cancellation_advance_hours,
           postponement_advance_hours: updatedStudio.postponement_advance_hours,
           max_advance_booking_days: updatedStudio.max_advance_booking_days,
+          expected_weekly_appointments: updatedStudio.expected_weekly_appointments,
           settings_updated_at: updatedStudio.settings_updated_at
         }
       });

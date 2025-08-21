@@ -522,6 +522,10 @@ const validateStudioRegistration = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
   
+  body('confirmPassword')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
+  
   body('firstName')
     .trim()
     .isLength({ min: 2, max: 50 })
@@ -533,35 +537,48 @@ const validateStudioRegistration = [
     .withMessage('Last name must be between 2 and 50 characters'),
   
   body('phone')
-    .optional({ nullable: true, checkFalsy: true })
-    .custom((value) => {
-      if (!value || value.trim() === '') return true;
-      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
-    })
+    .trim()
+    .matches(/^[\+]?[0-9\s\-\(\)]{7,20}$/)
     .withMessage('Please provide a valid phone number'),
   
-  body('studioName')
+  body('city')
     .trim()
     .isLength({ min: 2, max: 100 })
-    .withMessage('Studio name must be between 2 and 100 characters'),
+    .withMessage('City must be between 2 and 100 characters'),
   
-  body('studioAddress')
+  body('address')
     .trim()
     .isLength({ min: 5, max: 200 })
-    .withMessage('Studio address must be between 5 and 200 characters'),
+    .withMessage('Address must be between 5 and 200 characters'),
   
-  body('studioCity')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Studio city must be between 2 and 50 characters'),
+  body('termsAccepted')
+    .isBoolean()
+    .equals('true')
+    .withMessage('You must accept the terms and conditions'),
   
-  body('studioPhone')
-    .optional({ nullable: true, checkFalsy: true })
-    .custom((value) => {
-      if (!value || value.trim() === '') return true;
-      return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
-    })
-    .withMessage('Please provide a valid studio phone number')
+  body('privacyAccepted')
+    .isBoolean()
+    .equals('true')
+    .withMessage('You must accept the privacy policy')
+];
+
+// Password change validation
+const validatePasswordChange = [
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required'),
+  
+  body('newPassword')
+    .isLength({ min: 8 })
+    .withMessage('New password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('New password must contain at least one lowercase letter, one uppercase letter, and one number')
+    .custom((value, { req }) => value !== req.body.currentPassword)
+    .withMessage('New password must be different from current password'),
+  
+  body('confirmPassword')
+    .custom((value, { req }) => value === req.body.newPassword)
+    .withMessage('Passwords do not match')
 ];
 
 module.exports = {
@@ -591,5 +608,6 @@ module.exports = {
   validateGoogleSheetsPreview,
   validateIntegrationId,
   validateCustomerRegistration,
-  validateStudioRegistration
+  validateStudioRegistration,
+  validatePasswordChange
 };

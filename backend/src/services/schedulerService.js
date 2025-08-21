@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const googleSheetsService = require('./googleSheetsService');
+const ActivityCleanupJob = require('../jobs/cleanup-activities');
 
 class SchedulerService {
   constructor() {
@@ -15,6 +16,11 @@ class SchedulerService {
       // Start auto-sync job if enabled
       if (process.env.AUTO_SYNC_ENABLED === 'true') {
         await this.scheduleAutoSync();
+      }
+
+      // Start activity cleanup job if enabled
+      if (process.env.CLEANUP_ENABLED === 'true') {
+        await this.scheduleActivityCleanup();
       }
 
       this.initialized = true;
@@ -70,6 +76,42 @@ class SchedulerService {
 
     } catch (error) {
       console.error('Error scheduling auto-sync:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Schedule activity cleanup job
+   */
+  async scheduleActivityCleanup() {
+    try {
+      const cleanupSchedule = process.env.CLEANUP_SCHEDULE || '0 2 * * *'; // Default: 2 AM daily
+      
+      const job = cron.schedule(cleanupSchedule, async () => {
+        console.log('🧹 Running activity cleanup job');
+        
+        try {
+          const cleanupJob = new ActivityCleanupJob();
+          const result = await cleanupJob.run();
+          
+          if (result.success) {
+            console.log(`✅ Activity cleanup completed: ${result.deleted} records deleted`);
+          } else {
+            console.error('❌ Activity cleanup failed:', result.error);
+          }
+        } catch (error) {
+          console.error('❌ Activity cleanup job error:', error);
+        }
+      }, {
+        scheduled: true,
+        timezone: 'Europe/Berlin'
+      });
+
+      this.jobs.set('activity-cleanup', job);
+      console.log(`📅 Activity cleanup scheduled: ${cleanupSchedule}`);
+
+    } catch (error) {
+      console.error('Error scheduling activity cleanup:', error);
       throw error;
     }
   }

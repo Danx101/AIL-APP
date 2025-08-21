@@ -1,5 +1,4 @@
 // Studio Owner Lead Management Component - LOADED AT: 1753731733
-console.log('🚀 LOADING LeadManagement.js at timestamp:', new Date().toISOString());
 
 class LeadManagement {
     constructor() {
@@ -26,7 +25,6 @@ class LeadManagement {
     // Initialize the component
     async init(studioId) {
         this.studioId = studioId;
-        console.log('Initializing Lead Management for studio:', studioId);
         
         // Verify studio owner role
         const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -71,7 +69,7 @@ class LeadManagement {
                                 <div class="d-flex align-items-center">
                                     <div class="flex-shrink-0">
                                         <div class="icon-circle bg-primary bg-opacity-10">
-                                            <i class="bi bi-people text-primary"></i>
+                                            <i class="bi bi-people icon-very-light"></i>
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
@@ -397,7 +395,6 @@ class LeadManagement {
                         <ul class="dropdown-menu">
                             ${(() => {
                                 const statuses = window.leadsAPI.getAvailableStatuses();
-                                console.log('🔍 Row dropdown generating with statuses:', statuses);
                                 return statuses.map(status => `
                                 <li>
                                     <a class="dropdown-item ${lead.status === status.value ? 'active' : ''}" 
@@ -878,7 +875,6 @@ class LeadManagement {
     }
 
     showSuccess(message) {
-        console.log('Success:', message);
         // Implementation depends on notification system
     }
 
@@ -888,7 +884,6 @@ class LeadManagement {
     }
 
     showInfo(message) {
-        console.log('Info:', message);
         // Implementation depends on notification system
     }
 }

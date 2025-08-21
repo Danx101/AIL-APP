@@ -85,12 +85,7 @@
 
                 <!-- Auth Buttons (when not authenticated) -->
                 <div id="authButtonsSidebar" class="auth-buttons-sidebar">
-                    <button class="auth-btn login-btn" id="loginBtnSidebar">
-                        <i class="fas fa-sign-in-alt me-2"></i>Login
-                    </button>
-                    <button class="auth-btn register-btn" id="registerBtnSidebar">
-                        <i class="fas fa-user-plus me-2"></i>Registrieren
-                    </button>
+                    <!-- Customer login/registration removed - customers can't login yet -->
                 </div>
             </div>
         </nav>
@@ -135,7 +130,6 @@
     
     <!-- TEST SCRIPT -->
     <script>
-        console.log('🧪 TEST: Basic JavaScript is working');
         window.addEventListener('error', function(e) {
             console.error('🚨 JavaScript Error:', e.error, 'at', e.filename, 'line', e.lineno);
         });
@@ -146,6 +140,9 @@
     <script src="src/services/api.js?v=3"></script>
     <script src="src/services/managerAPI.js?v=5"></script>
     <script src="src/services/leadsAPI.js?v=1753731733"></script>
+    
+    <!-- Global Components -->
+    <script src="src/components/shared/Inbox.js?v=1"></script>
     
     <!-- Manager Components -->
     <script src="src/pages/ManagerDashboard.js?v=3"></script>

@@ -9,6 +9,7 @@ class LeadActivityLogger {
   /**
    * Activity types supported by the MySQL table enum
    * Based on existing table structure: enum('status_change','call','email','sms','note','appointment_scheduled','appointment_completed','conversion','archive')
+   * Extended with: 'new', 'moved', 'reactivated' for frontend filter support
    */
   static ACTIVITY_TYPES = {
     STATUS_CHANGE: 'status_change',
@@ -19,7 +20,10 @@ class LeadActivityLogger {
     APPOINTMENT_SCHEDULED: 'appointment_scheduled',
     APPOINTMENT_COMPLETED: 'appointment_completed',
     CONVERSION: 'conversion',
-    ARCHIVE: 'archive'
+    ARCHIVE: 'archive',
+    NEW: 'new',          // For manually added or imported from Google Sheets
+    MOVED: 'moved',      // For status changes to IN_BEARBEITUNG, QUALIFIZIERT, PROBEBEHANDLUNG_GEPLANT
+    REACTIVATED: 'reactivated'  // For leads moved back from archive
   };
 
   /**
@@ -62,21 +66,13 @@ class LeadActivityLogger {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `;
 
-      const params = [leadId, studioId, activityType, description, fromStatus, toStatus, metadata, createdBy];
+      const params = [leadId, studioId, activityType, description, fromStatus, toStatus, metadata ? JSON.stringify(metadata) : null, createdBy];
       
-      const result = await new Promise((resolve, reject) => {
-        db.run(sql, params, function(err) {
-          if (err) {
-            console.error('❌ Error logging lead activity:', err);
-            reject(err);
-          } else {
-            resolve(this.lastID || this.insertId);
-          }
-        });
-      });
+      const result = await db.run(sql, params);
+      const activityId = result.lastID || result.insertId;
 
-      console.log(`✅ Logged activity: ${activityType} for lead ${leadId} (activity ID: ${result})`);
-      return result;
+      console.log(`✅ Logged activity: ${activityType} for lead ${leadId} (activity ID: ${activityId})`);
+      return activityId;
 
     } catch (error) {
       console.error('❌ LeadActivityLogger error:', error);
@@ -122,6 +118,71 @@ class LeadActivityLogger {
   }
 
   /**
+   * Log new lead activity (manually added or imported)
+   */
+  static async logNewLead(leadId, studioId, createdBy, source = 'manual') {
+    return this.logActivity({
+      leadId,
+      studioId,
+      activityType: this.ACTIVITY_TYPES.NEW,
+      description: `New lead added${source === 'google_sheets' ? ' from Google Sheets' : ' manually'}`,
+      metadata: { source },
+      createdBy
+    });
+  }
+
+  /**
+   * Log lead moved to working statuses
+   */
+  static async logLeadMoved(leadId, studioId, createdBy, fromStatus, toStatus) {
+    const workingStatuses = ['IN_BEARBEITUNG', 'QUALIFIZIERT', 'PROBEBEHANDLUNG_GEPLANT'];
+    if (workingStatuses.includes(toStatus)) {
+      return this.logActivity({
+        leadId,
+        studioId,
+        activityType: this.ACTIVITY_TYPES.MOVED,
+        description: `Lead moved from ${fromStatus} to ${toStatus}`,
+        fromStatus,
+        toStatus,
+        metadata: { timestamp: new Date().toISOString() },
+        createdBy
+      });
+    }
+    // Fall back to regular status change
+    return this.logStatusChange(leadId, studioId, createdBy, fromStatus, toStatus);
+  }
+
+  /**
+   * Log lead reactivation
+   */
+  static async logReactivation(leadId, studioId, createdBy, fromStatus) {
+    return this.logActivity({
+      leadId,
+      studioId,
+      activityType: this.ACTIVITY_TYPES.REACTIVATED,
+      description: `Lead reactivated from ${fromStatus}`,
+      fromStatus,
+      toStatus: 'NEU',
+      metadata: { reactivatedAt: new Date().toISOString() },
+      createdBy
+    });
+  }
+
+  /**
+   * Log archive activity
+   */
+  static async logArchive(leadId, studioId, createdBy, reason) {
+    return this.logActivity({
+      leadId,
+      studioId,
+      activityType: this.ACTIVITY_TYPES.ARCHIVE,
+      description: `Lead archived: ${reason}`,
+      metadata: { reason, archivedAt: new Date().toISOString() },
+      createdBy
+    });
+  }
+
+  /**
    * Get activities for a lead
    * @param {number} leadId - Lead ID
    * @param {Object} options - Query options
@@ -159,7 +220,7 @@ class LeadActivityLogger {
             // Parse metadata JSON for each activity
             const activities = rows.map(row => ({
               ...row,
-              metadata: row.metadata ? JSON.parse(row.metadata) : null
+              metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null
             }));
             resolve(activities);
           }
@@ -186,7 +247,7 @@ class LeadActivityLogger {
           DATE(created_at) as date
         FROM lead_activities 
         WHERE studio_id = ?
-        AND created_at >= date('now', '-30 days')
+        AND created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
         GROUP BY activity_type, DATE(created_at)
         ORDER BY created_at DESC
       `;
@@ -204,6 +265,29 @@ class LeadActivityLogger {
 
     } catch (error) {
       console.error('❌ Error in getStudioActivityStats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up old activities (older than specified days)
+   * @param {number} retentionDays - Number of days to retain activities
+   * @returns {Promise<number>} - Number of deleted records
+   */
+  static async cleanupOldActivities(retentionDays = 30) {
+    try {
+      const sql = `
+        DELETE FROM lead_activities
+        WHERE created_at < DATE_SUB(CURRENT_DATE(), INTERVAL ${retentionDays} DAY)
+      `;
+
+      const result = await db.run(sql, []);
+      const deletedCount = result.changes || 0;
+      console.log(`✅ Cleaned up ${deletedCount} old activities`);
+      return deletedCount;
+
+    } catch (error) {
+      console.error('❌ Error in cleanupOldActivities:', error);
       throw error;
     }
   }

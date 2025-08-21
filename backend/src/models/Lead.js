@@ -1,5 +1,4 @@
 const db = require("../database/database-wrapper");
-const LeadActivityLogger = require("../utils/LeadActivityLogger");
 
 class Lead {
   constructor(data) {
@@ -25,13 +24,18 @@ class Lead {
     this.updated_at = data.updated_at || null;
   }
 
-  // Valid statuses for leads
+  // Valid statuses for leads (matching database ENUM values)
   static get STATUSES() {
     return {
-      NEW: 'neu',
-      CONTACTED: 'kontaktiert',
-      CONVERTED: 'konvertiert',
-      NOT_INTERESTED: 'nicht_interessiert'
+      NEW: 'new',
+      WORKING: 'working',
+      QUALIFIED: 'qualified',
+      TRIAL_SCHEDULED: 'trial_scheduled',
+      CONVERTED: 'converted',
+      UNREACHABLE: 'unreachable',
+      WRONG_NUMBER: 'wrong_number',
+      NOT_INTERESTED: 'not_interested',
+      LOST: 'lost'
     };
   }
 
@@ -100,16 +104,7 @@ class Lead {
                 const oldStatus = originalLead.status;
                 const newStatus = this.status;
                 
-                if (oldStatus !== newStatus) {
-                  await LeadActivityLogger.logStatusChange(
-                    this.id,
-                    this.studio_id,
-                    userId || null, // Allow null userId
-                    oldStatus,
-                    newStatus,
-                    this.notes
-                  );
-                }
+                // Status change logging removed - now handled in controllers
                 resolve(this.id);
               } catch (activityErr) {
                 console.error('Error logging status change activity:', activityErr);
@@ -363,17 +358,7 @@ class Lead {
               this.status = newStatus;
               if (notes) this.notes = notes;
               
-              // Always log status changes (even without userId)
-              if (oldStatus !== newStatus) {
-                await LeadActivityLogger.logStatusChange(
-                  this.id,
-                  this.studio_id,
-                  userId || null,
-                  oldStatus,
-                  newStatus,
-                  notes
-                );
-              }
+              // Status change logging removed - now handled in controllers
               
               resolve(this);
             } catch (activityErr) {

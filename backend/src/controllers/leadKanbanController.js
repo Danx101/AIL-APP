@@ -1,5 +1,6 @@
 const db = require('../database/database-wrapper');
 const { validationResult } = require('express-validator');
+const LeadStatsLogger = require('../utils/LeadStatsLogger');
 
 class LeadKanbanController {
   // Get leads organized by Kanban status
@@ -26,7 +27,7 @@ class LeadKanbanController {
       
       const activeLeads = await db.all(activeSql, [studioId]);
 
-      // Get archived leads
+      // Get archived leads (including converted leads)
       const archivedSql = `
         SELECT 
           l.*,
@@ -37,8 +38,9 @@ class LeadKanbanController {
            WHERE cs.customer_id = c.id) as total_sessions_purchased
         FROM leads l
         LEFT JOIN customers c ON l.converted_to_customer_id = c.id
-        WHERE l.studio_id = ? AND l.is_archived = TRUE
-        ORDER BY l.stage_entered_at DESC
+        WHERE l.studio_id = ? 
+          AND l.is_archived = TRUE
+        ORDER BY COALESCE(l.archive_date, l.stage_entered_at) DESC
         LIMIT 100
       `;
       
@@ -58,10 +60,10 @@ class LeadKanbanController {
         }
       });
 
-      // Organize archived leads by outcome
+      // Organize archived leads by outcome (including converted leads)
       const archived = {
         positive: {
-          converted: []
+          converted: []  // Now includes converted leads
         },
         negative: {
           unreachable: [],
@@ -79,24 +81,48 @@ class LeadKanbanController {
         }
       });
 
-      // Calculate metrics
+      // Calculate metrics based on current month's activity data
       const totalActive = activeLeads.length;
       const totalArchived = archivedLeads.length;
-      const totalConverted = archived.positive.converted.length;
-      const conversionRate = totalArchived > 0 
-        ? (totalConverted / totalArchived).toFixed(2) 
+      
+      // Get current month's conversion activities
+      const currentMonthConversions = await db.all(`
+        SELECT COUNT(*) as count
+        FROM lead_activities
+        WHERE studio_id = ?
+          AND activity_type = 'conversion'
+          AND YEAR(created_at) = YEAR(CURRENT_DATE())
+          AND MONTH(created_at) = MONTH(CURRENT_DATE())
+      `, [studioId]);
+
+      // Get total leads created this month (for conversion rate)
+      const currentMonthLeads = await db.all(`
+        SELECT COUNT(*) as count
+        FROM lead_activities
+        WHERE studio_id = ?
+          AND activity_type IN ('new', 'status_change')
+          AND YEAR(created_at) = YEAR(CURRENT_DATE())
+          AND MONTH(created_at) = MONTH(CURRENT_DATE())
+      `, [studioId]);
+
+      const totalConverted = currentMonthConversions[0]?.count || 0;
+      const totalLeadsThisMonth = currentMonthLeads[0]?.count || 0;
+      const conversionRate = totalLeadsThisMonth > 0 
+        ? (totalConverted / totalLeadsThisMonth).toFixed(2) 
         : 0;
 
-      // Calculate average time to convert
-      // Using DATEDIFF for MySQL compatibility
+      // Calculate average time to convert based on current month's conversions
       const convertedWithTime = await db.all(`
         SELECT 
-          DATEDIFF(conversion_date, created_at) as days_to_convert
-        FROM leads
-        WHERE studio_id = ? 
-          AND status = 'converted' 
-          AND conversion_date IS NOT NULL
-          AND created_at IS NOT NULL
+          l.id,
+          DATEDIFF(la.created_at, l.created_at) as days_to_convert
+        FROM lead_activities la
+        JOIN leads l ON la.lead_id = l.id
+        WHERE la.studio_id = ?
+          AND la.activity_type = 'conversion'
+          AND YEAR(la.created_at) = YEAR(CURRENT_DATE())
+          AND MONTH(la.created_at) = MONTH(CURRENT_DATE())
+          AND l.created_at IS NOT NULL
       `, [studioId]);
 
       const avgDaysToConvert = convertedWithTime.length > 0
@@ -176,14 +202,35 @@ class LeadKanbanController {
         // Update lead status
         const isArchived = ['converted', 'unreachable', 'wrong_number', 'not_interested', 'lost'].includes(to_status);
         
-        await db.run(`
-          UPDATE leads 
-          SET status = ?,
-              stage_entered_at = CURRENT_TIMESTAMP,
-              is_archived = ?,
-              archive_reason = ?
-          WHERE id = ?
-        `, [to_status, isArchived, isArchived ? to_status : null, leadId]);
+        // Prepare update query based on status
+        let updateQuery, updateParams;
+        
+        if (to_status === 'converted') {
+          // Set conversion_date when converting
+          updateQuery = `
+            UPDATE leads 
+            SET status = ?,
+                stage_entered_at = CURRENT_TIMESTAMP,
+                is_archived = ?,
+                archive_reason = ?,
+                archive_date = CURRENT_TIMESTAMP,
+                conversion_date = CURRENT_TIMESTAMP
+            WHERE id = ?`;
+          updateParams = [to_status, isArchived, to_status, leadId];
+        } else {
+          // Standard update for other status changes
+          updateQuery = `
+            UPDATE leads 
+            SET status = ?,
+                stage_entered_at = CURRENT_TIMESTAMP,
+                is_archived = ?,
+                archive_reason = ?,
+                archive_date = ${isArchived ? 'CURRENT_TIMESTAMP' : 'NULL'}
+            WHERE id = ?`;
+          updateParams = [to_status, isArchived, isArchived ? to_status : null, leadId];
+        }
+        
+        await db.run(updateQuery, updateParams);
 
         // If moving to trial_scheduled and appointment data provided, create appointment
         if (to_status === 'trial_scheduled' && appointment_data) {
@@ -219,25 +266,13 @@ class LeadKanbanController {
           );
         }
 
-        // Log activity
-        await db.run(`
-          INSERT INTO lead_activities (
-            lead_id,
-            studio_id,
-            activity_type,
-            description,
-            from_status,
-            to_status,
-            created_by
-          ) VALUES (?, ?, 'status_change', ?, ?, ?, ?)
-        `, [
-          leadId,
-          lead.studio_id,
-          `Status changed from ${lead.status} to ${to_status}`,
-          lead.status,
-          to_status,
-          req.user.userId || req.user.id || null
-        ]);
+        // Log activity using the proper logger
+        const userId = req.user.userId || req.user.id || null;
+        
+        // Log conversion for stats tracking
+        if (to_status === 'converted') {
+          await LeadStatsLogger.logLeadConverted(lead.studio_id, leadId);
+        }
 
         // Transaction commit removed for now
         
@@ -386,6 +421,7 @@ class LeadKanbanController {
               archive_reason = 'converted',
               converted_to_customer_id = ?,
               conversion_date = CURRENT_TIMESTAMP,
+              archive_date = CURRENT_TIMESTAMP,
               initial_package_size = ?
           WHERE id = ?
         `, [customerId, sessionPackage, leadId]);
@@ -492,6 +528,7 @@ class LeadKanbanController {
         UPDATE leads 
         SET is_archived = FALSE,
             archive_reason = NULL,
+            archive_date = NULL,
             status = ?,
             stage_entered_at = CURRENT_TIMESTAMP
         WHERE id = ?

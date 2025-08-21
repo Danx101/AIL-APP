@@ -16,6 +16,10 @@
     font-size: 1.25rem;
 }
 
+.lead-management .icon-very-light {
+    color: #E8DDF0 !important;
+}
+
 .lead-management .card {
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: var(--glass-bg);

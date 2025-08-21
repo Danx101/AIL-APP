@@ -103,6 +103,10 @@ app.use('/api/v1/debug', debugRoutes);
 const dbTestRoutes = require('./src/routes/dbTest');
 app.use('/api/v1/db', dbTestRoutes);
 
+// Temporary migration routes (no auth required - remove after use)
+const migrationRoutes = require('./src/routes/migration');
+app.use('/api/v1/migration', migrationRoutes);
+
 // Authentication routes
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
@@ -146,6 +150,10 @@ app.use('/api/v1/manager', managerLeadRoutes);
 const appointmentRoutes = require('./src/routes/appointments');
 app.use('/api/v1/appointments', appointmentRoutes);
 
+// Lead appointment routes
+const leadAppointmentRoutes = require('./src/routes/leadAppointments');
+app.use('/api/v1/lead-appointments', leadAppointmentRoutes);
+
 // Customer session routes (simplified for new schema) - must come before general session routes
 const customerSessionsSimple = require('./src/routes/customerSessionsSimple');
 app.use('/api/v1', customerSessionsSimple);
@@ -158,9 +166,9 @@ app.use('/api/v1', sessionRoutes);
 const leadRoutes = require('./src/routes/leadsSimple');
 app.use('/api/v1/leads', leadRoutes);
 
-// Lead Kanban routes
-const leadKanbanRoutes = require('./src/routes/leadKanban');
-app.use('/api/v1', leadKanbanRoutes);
+// Lead Kanban routes (temporarily disabled - using leadsSimple instead)
+// const leadKanbanRoutes = require('./src/routes/leadKanban');
+// app.use('/api/v1', leadKanbanRoutes);
 
 // (Customer routes moved earlier to avoid routing conflicts)
 
@@ -175,6 +183,10 @@ app.use('/api/v1/twilio', twilioRoutes);
 // Dialogflow routes
 const dialogflowRoutes = require('./src/routes/dialogflow');
 app.use('/api/v1/dialogflow', dialogflowRoutes);
+
+// Notification routes
+const notificationRoutes = require('./src/routes/notifications');
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

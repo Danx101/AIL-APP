@@ -1,6 +1,7 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const Lead = require('../models/Lead');
+const Notification = require('../models/Notification');
 const db = require("../database/database-wrapper");
 
 class GoogleSheetsService {
@@ -254,7 +255,12 @@ class GoogleSheetsService {
         errorDetails: [...(importResult.errorDetails || []), ...errors],
         syncId,
         totalRows: rows.length,
-        newRows: leadsData.length
+        newRows: leadsData.length,
+        newLeads: leadsData.map(lead => ({
+          name: lead.name,
+          phone_number: lead.phone_number,
+          email: lead.email || ''
+        }))
       };
 
     } catch (error) {
@@ -401,6 +407,22 @@ class GoogleSheetsService {
         skipped: result.skipped,
         errors: result.errors
       });
+
+      // Create notification if there were any imports
+      if (result.imported > 0) {
+        try {
+          await Notification.createImportNotification(integration.studio_id, {
+            imported: result.imported,
+            updated: result.skipped,
+            errors: result.errorDetails || [],
+            leadDetails: result.newLeads || []
+          });
+          console.log(`✉️ Notification created for studio ${integration.studio_id}: ${result.imported} imports`);
+        } catch (notificationError) {
+          console.error('Error creating notification:', notificationError);
+          // Don't fail the sync if notification creation fails
+        }
+      }
 
       return {
         success: true,

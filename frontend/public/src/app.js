@@ -71,7 +71,8 @@ class App {
         await this.checkAuthStatus();
         
         // Initialize CustomerManagement component for shared modal access
-        this.initializeCustomerManagement();
+        // Don't initialize on startup - wait until we have a studio ID
+        // this.initializeCustomerManagement();
     }
 
     async initializeCustomerManagement() {
@@ -89,7 +90,8 @@ class App {
             
             // Initialize with skipTabSwitch=true so it doesn't interfere with current view
             // This just ensures the modals are available
-            if (this.currentStudioId) {
+            // Only initialize if we have a valid studio ID (not undefined or 'undefined')
+            if (this.currentStudioId && this.currentStudioId !== 'undefined') {
                 await window.customerManagement.init(this.currentStudioId, true);
             }
         } catch (error) {
@@ -207,21 +209,7 @@ class App {
         // Update sidebar navigation for guest
         this.updateSidebarNavigation();
 
-        // Add auth button event listeners in sidebar
-        const loginBtnSidebar = document.getElementById('loginBtnSidebar');
-        const registerBtnSidebar = document.getElementById('registerBtnSidebar');
-        
-        if (loginBtnSidebar) {
-            loginBtnSidebar.addEventListener('click', () => {
-                this.showCustomerLogin();
-            });
-        }
-        
-        if (registerBtnSidebar) {
-            registerBtnSidebar.addEventListener('click', () => {
-                this.showCustomerRegister();
-            });
-        }
+        // Customer login/registration buttons removed - customers can't login yet
 
 
         // Show welcome page
@@ -256,14 +244,8 @@ class App {
                         <div class="card-body">
                             <p>Vereinbaren Sie Ihren Termin schnell und einfach online.</p>
                             <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                                <button class="btn btn-primary" type="button" id="customerLoginBtn">
-                                    Kunde Login
-                                </button>
-                                <button class="btn btn-outline-primary" type="button" id="studioLoginBtn">
+                                <button class="btn btn-primary" type="button" id="studioLoginBtn">
                                     Studio Login
-                                </button>
-                                <button class="btn btn-outline-secondary" type="button" id="managerLoginBtn">
-                                    Manager Login
                                 </button>
                             </div>
                         </div>
@@ -272,16 +254,8 @@ class App {
             </div>
         `;
 
-        document.getElementById('customerLoginBtn').addEventListener('click', () => {
-            this.showCustomerLogin();
-        });
-
         document.getElementById('studioLoginBtn').addEventListener('click', () => {
             this.showStudioLogin();
-        });
-
-        document.getElementById('managerLoginBtn').addEventListener('click', () => {
-            this.showManagerLogin();
         });
     }
 
@@ -325,79 +299,9 @@ class App {
         }
     }
 
-    showCustomerLogin() {
-        const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-6 mx-auto">
-                    <div class="text-center mb-3">
-                        <h2><a href="#" class="text-decoration-none" id="brandLinkCustomer"><img src="assets/images/LOgo AIL.png" alt="Abnehmen im Liegen" style="height: 60px;"></a></h2>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h4>Kunde Login</h4>
-                        </div>
-                        <div class="card-body">
-                            <div id="loginError" class="alert alert-danger d-none"></div>
-                            <form id="customerLoginForm">
-                                <div class="mb-3">
-                                    <label for="email" class="form-label">E-Mail</label>
-                                    <input type="email" class="form-control" id="email" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="password" class="form-label">Passwort</label>
-                                    <input type="password" class="form-control" id="password" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn">Login</button>
-                            </form>
-                            <hr>
-                            <div class="text-center">
-                                <small>Noch kein Konto? <a href="#" id="showRegisterLink">Registrieren</a></small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    // Customer login removed - customers can't login yet
 
-        document.getElementById('customerLoginForm').addEventListener('submit', (e) => {
-            this.handleLogin(e);
-        });
-        document.getElementById('brandLinkCustomer')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.showMainPage();
-        });
-
-        document.getElementById('showRegisterLink')?.addEventListener('click', () => {
-            this.showCustomerRegister();
-        });
-    }
-
-    async handleLogin(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const submitBtn = document.getElementById('loginSubmitBtn');
-        const errorDiv = document.getElementById('loginError');
-        
-        try {
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Logging in...';
-            errorDiv.classList.add('d-none');
-            
-            const result = await window.authService.login(email, password);
-            this.currentUser = result.user;
-            this.updateUIForAuthenticatedUser();
-            
-        } catch (error) {
-            errorDiv.textContent = error.message;
-            errorDiv.classList.remove('d-none');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Login';
-        }
-    }
+    // Customer login handler removed - customers can't login yet
 
     async logout() {
         try {
@@ -475,6 +379,15 @@ class App {
             this.currentUser = result.user;
             this.updateUIForAuthenticatedUser();
             
+            // Close the modal after successful login
+            const modalElement = document.querySelector('.modal.show');
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+            
         } catch (error) {
             errorDiv.textContent = error.message;
             errorDiv.classList.remove('d-none');
@@ -484,109 +397,7 @@ class App {
         }
     }
 
-    showCustomerRegister() {
-        const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-6 mx-auto">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4>Kunde Registrierung</h4>
-                        </div>
-                        <div class="card-body">
-                            <div id="registerError" class="alert alert-danger d-none"></div>
-                            <div id="registerSuccess" class="alert alert-success d-none"></div>
-                            <form id="customerRegisterForm">
-                                <div class="mb-3">
-                                    <label for="activationCode" class="form-label">Aktivierungscode</label>
-                                    <input type="text" class="form-control" id="activationCode" required 
-                                           placeholder="Code vom Studio erhalten">
-                                </div>
-                                <div class="mb-3">
-                                    <label for="firstName" class="form-label">Vorname</label>
-                                    <input type="text" class="form-control" id="firstName" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="lastName" class="form-label">Nachname</label>
-                                    <input type="text" class="form-control" id="lastName" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="registerEmail" class="form-label">E-Mail</label>
-                                    <input type="email" class="form-control" id="registerEmail" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="registerPassword" class="form-label">Passwort</label>
-                                    <input type="password" class="form-control" id="registerPassword" required>
-                                    <div class="form-text">
-                                        Mindestens 8 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe und eine Zahl
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="phone" class="form-label">Telefon (optional)</label>
-                                    <input type="tel" class="form-control" id="phone">
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100" id="registerSubmitBtn">Registrieren</button>
-                            </form>
-                            <hr>
-                            <div class="text-center">
-                                <small>Bereits ein Konto? <a href="#" id="showLoginLink">Anmelden</a></small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('customerRegisterForm').addEventListener('submit', (e) => {
-            this.handleRegister(e);
-        });
-
-        document.getElementById('showLoginLink')?.addEventListener('click', () => {
-            this.showCustomerLogin();
-        });
-    }
-
-    async handleRegister(e) {
-        e.preventDefault();
-        
-        const formData = {
-            activationCode: document.getElementById('activationCode').value,
-            firstName: document.getElementById('firstName').value,
-            lastName: document.getElementById('lastName').value,
-            email: document.getElementById('registerEmail').value,
-            password: document.getElementById('registerPassword').value,
-            phone: document.getElementById('phone').value,
-            role: 'customer'
-        };
-        
-        const submitBtn = document.getElementById('registerSubmitBtn');
-        const errorDiv = document.getElementById('registerError');
-        const successDiv = document.getElementById('registerSuccess');
-        
-        try {
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Registering...';
-            errorDiv.classList.add('d-none');
-            successDiv.classList.add('d-none');
-            
-            const result = await window.authService.register(formData);
-            this.currentUser = result.user;
-            
-            successDiv.textContent = 'Registrierung erfolgreich! Sie werden weitergeleitet...';
-            successDiv.classList.remove('d-none');
-            
-            setTimeout(() => {
-                this.updateUIForAuthenticatedUser();
-            }, 2000);
-            
-        } catch (error) {
-            errorDiv.textContent = error.message;
-            errorDiv.classList.remove('d-none');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Registrieren';
-        }
-    }
+    // Customer registration and handlers removed - customers can't register yet
 
     async showCustomerDashboard() {
         const content = document.getElementById('content');
@@ -1080,13 +891,20 @@ class App {
             });
             const headerElement = document.getElementById('selectedDateHeader');
             if (headerElement) {
+                // Check if selected date is in the past
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const isPastDate = selectedDate < today;
+                
                 headerElement.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <span>Termine für ${selectedDateDisplayStr}</span>
-                        <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
-                            <i class="fas fa-plus-circle me-1"></i>
-                            Neue Behandlung
-                        </button>
+                        ${!isPastDate ? `
+                            <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
+                                <i class="fas fa-plus-circle me-1"></i>
+                                Neue Behandlung
+                            </button>
+                        ` : ''}
                     </div>
                 `;
             }
@@ -1307,12 +1125,12 @@ class App {
             'bestätigt': 'bg-success',
             'abgesagt': 'bg-danger',
             'abgeschlossen': 'bg-info',
-            'nicht erschienen': 'bg-secondary',
+            'nicht erschienen': 'bg-warning',
             // English terms (legacy support)
             'confirmed': 'bg-success',
             'cancelled': 'bg-danger',
             'completed': 'bg-info',
-            'no_show': 'bg-secondary'
+            'no_show': 'bg-warning'
         };
         
         
@@ -2460,9 +2278,9 @@ class App {
                     ${this.createLoadingMetrics()}
                 </div>
 
-                <!-- Studio Status and Quick Actions -->
+                <!-- Studio Status -->
                 <div class="row">
-                    <div class="col-lg-8">
+                    <div class="col-12">
                         <div class="glass-card p-4 mb-4">
                             <h5 class="mb-3">Studio Status</h5>
                             <div id="studioStatus">
@@ -2472,25 +2290,6 @@ class App {
                                     </div>
                                     <p class="mt-2 text-muted">Lade Studio-Informationen...</p>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="glass-card p-4 mb-4">
-                            <h5 class="mb-3">Quick Actions</h5>
-                            <div class="d-grid gap-2" id="quickActions">
-                                <button class="btn btn-primary" disabled>
-                                    <i class="fas fa-users me-2"></i>
-                                    Lead Management
-                                </button>
-                                <button class="btn btn-outline-primary" disabled>
-                                    <i class="fas fa-plus-circle me-2"></i>
-                                    Aktivierungscodes
-                                </button>
-                                <button class="btn btn-outline-primary" disabled>
-                                    <i class="fas fa-calendar me-2"></i>
-                                    Termine verwalten
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -2619,9 +2418,19 @@ class App {
 
         const metricCards = metricConfigs.map((config, index) => {
             const data = metrics[config.key];
-            const isClickable = config.key === 'todayAppointments';
-            const clickableClass = isClickable ? 'metric-card-clickable' : '';
-            const clickHandler = isClickable ? `onclick="showTodayAppointments()"` : '';
+            let clickableClass = '';
+            let clickHandler = '';
+            
+            if (config.key === 'activeCustomers') {
+                clickableClass = 'metric-card-clickable';
+                clickHandler = `onclick="app.navigateToKundenWithFilter()"`;
+            } else if (config.key === 'todayAppointments') {
+                clickableClass = 'metric-card-clickable';
+                clickHandler = `onclick="app.showTodayAppointments()"`;
+            } else if (config.key === 'utilization') {
+                clickableClass = 'metric-card-clickable';
+                clickHandler = `onclick="app.showAuslastungModal()"`;
+            }
             
             return `
                 <div class="metric-card ${clickableClass}" style="animation-delay: ${index * 0.1}s" ${clickHandler}>
@@ -2693,41 +2502,14 @@ class App {
                     </div>
                 `;
 
-                // Enable quick action buttons
-                const quickActionsContainer = document.getElementById('quickActions');
-                if (quickActionsContainer) {
-                    quickActionsContainer.innerHTML = `
-                        <button class="btn btn-primary" onclick="app.showStudioLeadManagement(${studio.id})">
-                            <i class="fas fa-users me-2"></i>
-                            Lead Management
-                        </button>
-                        <button class="btn btn-outline-primary" onclick="app.showActivationCodeGeneration(${studio.id})">
-                            <i class="fas fa-plus-circle me-2"></i>
-                            Aktivierungscodes
-                        </button>
-                        <button class="btn btn-outline-primary" onclick="app.navigateToSection('termine')">
-                            <i class="fas fa-calendar me-2"></i>
-                            Termine verwalten
-                        </button>
-                    `;
-                }
                 
             } else if (response.status === 404) {
                 statusDiv.innerHTML = `
-                    <div class="card">
-                        <div class="card-body">
-                            <h6>Studio Setup erforderlich</h6>
-                            <p>Sie müssen zuerst Ihr Studio einrichten.</p>
-                            <button class="btn btn-primary" id="startStudioSetupBtn">
-                                Studio einrichten
-                            </button>
-                        </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Studio wird initialisiert...
                     </div>
                 `;
-                
-                document.getElementById('startStudioSetupBtn').addEventListener('click', () => {
-                    this.showStudioSetup();
-                });
             }
             
         } catch (error) {
@@ -3052,15 +2834,12 @@ class App {
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioPhone" class="form-label">Telefon (optional)</label>
-                                    <input type="tel" class="form-control" id="studioPhone">
+                                    <label for="studioPhone" class="form-label">Telefon *</label>
+                                    <input type="tel" class="form-control" id="studioPhone" required placeholder="+43 660 800 3836">
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioName" class="form-label">Studio Name</label>
-                                    <input type="text" class="form-control" id="studioName" required placeholder="z.B. AIL Berlin Mitte">
-                                    <div class="form-text">
-                                        Empfohlen: AIL [Stadt] [Stadtteil/Bezirk]
-                                    </div>
+                                    <label for="studioConfirmPassword" class="form-label">Passwort wiederholen *</label>
+                                    <input type="password" class="form-control" id="studioConfirmPassword" required>
                                 </div>
                                 <div class="mb-3">
                                     <label for="studioCity" class="form-label">Stadt *</label>
@@ -3070,11 +2849,32 @@ class App {
                                     <label for="studioAddress" class="form-label">Adresse *</label>
                                     <input type="text" class="form-control" id="studioAddress" required placeholder="Straße, Hausnummer, PLZ">
                                 </div>
+                                
+                                <h5 class="mb-3 mt-4">Rechtliches</h5>
                                 <div class="mb-3">
-                                    <label for="studioPhoneNumber" class="form-label">Studio Telefon (optional)</label>
-                                    <input type="tel" class="form-control" id="studioPhoneNumber" placeholder="Studio Kontakt">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="termsAccepted" required>
+                                        <label class="form-check-label" for="termsAccepted">
+                                            Ich akzeptiere die <a href="/terms-conditions.html" target="_blank">Allgemeinen Geschäftsbedingungen</a> *
+                                        </label>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100" id="studioRegisterSubmitBtn">Studio Registrieren</button>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="privacyAccepted" required>
+                                        <label class="form-check-label" for="privacyAccepted">
+                                            Ich akzeptiere die <a href="/privacy-policy.html" target="_blank">Datenschutzerklärung</a> *
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3">
+                                    <small>
+                                        <strong>30 Tage kostenlose Testphase!</strong> Danach €20/Monat oder €199/Jahr.
+                                    </small>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary w-100 btn-lg" id="studioRegisterSubmitBtn">Jetzt registrieren</button>
                             </form>
                             <hr>
                             <div class="text-center">
@@ -3098,16 +2898,28 @@ class App {
     async handleStudioRegister(e) {
         e.preventDefault();
         
+        // Validate password confirmation
+        const password = document.getElementById('studioRegisterPassword').value;
+        const confirmPassword = document.getElementById('studioConfirmPassword').value;
+        
+        if (password !== confirmPassword) {
+            const errorDiv = document.getElementById('studioRegisterError');
+            errorDiv.textContent = 'Passwörter stimmen nicht überein';
+            errorDiv.classList.remove('d-none');
+            return;
+        }
+        
         const formData = {
             firstName: document.getElementById('studioFirstName').value,
             lastName: document.getElementById('studioLastName').value,
             email: document.getElementById('studioRegisterEmail').value,
-            password: document.getElementById('studioRegisterPassword').value,
-            phone: document.getElementById('studioPhone').value || '',
-            studioName: document.getElementById('studioName').value,
-            studioCity: document.getElementById('studioCity').value,
-            studioAddress: document.getElementById('studioAddress').value,
-            studioPhone: document.getElementById('studioPhoneNumber').value || ''
+            password: password,
+            confirmPassword: confirmPassword,
+            phone: document.getElementById('studioPhone').value,
+            city: document.getElementById('studioCity').value,
+            address: document.getElementById('studioAddress').value,
+            termsAccepted: document.getElementById('termsAccepted').checked,
+            privacyAccepted: document.getElementById('privacyAccepted').checked
         };
         
         const submitBtn = document.getElementById('studioRegisterSubmitBtn');
@@ -3143,13 +2955,13 @@ class App {
     }
 
     showLoginModal() {
-        // Generic login modal for header link
-        this.showCustomerLogin();
+        // Redirect to studio login since customer login is removed
+        this.showStudioLogin();
     }
 
     showRegisterModal() {
-        // Generic register modal for header link
-        this.showCustomerRegister();
+        // Redirect to studio login since customer registration is removed
+        this.showStudioLogin();
     }
 
     showManagerLogin() {
@@ -3389,170 +3201,6 @@ class App {
         `;
     }
 
-    showStudioSetup() {
-        const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-8 mx-auto">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4>Studio Setup</h4>
-                        </div>
-                        <div class="card-body">
-                            <div id="studioSetupError" class="alert alert-danger d-none"></div>
-                            <div id="studioSetupSuccess" class="alert alert-success d-none"></div>
-                            <div id="preFillInfo" class="alert alert-info">
-                                <div class="spinner-border spinner-border-sm" role="status"></div>
-                                Lade Vorab-Informationen...
-                            </div>
-                            <form id="studioSetupForm">
-                                <div class="mb-3">
-                                    <label for="studioName" class="form-label">Studio Name</label>
-                                    <input type="text" class="form-control" id="studioName" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="studioCity" class="form-label">Stadt</label>
-                                    <input type="text" class="form-control" id="studioCity" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="studioAddress" class="form-label">Adresse</label>
-                                    <input type="text" class="form-control" id="studioAddress" required>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="studioSetupPhone" class="form-label">Telefon</label>
-                                            <input type="tel" class="form-control" id="studioSetupPhone" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="studioSetupEmail" class="form-label">Studio E-Mail</label>
-                                            <input type="email" class="form-control" id="studioSetupEmail" required>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="businessHours" class="form-label">Öffnungszeiten</label>
-                                    <textarea class="form-control" id="businessHours" rows="3" 
-                                              placeholder="Mo-Fr: 9:00-18:00, Sa: 10:00-16:00"></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="machineCount" class="form-label">
-                                        <i class="fas fa-cogs me-2"></i>Anzahl der Behandlungsgeräte
-                                    </label>
-                                    <input type="number" class="form-control" id="machineCount" min="1" max="3" value="1" required>
-                                    <small class="form-text text-muted">
-                                        Wie viele Geräte stehen für gleichzeitige Behandlungen zur Verfügung? (Maximum: 3)
-                                    </small>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100" id="studioSetupSubmitBtn">Studio erstellen</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('studioSetupForm').addEventListener('submit', (e) => {
-            this.handleStudioSetup(e);
-        });
-
-        // Load pre-fill information
-        this.loadStudioPreFillInfo();
-    }
-
-    async loadStudioPreFillInfo() {
-        const preFillDiv = document.getElementById('preFillInfo');
-        
-        try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/prefill-info`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to load pre-fill info');
-            }
-            
-            const data = await response.json();
-            const info = data.preFillInfo;
-            
-            // Pre-fill form fields
-            document.getElementById('studioName').value = info.studioName || '';
-            document.getElementById('studioCity').value = info.city || '';
-            
-            preFillDiv.innerHTML = `
-                <strong>Vorab-Informationen geladen:</strong><br>
-                Inhaber: ${info.ownerName}<br>
-                Stadt: ${info.city}<br>
-                ${info.studioName ? `Studio Name: ${info.studioName}` : ''}
-            `;
-            
-        } catch (error) {
-            preFillDiv.innerHTML = `
-                <div class="alert alert-warning">
-                    Vorab-Informationen konnten nicht geladen werden: ${error.message}
-                </div>
-            `;
-        }
-    }
-
-    async handleStudioSetup(e) {
-        e.preventDefault();
-        
-        const formData = {
-            name: document.getElementById('studioName').value,
-            city: document.getElementById('studioCity').value,
-            address: document.getElementById('studioAddress').value,
-            phone: document.getElementById('studioSetupPhone').value,
-            email: document.getElementById('studioSetupEmail').value,
-            business_hours: document.getElementById('businessHours').value,
-            machine_count: parseInt(document.getElementById('machineCount').value) || 1
-        };
-        
-        const submitBtn = document.getElementById('studioSetupSubmitBtn');
-        const errorDiv = document.getElementById('studioSetupError');
-        const successDiv = document.getElementById('studioSetupSuccess');
-        
-        try {
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Erstelle Studio...';
-            errorDiv.classList.add('d-none');
-            successDiv.classList.add('d-none');
-            
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify(formData)
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Fehler beim Erstellen des Studios');
-            }
-            
-            const data = await response.json();
-            
-            successDiv.textContent = 'Studio erfolgreich erstellt! Sie werden zum Dashboard weitergeleitet...';
-            successDiv.classList.remove('d-none');
-            
-            setTimeout(() => {
-                this.showStudioDashboard();
-            }, 2000);
-            
-        } catch (error) {
-            errorDiv.textContent = error.message;
-            errorDiv.classList.remove('d-none');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Studio erstellen';
-        }
-    }
 
     showAppointmentManagement(studioId) {
         console.log('showAppointmentManagement called with studioId:', studioId);
@@ -3911,12 +3559,13 @@ class App {
         
         appointments.forEach(apt => {
             const customerName = this.getCustomerDisplayName(apt);
-            const statusBadge = this.getListStatusBadge(apt.status);
+            const statusBadge = this.getListStatusBadge(apt.status, apt);
             const typeColor = apt.appointment_type_color || '#007bff';
             const timeUntil = this.getTimeUntilAppointment(apt);
             
             html += `
-                <div class="list-group-item border-start" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important;">
+                <div class="list-group-item border-start clickable-card" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important; cursor: pointer;" 
+                     onclick="window.app.viewAppointmentDetails(${apt.id})">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="d-flex align-items-center mb-2">
@@ -3981,7 +3630,7 @@ class App {
         
         appointments.forEach(apt => {
             const customerName = this.getCustomerDisplayName(apt);
-            const statusBadge = this.getListStatusBadge(apt.status);
+            const statusBadge = this.getListStatusBadge(apt.status, apt);
             const typeColor = apt.appointment_type_color || '#6c757d';
             
             html += `
@@ -4094,13 +3743,20 @@ class App {
             });
             const headerElement = document.getElementById('selectedDateHeader');
             if (headerElement) {
+                // Check if selected date is in the past
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const isPastDate = selectedDate < today;
+                
                 headerElement.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <span>Termine für ${selectedDateDisplayStr}</span>
-                        <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
-                            <i class="fas fa-plus-circle me-1"></i>
-                            Neue Behandlung
-                        </button>
+                        ${!isPastDate ? `
+                            <button class="btn btn-sm btn-primary" onclick="window.app.showCreateAppointmentForm('${studioId}', new Date('${selectedDate.toISOString()}'))">
+                                <i class="fas fa-plus-circle me-1"></i>
+                                Neue Behandlung
+                            </button>
+                        ` : ''}
                     </div>
                 `;
             }
@@ -4113,9 +3769,16 @@ class App {
                     </div>
                 `;
             } else {
+                // Debug: Log appointment data to check lead appointments
+                const leadAppointments = appointments.filter(apt => apt.appointment_source === 'lead' || apt.person_type === 'lead' || apt.lead_id);
+                console.log(`Rendering ${appointments.length} appointments (${leadAppointments.length} trials) for ${selectedDateStr}`);
+                
                 // Create timeline view with colored appointment blocks
                 appointmentsDiv.innerHTML = this.renderTimelineView(appointments, selectedDate);
             }
+            
+            // Load calendar indicators after appointments are loaded
+            this.loadMonthlyAppointmentIndicators();
             
         } catch (error) {
             appointmentsDiv.innerHTML = `
@@ -4162,25 +3825,27 @@ class App {
 
     splitAppointments() {
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
-        const currentTime = now.toTimeString().split(' ')[0];
+        const currentDateTime = now.getTime();
         
         this.upcomingAppointments = [];
         this.pastAppointments = [];
         
         this.allAppointments.forEach(apt => {
-            const aptDate = apt.appointment_date;
-            const aptTime = apt.start_time;
+            // Parse appointment date and time properly
+            let aptDateStr = apt.appointment_date;
             
-            // Convert date for comparison
-            let aptDateStr = aptDate;
-            if (aptDate instanceof Date) {
-                aptDateStr = aptDate.toISOString().split('T')[0];
-            } else if (aptDate.includes('T')) {
-                aptDateStr = aptDate.split('T')[0];
+            // Handle ISO date strings with timezone
+            if (aptDateStr.includes('T')) {
+                aptDateStr = aptDateStr.split('T')[0];
             }
             
-            if (aptDateStr > today || (aptDateStr === today && aptTime >= currentTime)) {
+            // Create proper date object with time
+            const aptDateTime = new Date(aptDateStr + 'T' + apt.start_time);
+            const isUpcoming = aptDateTime.getTime() > currentDateTime;
+            
+            console.log(`Appointment ${aptDateStr} ${apt.start_time}: ${isUpcoming ? 'UPCOMING' : 'PAST'} (status: ${apt.status})`);
+            
+            if (isUpcoming) {
                 this.upcomingAppointments.push(apt);
             } else {
                 this.pastAppointments.push(apt);
@@ -4197,9 +3862,23 @@ class App {
         
         // Sort past appointments (most recent first)
         this.pastAppointments.sort((a, b) => {
-            // Use ISO format for consistent date parsing
-            const dateA = new Date(a.appointment_date + 'T' + a.start_time);
-            const dateB = new Date(b.appointment_date + 'T' + b.start_time);
+            // Parse dates properly handling timezone
+            let dateStrA = a.appointment_date;
+            let dateStrB = b.appointment_date;
+            
+            // Handle date format (could be ISO string with timezone)
+            if (dateStrA.includes('T')) {
+                dateStrA = dateStrA.split('T')[0];
+            }
+            if (dateStrB.includes('T')) {
+                dateStrB = dateStrB.split('T')[0];
+            }
+            
+            const dateA = new Date(dateStrA + 'T' + a.start_time);
+            const dateB = new Date(dateStrB + 'T' + b.start_time);
+            
+            console.log('Sorting past:', dateStrB, b.start_time, 'vs', dateStrA, a.start_time, '=', dateB.getTime() - dateA.getTime());
+            
             return dateB.getTime() - dateA.getTime(); // Most recent first
         });
         
@@ -4258,12 +3937,13 @@ class App {
         
         this.upcomingAppointments.forEach(apt => {
             const customerName = this.getCustomerDisplayName(apt);
-            const statusBadge = this.getListStatusBadge(apt.status);
+            const statusBadge = this.getListStatusBadge(apt.status, apt);
             const typeColor = apt.appointment_type_color || '#007bff';
             const timeUntil = this.getTimeUntilAppointment(apt);
             
             html += `
-                <div class="list-group-item border-start" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important;">
+                <div class="list-group-item border-start clickable-card" style="border-start-color: ${typeColor} !important; border-start-width: 4px !important; cursor: pointer;" 
+                     onclick="window.app.viewAppointmentDetails(${apt.id})">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="d-flex align-items-center mb-2">
@@ -4281,10 +3961,9 @@ class App {
                                 ${timeUntil ? `<small class="text-muted ms-2">${timeUntil}</small>` : ''}
                             </div>
                             <h6 class="mb-1">
-                                <a href="#" onclick="event.stopPropagation(); window.app.showCustomerDetails(${apt.customer_ref_id || apt.customer_id})" 
-                                   class="text-decoration-none customer-name-link text-dark fw-bold">
+                                <span class="text-dark fw-bold">
                                     ${customerName}
-                                </a>
+                                </span>
                             </h6>
                             <div class="text-muted small">
                                 <i class="fas fa-calendar me-1"></i>
@@ -4340,7 +4019,7 @@ class App {
         
         this.pastAppointments.forEach(apt => {
             const customerName = this.getCustomerDisplayName(apt);
-            const statusBadge = this.getListStatusBadge(apt.status);
+            const statusBadge = this.getListStatusBadge(apt.status, apt);
             const typeColor = apt.appointment_type_color || '#6c757d';
             
             html += `
@@ -4355,10 +4034,9 @@ class App {
                                 ${statusBadge}
                             </div>
                             <h6 class="mb-1">
-                                <a href="#" onclick="event.stopPropagation(); window.app.showCustomerDetails(${apt.customer_ref_id || apt.customer_id})" 
-                                   class="text-decoration-none customer-name-link text-dark fw-bold">
+                                <span class="text-dark fw-bold">
                                     ${customerName}
-                                </a>
+                                </span>
                             </h6>
                             <div class="text-muted small">
                                 <i class="fas fa-calendar me-1"></i>
@@ -4399,17 +4077,27 @@ class App {
         }
     }
 
-    getListStatusBadge(status) {
+    getListStatusBadge(status, appointment) {
+        // Special handling for confirmed/bestätigt status
+        if (status === 'confirmed' || status === 'bestätigt') {
+            // Check if it's a trial appointment (lead)
+            if (appointment && appointment.person_type === 'lead') {
+                return '<span class="badge" style="background-color: #ff9800">Probe</span>';
+            }
+            // Regular customer appointment
+            return '<span class="badge bg-success">Regulär</span>';
+        }
+        
+        // Other statuses remain the same
         const statusMap = {
-            'confirmed': '<span class="badge bg-success">Bestätigt</span>',
-            'bestätigt': '<span class="badge bg-success">Bestätigt</span>',
             'completed': '<span class="badge bg-info">Abgeschlossen</span>',
             'abgeschlossen': '<span class="badge bg-info">Abgeschlossen</span>',
             'cancelled': '<span class="badge bg-danger">Abgesagt</span>',
             'abgesagt': '<span class="badge bg-danger">Abgesagt</span>',
             'no_show': '<span class="badge bg-warning">Nicht erschienen</span>',
             'nicht erschienen': '<span class="badge bg-warning">Nicht erschienen</span>',
-            'pending': '<span class="badge bg-secondary">Wartend</span>'
+            'pending': '<span class="badge bg-secondary">Wartend</span>',
+            'geplant': '<span class="badge" style="background-color: #ff9800">Geplant</span>'
         };
         return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
     }
@@ -4449,12 +4137,13 @@ class App {
             'bestätigt': 'bg-success',
             'abgesagt': 'bg-danger',
             'abgeschlossen': 'bg-info',
-            'nicht erschienen': 'bg-secondary',
+            'nicht erschienen': 'bg-warning',
+            'geplant': 'bg-warning',
             // English terms (legacy support)
             'confirmed': 'bg-success',
             'cancelled': 'bg-danger',
             'completed': 'bg-info',
-            'no_show': 'bg-secondary'
+            'no_show': 'bg-warning'
         };
         
         
@@ -4550,7 +4239,8 @@ class App {
             'bestätigt': 'Bestätigt',
             'abgesagt': 'Abgesagt',
             'abgeschlossen': 'Abgeschlossen',
-            'nicht erschienen': 'Nicht erschienen'
+            'nicht erschienen': 'Nicht erschienen',
+            'geplant': 'Geplant'
         };
         return texts[status] || status;
     }
@@ -4722,7 +4412,11 @@ class App {
             // Skip if outside business hours
             if (startHours < startHour || endHours > endHour) return;
             
-            // Enhanced color scheme based on status
+            // Check if this is a trial appointment (lead appointment)
+            const isTrialAppointment = appointment.appointment_source === 'lead' || appointment.person_type === 'lead' || appointment.lead_id || 
+                                      (appointment.appointment_type_name && appointment.appointment_type_name.toLowerCase().includes('probe'));
+            
+            // Enhanced color scheme based on status and appointment type
             const statusStyles = {
                 'bestätigt': { bg: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', border: '#28a745' },
                 'abgeschlossen': { bg: 'linear-gradient(135deg, #17a2b8 0%, #20c9b8 100%)', border: '#17a2b8' },
@@ -4731,9 +4425,16 @@ class App {
                 'confirmed': { bg: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', border: '#28a745' },
                 'cancelled': { bg: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)', border: '#dc3545' },
                 'completed': { bg: 'linear-gradient(135deg, #17a2b8 0%, #20c9b8 100%)', border: '#17a2b8' },
-                'no_show': { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' }
+                'no_show': { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' },
+                // Lead appointment statuses
+                'geplant': { bg: 'linear-gradient(135deg, #ff9800 0%, #ffb347 100%)', border: '#ff9800' }
             };
-            const style = statusStyles[appointment.status] || { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' };
+            
+            // Use trial appointment styling if it's a trial
+            let style = statusStyles[appointment.status] || { bg: 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)', border: '#6c757d' };
+            if (isTrialAppointment && !statusStyles[appointment.status]) {
+                style = { bg: 'linear-gradient(135deg, #ff9800 0%, #ffb347 100%)', border: '#ff9800' };
+            }
             
             // Handle overlapping appointments
             const overlapOffset = appointment.overlapIndex || 0;
@@ -4747,6 +4448,9 @@ class App {
                 `<div style="position: absolute; top: 2px; right: 2px; background: rgba(255,255,255,0.9); color: #333; padding: 1px 4px; font-size: 9px; border-radius: 10px;">
                     ${appointment.overlapIndex + 1}/${appointment.overlapCount}
                 </div>` : '';
+            
+            // Trial badge removed per user request
+            const trialBadge = '';
             
             html += `
                 <div class="appointment-block" 
@@ -4770,6 +4474,7 @@ class App {
                      onclick="window.app.editAppointment(${appointment.id})"
                      title="${appointment.overlapCount > 1 ? `${appointment.overlapCount} überlappende Termine - ` : ''}Klicken zum Bearbeiten">
                     ${overlapBadge}
+                    ${trialBadge}
                     <div style="font-weight: bold; margin-bottom: 2px;">
                         ${appointment.customer_first_name} ${appointment.customer_last_name}
                     </div>
@@ -4788,10 +4493,11 @@ class App {
         
         // Add legend
         html += `
-            <div class="mt-3">
+            <div class="mt-4">
                 <h6>Status-Legende:</h6>
                 <div class="d-flex flex-wrap gap-3">
-                    <span class="badge" style="background: #28a745;">Bestätigt</span>
+                    <span class="badge" style="background: #28a745;">Regulär</span>
+                    <span class="badge" style="background: #ff9800;">Probe</span>
                     <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
                     <span class="badge" style="background: #dc3545;">Abgesagt</span>
                     <span class="badge" style="background: #6c757d;">Nicht erschienen</span>
@@ -4911,10 +4617,11 @@ class App {
         
         // Add legend
         html += `
-            <div class="mt-3">
+            <div class="mt-4">
                 <h6>Status-Legende:</h6>
                 <div class="d-flex flex-wrap gap-3">
-                    <span class="badge" style="background: #28a745;">Bestätigt</span>
+                    <span class="badge" style="background: #28a745;">Regulär</span>
+                    <span class="badge" style="background: #ff9800;">Probe</span>
                     <span class="badge" style="background: #17a2b8;">Abgeschlossen</span>
                     <span class="badge" style="background: #dc3545;">Abgesagt</span>
                     <span class="badge" style="background: #6c757d;">Nicht erschienen</span>
@@ -5457,7 +5164,6 @@ class App {
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
             
-            console.log('Debug - Making fetch request to:', `${window.API_BASE_URL}/api/v1/appointments`);
             console.log('Debug - Request body:', JSON.stringify(formData, null, 2));
             
             const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments`, {
@@ -5522,7 +5228,8 @@ class App {
 
     async updateAppointmentStatus(appointmentId, status) {
         try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
+            // Try customer appointments first
+            let response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5530,6 +5237,18 @@ class App {
                 },
                 body: JSON.stringify({ status })
             });
+            
+            // If not found, try lead appointments
+            if (response.status === 404) {
+                response = await fetch(`${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ status })
+                });
+            }
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -5557,23 +5276,46 @@ class App {
         }
     }
 
-    async editAppointment(appointmentId) {
-        try {
-            // Fetch appointment details
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+    // Helper function to fetch appointment details (handles both customer and trial appointments)
+    async fetchAppointmentDetails(appointmentId) {
+        // First try customer appointments endpoint
+        let response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+        });
+        
+        if (response.ok) {
+            // Successfully found customer appointment
+            const data = await response.json();
+            return data.appointment || data;
+        } else if (response.status === 404) {
+            // Try lead appointments endpoint
+            console.log('Customer appointment not found, trying lead appointments...');
+            response = await fetch(`${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to load appointment details');
-            }
-
-            const result = await response.json();
             
-            // Extract appointment data from API response
-            const appointment = result.appointment || result;
+            if (response.ok) {
+                const data = await response.json();
+                const appointment = data.leadAppointment || data;
+                // Mark as trial appointment for proper display
+                appointment.isTrialAppointment = true;
+                return appointment;
+            } else {
+                throw new Error('Termin nicht gefunden');
+            }
+        } else {
+            throw new Error('Termin nicht gefunden');
+        }
+    }
+
+    async editAppointment(appointmentId) {
+        try {
+            // Fetch appointment details using helper function
+            const appointment = await this.fetchAppointmentDetails(appointmentId);
 
             // Show appointment details modal
             this.showAppointmentDetailsModal(appointment);
@@ -5584,23 +5326,128 @@ class App {
     }
 
     showAppointmentDetailsModal(appointment) {
+        // Handle both customer and lead appointments
+        let customerName, firstName, lastName, phone, email;
+        
+        if (appointment.isTrialAppointment || appointment.lead_name) {
+            // Trial/Lead appointment
+            customerName = appointment.lead_name || 'Lead';
+            const nameParts = customerName.split(' ');
+            firstName = nameParts[0] || '';
+            lastName = nameParts.slice(1).join(' ') || '';
+            phone = appointment.lead_phone || '';
+            email = appointment.lead_email || '';
+        } else {
+            // Customer appointment
+            customerName = this.getCustomerDisplayName(appointment);
+            firstName = appointment.customer_first_name || '';
+            lastName = appointment.customer_last_name || '';
+            phone = appointment.customer_phone || '';
+            email = appointment.customer_email || '';
+        }
+        
+        const statusBadge = this.getListStatusBadge(appointment.status, appointment);
+        
         // Calculate customer initials
-        const firstName = appointment.customer_first_name || '';
-        const lastName = appointment.customer_last_name || '';
         const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || '??';
         
         // Check if appointment is in the past
         const now = new Date();
-        const appointmentStart = new Date(`${appointment.appointment_date} ${appointment.start_time}`);
-        const appointmentEnd = new Date(`${appointment.appointment_date} ${appointment.end_time || this.calculateEndTime(appointment.start_time, 60)}`);
-        const isPast = appointmentEnd < now;
-        const hasStarted = appointmentStart <= now;
+        
+        // Debug appointment data first
+        console.log('Appointment data:', {
+            appointment_date: appointment.appointment_date,
+            start_time: appointment.start_time,
+            end_time: appointment.end_time,
+            status: appointment.status
+        });
+        
+        // Safe date parsing with fallbacks
+        let appointmentStart, appointmentEnd, isPast, hasStarted;
+        try {
+            if (!appointment.appointment_date || !appointment.start_time) {
+                throw new Error('Missing appointment date or time');
+            }
+            
+            // Handle different time formats (remove seconds if present)
+            let cleanStartTime = appointment.start_time;
+            let cleanEndTime = appointment.end_time;
+            
+            // If time includes seconds, remove them (HH:MM:SS -> HH:MM)
+            if (cleanStartTime && cleanStartTime.split(':').length === 3) {
+                cleanStartTime = cleanStartTime.substring(0, 5);
+            }
+            if (cleanEndTime && cleanEndTime.split(':').length === 3) {
+                cleanEndTime = cleanEndTime.substring(0, 5);
+            }
+            
+            console.log('Cleaned times:', { cleanStartTime, cleanEndTime });
+            
+            // Try multiple date parsing approaches
+            let dateStr1 = `${appointment.appointment_date}T${cleanStartTime}`;
+            let dateStr2 = `${appointment.appointment_date} ${cleanStartTime}`;
+            
+            console.log('Trying date strings:', { dateStr1, dateStr2 });
+            
+            // Try multiple parsing approaches
+            appointmentStart = new Date(dateStr1);
+            if (isNaN(appointmentStart.getTime())) {
+                appointmentStart = new Date(dateStr2);
+            }
+            if (isNaN(appointmentStart.getTime())) {
+                // Try parsing date and time separately
+                const datePart = new Date(appointment.appointment_date);
+                const [hours, minutes] = cleanStartTime.split(':');
+                datePart.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                appointmentStart = datePart;
+            }
+            
+            const endTime = cleanEndTime || this.calculateEndTime(cleanStartTime, 60);
+            let endDateStr1 = `${appointment.appointment_date}T${endTime}`;
+            let endDateStr2 = `${appointment.appointment_date} ${endTime}`;
+            
+            appointmentEnd = new Date(endDateStr1);
+            if (isNaN(appointmentEnd.getTime())) {
+                appointmentEnd = new Date(endDateStr2);
+            }
+            if (isNaN(appointmentEnd.getTime())) {
+                // Try parsing date and time separately
+                const datePart = new Date(appointment.appointment_date);
+                const [hours, minutes] = endTime.split(':');
+                datePart.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                appointmentEnd = datePart;
+            }
+            
+            
+            if (isNaN(appointmentStart.getTime()) || isNaN(appointmentEnd.getTime())) {
+                throw new Error(`Invalid date format - Start: ${appointmentStart}, End: ${appointmentEnd}`);
+            }
+            
+            isPast = appointmentEnd < now;
+            hasStarted = appointmentStart <= now;
+        } catch (dateError) {
+            console.error('Date parsing error:', dateError);
+            console.error('Raw appointment data:', appointment);
+            // Fallback values
+            appointmentStart = now;
+            appointmentEnd = now;
+            isPast = false;
+            hasStarted = false;
+        }
+        
         const currentStatus = appointment.status;
         
         // Determine if we can show "Nicht erschienen" button
-        const canMarkNoShow = hasStarted && 
-                             (currentStatus === 'confirmed' || currentStatus === 'bestätigt' || 
-                              currentStatus === 'completed' || currentStatus === 'abgeschlossen');
+        const canMarkNoShow = hasStarted && (currentStatus === 'confirmed' || currentStatus === 'completed');
+        
+        // Debug logging for button visibility
+        console.log('Nicht erschienen button debug:', {
+            hasStarted,
+            currentStatus,
+            canMarkNoShow,
+            appointmentStart: appointmentStart.toISOString(),
+            now: now.toISOString()
+        });
         
         // Create modal HTML with new design
         const modalHTML = `
@@ -5610,32 +5457,37 @@ class App {
                         <div class="modal-header p-0">
                             <div class="w-100">
                                 <!-- Customer Header (Clickable) -->
-                                <div class="bg-light p-3 border-bottom" style="cursor: pointer;" onclick="window.app.showCustomerFromAppointment(${appointment.customer_id})">
+                                <div class="bg-light p-4 border-bottom position-relative" style="cursor: pointer;" onclick="event.preventDefault(); ${appointment.isTrialAppointment || appointment.lead_name ? 'window.app.dismissModalAndShowLead(' + appointment.lead_id + ')' : 'window.app.dismissModalAndShowCustomer(' + (appointment.customer_ref_id || appointment.customer_id) + ')'}">
                                     <div class="d-flex align-items-center">
-                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px; font-weight: bold;">
+                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-weight: bold; font-size: 1.5rem;">
                                             ${initials}
                                         </div>
                                         <div class="flex-grow-1">
-                                            <h5 class="mb-1">${firstName} ${lastName}</h5>
-                                            <div class="text-muted small">
-                                                ${appointment.customer_email ? `<i class="fas fa-envelope me-2"></i>${appointment.customer_email}` : ''}
-                                                ${appointment.customer_phone ? `<br><i class="fas fa-phone me-2"></i>${appointment.customer_phone}` : ''}
+                                            <h4 class="mb-1 text-dark">${customerName}</h4>
+                                            <div class="text-muted">
+                                                ${email ? `<i class="fas fa-envelope me-2"></i>${email}` : ''}
+                                                ${phone ? `<br><i class="fas fa-phone me-2"></i>${phone}` : ''}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Schließen"></button>
+                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Schließen" onclick="event.stopPropagation()"></button>
                         </div>
                         <div class="modal-body">
                             <!-- Date & Time with inline edit button -->
                             <div class="mb-4">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Datum & Zeit</h6>
-                                    ${!isPast ? `
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="window.app.rescheduleAppointment(${appointment.id})">
-                                            <i class="fas fa-edit"></i> Bearbeiten
-                                        </button>
+                                    ${!isPast && currentStatus !== 'cancelled' && currentStatus !== 'no_show' && currentStatus !== 'abgesagt' && currentStatus !== 'nicht erschienen' ? `
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-warning" onclick="window.app.rescheduleAppointment(${appointment.id})">
+                                                <i class="fas fa-edit"></i> Bearbeiten
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" onclick="window.app.cancelAppointment(${appointment.id})" data-bs-dismiss="modal">
+                                                <i class="fas fa-times"></i> Stornieren
+                                            </button>
+                                        </div>
                                     ` : ''}
                                 </div>
                                 <p class="mb-0">${this.formatDate(appointment.appointment_date)} um ${appointment.start_time}</p>
@@ -5650,7 +5502,7 @@ class App {
                             
                             <!-- Status with inline action -->
                             <div class="mb-4">
-                                <div class="d-flex align-items-center gap-3">
+                                <div class="d-flex align-items-center justify-content-between">
                                     <div>
                                         <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i>Status</h6>
                                         <span class="badge ${this.getStatusBadgeClass(appointment.status)} fs-6">
@@ -5658,28 +5510,34 @@ class App {
                                         </span>
                                     </div>
                                     ${canMarkNoShow ? `
-                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="window.app.markAsNoShow(${appointment.id})">
+                                        <button type="button" class="btn btn-warning" onclick="window.app.markAsNoShow(${appointment.id})" data-bs-dismiss="modal">
                                             <i class="fas fa-user-times"></i> Nicht erschienen
                                         </button>
                                     ` : ''}
                                 </div>
                             </div>
                             
-                            <!-- Notes if present -->
+                            <!-- Notes -->
                             ${appointment.notes ? `
                                 <div class="mb-4">
                                     <h6 class="mb-2"><i class="fas fa-sticky-note me-2"></i>Notizen</h6>
-                                    <p class="mb-0 text-muted">${appointment.notes}</p>
+                                    <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this, ${appointment.isTrialAppointment || appointment.lead_name ? true : false})">
+                                        <div class="notes-display bg-light p-3 rounded" style="cursor: pointer;">
+                                            <i class="fas fa-sticky-note me-2 text-muted"></i>${appointment.notes}
+                                            <small class="text-muted d-block mt-1"><i class="fas fa-edit me-1"></i>Klicken zum Bearbeiten</small>
+                                        </div>
+                                    </div>
                                 </div>
-                            ` : ''}
-                        </div>
-                        <div class="modal-footer">
-                            ${!isPast && currentStatus !== 'cancelled' && currentStatus !== 'no_show' ? `
-                                <button type="button" class="btn btn-danger" onclick="window.app.cancelAppointment(${appointment.id})">
-                                    <i class="fas fa-times me-1"></i>Stornieren
-                                </button>
-                            ` : ''}
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                            ` : `
+                                <div class="mb-4">
+                                    <h6 class="mb-2"><i class="fas fa-sticky-note me-2"></i>Notizen</h6>
+                                    <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this, ${appointment.isTrialAppointment || appointment.lead_name ? true : false})">
+                                        <div class="notes-display bg-light p-3 rounded text-muted" style="cursor: pointer;">
+                                            <i class="fas fa-plus me-2"></i>Notiz hinzufügen...
+                                        </div>
+                                    </div>
+                                </div>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -5768,7 +5626,8 @@ class App {
                                                 <i class="fas fa-calendar me-2"></i>Datum
                                             </label>
                                             <input type="date" class="form-control" id="editAppointmentDate" 
-                                                   value="${appointment.appointment_date}" required>
+                                                   value="${appointment.appointment_date}" required
+                                                   min="${new Date().toISOString().split('T')[0]}">
                                         </div>
                                         
                                         <div class="mb-3">
@@ -5959,21 +5818,40 @@ class App {
         }
     }
 
-    async rescheduleAppointment(appointmentId) {
+    async rescheduleAppointment(appointmentId, isTrialAppointment = false) {
         try {
+            let appointment, endpoint;
+            
+            // Determine the correct endpoint based on appointment type
+            if (isTrialAppointment) {
+                endpoint = `${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`;
+            } else {
+                endpoint = `${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`;
+            }
+            
             // First, fetch the appointment details
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            const response = await fetch(endpoint, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
 
             if (!response.ok) {
+                // If regular appointment fails, try as trial appointment
+                if (!isTrialAppointment) {
+                    console.log('Regular appointment not found, trying as trial appointment...');
+                    return this.rescheduleAppointment(appointmentId, true);
+                }
                 throw new Error('Failed to load appointment details');
             }
 
             const result = await response.json();
-            const appointment = result.appointment || result;
+            appointment = result.appointment || result.leadAppointment || result;
+            
+            // Mark if it's a trial appointment for the modal
+            if (isTrialAppointment) {
+                appointment.isTrialAppointment = true;
+            }
 
             // Close the details modal and show reschedule modal
             const detailsModal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
@@ -6003,7 +5881,11 @@ class App {
                         </div>
                         <div class="modal-body">
                             <div class="alert alert-info">
-                                <strong>Kunde:</strong> ${appointment.customer_first_name} ${appointment.customer_last_name}<br>
+                                <strong>${appointment.isTrialAppointment ? 'Lead' : 'Kunde'}:</strong> ${
+                                    appointment.isTrialAppointment 
+                                        ? (appointment.lead_name || 'Unbekannt')
+                                        : `${appointment.customer_first_name || ''} ${appointment.customer_last_name || ''}`.trim() || 'Unbekannt'
+                                }<br>
                                 <strong>Behandlung:</strong> ${appointment.appointment_type_name || 'Behandlung'}
                             </div>
                             
@@ -6040,7 +5922,7 @@ class App {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                            <button type="button" class="btn btn-warning" onclick="window.app.saveReschedule(${appointment.id})">
+                            <button type="button" class="btn btn-warning" onclick="window.app.saveReschedule(${appointment.id}, ${appointment.isTrialAppointment || false})">
                                 <i class="fas fa-save me-1"></i>Termin umplanen
                             </button>
                         </div>
@@ -6068,13 +5950,18 @@ class App {
         });
     }
 
-    async saveReschedule(appointmentId) {
+    async saveReschedule(appointmentId, isTrialAppointment = false) {
         try {
             const date = document.getElementById('rescheduleDate').value;
             const time = document.getElementById('rescheduleTime').value;
             const notes = document.getElementById('rescheduleNotes').value;
 
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            // Use correct endpoint for trial vs regular appointments
+            const endpoint = isTrialAppointment 
+                ? `${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`
+                : `${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`;
+
+            const response = await fetch(endpoint, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6127,13 +6014,23 @@ class App {
                 detailsModal.hide();
             }
 
-            // Cancel the appointment
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
+            // Cancel the appointment - try customer appointments first
+            let response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
+
+            // If not found, try lead appointments
+            if (response.status === 404) {
+                response = await fetch(`${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+            }
 
             if (!response.ok) {
                 throw new Error('Failed to cancel appointment');
@@ -6158,15 +6055,15 @@ class App {
 
     async markAsNoShow(appointmentId) {
         try {
-            // Confirm the action
-            const confirmed = confirm('Möchten Sie diesen Termin als "Nicht erschienen" markieren? Eine Sitzung wird vom Kundenkonto abgezogen.');
+            // Confirm the action - more accurate message about session consumption
+            const confirmed = confirm('Möchten Sie diesen Termin als "Nicht erschienen" markieren?');
             
             if (!confirmed) {
                 return;
             }
             
-            // Update status to "nicht erschienen"
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
+            // Update status to "nicht erschienen" - try customer appointments first
+            let response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6174,6 +6071,18 @@ class App {
                 },
                 body: JSON.stringify({ status: 'nicht erschienen' })
             });
+            
+            // If not found, try lead appointments
+            if (response.status === 404) {
+                response = await fetch(`${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ status: 'nicht erschienen' })
+                });
+            }
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -6188,11 +6097,11 @@ class App {
                 detailsModal.hide();
             }
             
-            // Show success message
-            this.showSuccessMessage('Status aktualisiert', 'Der Termin wurde als "Nicht erschienen" markiert.');
-            
+            // Show appropriate success message based on whether session was deducted
             if (result.sessionDeducted) {
-                this.showSuccessMessage('Sitzung abgezogen', 'Eine Sitzung wurde vom Kundenkonto abgezogen.');
+                this.showSuccessMessage('Status aktualisiert', 'Der Termin wurde als "Nicht erschienen" markiert und eine Sitzung wurde verbraucht.');
+            } else {
+                this.showSuccessMessage('Status aktualisiert', 'Der Termin wurde als "Nicht erschienen" markiert. Keine zusätzliche Sitzung verbraucht.');
             }
             
             // Refresh calendar
@@ -6381,40 +6290,11 @@ class App {
         }
     }
 
-    async markAsNoShow(appointmentId) {
-        if (!confirm('Termin als "nicht erschienen" markieren?\n\nDadurch wird eine Session verbraucht.')) {
-            return;
-        }
-        
-        try {
-            await this.updateAppointmentStatus(appointmentId, 'nicht erschienen');
-            
-            // Refresh list view if we're in list mode
-            if (this.currentAppointmentView === 'list') {
-                await this.loadAllAppointments(this.currentStudioId);
-            }
-            
-            this.showSuccessMessage('Erfolg!', 'Termin wurde als "nicht erschienen" markiert und eine Session wurde verbraucht.');
-        } catch (error) {
-            console.error('Error marking appointment as no-show:', error);
-            alert('Fehler beim Markieren als "nicht erschienen": ' + error.message);
-        }
-    }
 
     async viewAppointmentDetails(appointmentId) {
         try {
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Termin nicht gefunden');
-            }
-            
-            const data = await response.json();
-            const appointment = data.appointment;
+            // Fetch appointment details using helper function
+            const appointment = await this.fetchAppointmentDetails(appointmentId);
             
             // Show appointment details modal
             this.showAppointmentDetailsModal(appointment);
@@ -6425,124 +6305,6 @@ class App {
         }
     }
 
-    showAppointmentDetailsModal(appointment) {
-        const customerName = this.getCustomerDisplayName(appointment);
-        const statusBadge = this.getListStatusBadge(appointment.status);
-        
-        // Calculate customer initials for avatar
-        const firstName = appointment.customer_first_name || '';
-        const lastName = appointment.customer_last_name || '';
-        const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || '??';
-        
-        // Check if appointment is in the past to determine if rescheduling is allowed
-        const now = new Date();
-        const appointmentStart = new Date(`${appointment.appointment_date}T${appointment.start_time}`);
-        const isPast = appointmentStart < now;
-        
-        const modalHtml = `
-            <div class="modal fade" id="appointmentDetailsModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header p-0">
-                            <!-- Customer Header (Prominent and Clickable) -->
-                            <div class="w-100 bg-light p-4 border-bottom position-relative" style="cursor: pointer;" onclick="event.preventDefault(); window.app.dismissModalAndShowCustomer(${appointment.customer_ref_id || appointment.customer_id})">
-                                <div class="d-flex align-items-center">
-                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px; font-weight: bold; font-size: 1.5rem;">
-                                        ${initials}
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h4 class="mb-1 text-dark">${customerName}</h4>
-                                        <div class="text-muted">
-                                            ${appointment.customer_email ? `<i class="fas fa-envelope me-2"></i>${appointment.customer_email}` : ''}
-                                            ${appointment.customer_phone ? `<br><i class="fas fa-phone me-2"></i>${appointment.customer_phone}` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Schließen" onclick="event.stopPropagation()"></button>
-                            </div>
-                        </div>
-                        <div class="modal-body p-4">
-                            <!-- Treatment Type -->
-                            <div class="row mb-4">
-                                <div class="col-sm-4"><strong>Termin:</strong></div>
-                                <div class="col-sm-8">
-                                    <span class="badge fs-6 px-3 py-2" style="background-color: ${appointment.appointment_type_color || '#007bff'}">
-                                        ${appointment.appointment_type_name || 'Termin'}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <!-- Date & Time Combined -->
-                            <div class="row mb-4">
-                                <div class="col-sm-4"><strong>Datum & Zeit:</strong></div>
-                                <div class="col-sm-8 d-flex justify-content-between align-items-center">
-                                    <span>${this.formatDate(appointment.appointment_date)} um ${appointment.start_time} - ${appointment.end_time}</span>
-                                    ${!isPast ? `
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="window.app.rescheduleAppointment(${appointment.id})" data-bs-dismiss="modal">
-                                            <i class="fas fa-edit me-1"></i>Umplanen
-                                        </button>
-                                    ` : `
-                                        <small class="text-muted"><i class="fas fa-history me-1"></i>Vergangen</small>
-                                    `}
-                                </div>
-                            </div>
-                            
-                            <!-- Status -->
-                            <div class="row mb-4">
-                                <div class="col-sm-4"><strong>Status:</strong></div>
-                                <div class="col-sm-8">${statusBadge}</div>
-                            </div>
-                            
-                            ${appointment.duration_minutes ? `
-                                <div class="row mb-4">
-                                    <div class="col-sm-4"><strong>Dauer:</strong></div>
-                                    <div class="col-sm-8">${appointment.duration_minutes} Minuten</div>
-                                </div>
-                            ` : ''}
-                            
-                            ${appointment.notes ? `
-                                <div class="row mb-4">
-                                    <div class="col-sm-4"><strong>Notizen:</strong></div>
-                                    <div class="col-sm-8">
-                                        <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this)">
-                                            <div class="notes-display bg-light p-3 rounded" style="cursor: pointer;">
-                                                <i class="fas fa-sticky-note me-2 text-muted"></i>${appointment.notes}
-                                                <small class="text-muted d-block mt-1"><i class="fas fa-edit me-1"></i>Klicken zum Bearbeiten</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ` : `
-                                <div class="row mb-4">
-                                    <div class="col-sm-4"><strong>Notizen:</strong></div>
-                                    <div class="col-sm-8">
-                                        <div class="editable-notes" onclick="window.app.editNotesInline(${appointment.id}, this)">
-                                            <div class="notes-display bg-light p-3 rounded text-muted" style="cursor: pointer;">
-                                                <i class="fas fa-plus me-2"></i>Notiz hinzufügen...
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Remove existing modal if present
-        const existingModal = document.getElementById('appointmentDetailsModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-        
-        // Add new modal to DOM
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('appointmentDetailsModal'));
-        modal.show();
-    }
 
     async addAppointmentNotes(appointmentId) {
         // Get current appointment to prefill notes
@@ -6698,6 +6460,12 @@ class App {
     }
 
     initializeCustomerManagement(studioId) {
+        // Validate studio ID before proceeding
+        if (!studioId || studioId === 'undefined') {
+            console.warn('initializeCustomerManagement called with invalid studio ID:', studioId);
+            return;
+        }
+        
         // Use the CustomerManagement component if available
         if (typeof CustomerManagement !== 'undefined') {
             console.log('Using CustomerManagement component for studio:', studioId);
@@ -6764,6 +6532,14 @@ class App {
     }
 
     async loadCustomersData(studioId) {
+        // Guard against undefined studio ID
+        if (!studioId || studioId === 'undefined') {
+            console.warn('loadCustomersData called with invalid studio ID:', studioId);
+            this.allCustomers = [];
+            this.filterAndRenderCustomers();
+            return;
+        }
+        
         try {
             // Fetch customers from real API endpoint
             const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/customers`, {
@@ -7182,7 +6958,7 @@ class App {
         const statusMap = {
             'bestätigt': '<span class="badge bg-primary">Bestätigt</span>',
             'absolviert': '<span class="badge bg-success">Absolviert</span>',
-            'nicht_erschienen': '<span class="badge bg-danger">Nicht erschienen</span>',
+            'nicht_erschienen': '<span class="badge bg-warning">Nicht erschienen</span>',
             'storniert': '<span class="badge bg-secondary">Storniert</span>'
         };
         return statusMap[status] || `<span class="badge bg-secondary">${status}</span>`;
@@ -7222,7 +6998,249 @@ class App {
         }
     }
 
-    editNotesInline(appointmentId, container) {
+    async dismissModalAndShowLead(leadId) {
+        try {
+            // Close appointment details modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('appointmentDetailsModal'));
+            if (modal) modal.hide();
+            
+            // Wait for modal to close, then show lead details
+            setTimeout(async () => {
+                // Try to use LeadKanban if available AND functional
+                if (window.leadKanban && 
+                    window.leadKanban.showLeadDetails && 
+                    typeof window.leadKanban.showLeadDetails === 'function') {
+                    
+                    try {
+                        // Test if LeadKanban modal elements exist
+                        if (document.getElementById('leadDetailsModal') || 
+                            (window.leadKanban.renderModals && typeof window.leadKanban.renderModals === 'function')) {
+                            await window.leadKanban.showLeadDetails(leadId);
+                            return;
+                        }
+                    } catch (leadKanbanError) {
+                        console.warn('LeadKanban failed, falling back to standalone modal:', leadKanbanError);
+                    }
+                }
+                
+                // Fallback to standalone modal (always reliable)
+                await this.showLeadDetailsStandalone(leadId);
+            }, 300);
+        } catch (error) {
+            console.error('Error in dismissModalAndShowLead:', error);
+            // Show user-friendly error message
+            this.showNotification('Fehler beim Öffnen der Lead-Details', 'error');
+        }
+    }
+
+    async showLeadDetailsStandalone(leadId) {
+        try {
+            // Fetch lead details from API
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/leads/${leadId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch lead details');
+
+            const data = await response.json();
+            const lead = data.lead;
+
+            // Ensure modal exists (following CustomerManagement pattern)
+            this.ensureLeadModalExists();
+            
+            // Verify modal content element exists before populating
+            const modalContent = document.getElementById('standalone-lead-details-content');
+            if (!modalContent) {
+                console.error('standalone-lead-details-content element not found, recreating modal');
+                // Force recreate the modal
+                this.createStandaloneLeadModal();
+            }
+
+            // Populate modal with lead data
+            this.populateLeadModalContent(lead);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('standaloneLeadModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Error loading lead details:', error);
+            this.showNotification('Fehler beim Laden der Lead-Details', 'error');
+        }
+    }
+
+    // Following CustomerManagement pattern - ensure modal exists
+    ensureLeadModalExists() {
+        if (!document.getElementById('standaloneLeadModal')) {
+            this.createStandaloneLeadModal();
+        }
+    }
+
+    // Separate content population for better error handling
+    populateLeadModalContent(lead) {
+        try {
+            // Use safer element selection with error handling
+            const setElementText = (id, text) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = text;
+                } else {
+                    console.warn(`Element ${id} not found during lead modal population`);
+                }
+            };
+
+            setElementText('standalone-lead-name', lead.name || '-');
+            setElementText('standalone-lead-phone', this.formatPhone(lead.phone_number) || '-');
+            setElementText('standalone-lead-email', lead.email || '-');
+            setElementText('standalone-lead-source', lead.source || '-');
+            setElementText('standalone-lead-created', new Date(lead.created_at).toLocaleDateString('de-DE'));
+            setElementText('standalone-lead-notes', lead.notes || 'Keine Notizen');
+            
+            // Status badge with error handling
+            const statusBadge = document.getElementById('standalone-lead-status');
+            if (statusBadge) {
+                statusBadge.textContent = this.getLeadStatusDisplay(lead.status);
+                statusBadge.className = `badge ${this.getLeadStatusBadgeClass(lead.status)}`;
+            }
+
+        } catch (populateError) {
+            console.error('Error populating lead modal content:', populateError);
+            throw populateError;
+        }
+    }
+
+    createStandaloneLeadModal() {
+        // Remove existing modal if present (following CustomerManagement pattern)
+        const existingModal = document.getElementById('standaloneLeadModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modalHtml = `
+            <div class="modal fade" id="standaloneLeadModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-person me-2"></i>
+                                Lead Details
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" id="standalone-lead-details-content">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Name</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-name">-</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Telefon</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-phone">-</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">E-Mail</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-email">-</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Quelle</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-source">-</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Status</label>
+                                    <div class="form-control-plaintext">
+                                        <span class="badge" id="standalone-lead-status">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Erstellt am</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-created">-</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold">Notizen</label>
+                                    <div class="form-control-plaintext" id="standalone-lead-notes" style="min-height: 60px; padding: 8px; background: #f8f9fa; border-radius: 4px;">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" onclick="window.app.openLeadManagement()">
+                                <i class="bi bi-kanban me-1"></i>
+                                Lead Management öffnen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <style>
+                .bg-brown {
+                    background-color: #8B4513 !important;
+                    color: white !important;
+                }
+            </style>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    getLeadStatusDisplay(status) {
+        const statusMap = {
+            'new': 'Neu',
+            'working': 'In Bearbeitung',
+            'qualified': 'Qualifiziert',
+            'trial_scheduled': 'Probebehandlung geplant',
+            'converted': 'Konvertiert',
+            'unreachable': 'Nicht erreichbar',
+            'wrong_number': 'Falsche Nummer',
+            'not_interested': 'Nicht interessiert',
+            'lost': 'Verloren'
+        };
+        return statusMap[status] || status;
+    }
+
+    getLeadStatusBadgeClass(status) {
+        const classMap = {
+            'new': 'bg-primary',
+            'working': 'bg-warning',
+            'qualified': 'bg-info',
+            'trial_scheduled': 'bg-purple text-white',
+            'converted': 'bg-success',
+            'unreachable': 'bg-brown',
+            'wrong_number': 'bg-danger',
+            'not_interested': 'bg-dark',
+            'lost': 'bg-muted'
+        };
+        
+        return classMap[status] || 'bg-secondary';
+    }
+
+    formatPhone(phone) {
+        if (!phone) return '';
+        // Remove all non-digit characters
+        const cleaned = phone.replace(/\D/g, '');
+        // Format based on length
+        if (cleaned.length === 10) {
+            return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+        } else if (cleaned.length === 11 && cleaned[0] === '1') {
+            return `+1 (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+        } else if (cleaned.startsWith('49')) {
+            // German format
+            return `+49 ${cleaned.slice(2, 5)} ${cleaned.slice(5)}`;
+        }
+        // Return as-is if format is unknown
+        return phone;
+    }
+
+    openLeadManagement() {
+        // Close the lead details modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('standaloneLeadModal'));
+        if (modal) modal.hide();
+        
+        // Switch to Lead Management tab
+        this.switchToView('lead-kanban');
+    }
+
+    editNotesInline(appointmentId, container, isLeadAppointment = false) {
         const display = container.querySelector('.notes-display');
         const currentText = display.textContent.replace('Klicken zum Bearbeiten', '').replace('Notiz hinzufügen...', '').trim();
         
@@ -7239,28 +7257,45 @@ class App {
         
         // Save on blur
         textarea.addEventListener('blur', async () => {
-            await this.saveNotesInline(appointmentId, textarea.value, container);
+            await this.saveNotesInline(appointmentId, textarea.value, container, isLeadAppointment);
         });
         
         // Save on Escape
         textarea.addEventListener('keydown', async (e) => {
             if (e.key === 'Escape') {
-                await this.saveNotesInline(appointmentId, textarea.value, container);
+                await this.saveNotesInline(appointmentId, textarea.value, container, isLeadAppointment);
             }
         });
     }
 
-    async saveNotesInline(appointmentId, notes, container) {
+    async saveNotesInline(appointmentId, notes, container, isLeadAppointment = false) {
         try {
-            // API call to update notes
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({ notes })
-            });
+            // Try customer appointments first, unless we know it's a lead appointment
+            let response = await fetch(
+                isLeadAppointment 
+                    ? `${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`
+                    : `${window.API_BASE_URL}/api/v1/appointments/${appointmentId}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ notes })
+                }
+            );
+            
+            // If customer appointment failed with 404, try lead appointments
+            if (!isLeadAppointment && response.status === 404) {
+                response = await fetch(`${window.API_BASE_URL}/api/v1/lead-appointments/${appointmentId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ notes })
+                });
+            }
             
             if (!response.ok) throw new Error('Failed to save notes');
             
@@ -8062,9 +8097,7 @@ class App {
             }
             
             const data = await response.json();
-            console.log('Session blocks API response:', data);
             const blocks = data.blocks || [];
-            console.log('Processed blocks:', blocks);
             
             // Return the blocks data for use in the modal
             return blocks;
@@ -8543,27 +8576,11 @@ class App {
         // Update month/year display
         monthYearDisplay.innerHTML = `<strong>${monthNames[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}</strong>`;
         
-        // Add or update legend after month/year display
-        let legend = document.getElementById('calendar-legend');
-        if (!legend) {
-            legend = document.createElement('div');
-            legend.id = 'calendar-legend';
-            legend.className = 'text-center mb-2';
-            monthYearDisplay.parentNode.insertBefore(legend, monthYearDisplay.nextSibling);
+        // Remove old legend if it exists
+        let oldLegend = document.getElementById('calendar-legend');
+        if (oldLegend) {
+            oldLegend.remove();
         }
-        
-        legend.innerHTML = `
-            <div class="d-flex justify-content-center gap-3 text-small">
-                <span class="d-flex align-items-center">
-                    <span class="badge" style="background-color: #f59e0b; font-size: 10px; margin-right: 4px;">T</span>
-                    Trial Termine
-                </span>
-                <span class="d-flex align-items-center">
-                    <span class="badge" style="background-color: #10b981; font-size: 10px; margin-right: 4px;">K</span>
-                    Kunden Termine
-                </span>
-            </div>
-        `;
         
         // Calculate first day of month and number of days
         const firstDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
@@ -8665,7 +8682,10 @@ class App {
     }
 
     async loadMonthlyAppointmentIndicators() {
-        if (!this.currentStudioId || !this.currentDate) return;
+        
+        if (!this.currentStudioId || !this.currentDate) {
+            return;
+        }
         
         try {
             const startDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
@@ -8675,21 +8695,39 @@ class App {
             const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
             const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
             
-            const response = await fetch(`${window.API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDateStr}&to_date=${endDateStr}`, {
+            const apiUrl = `${window.API_BASE_URL}/api/v1/appointments/studio/${this.currentStudioId}?from_date=${startDateStr}&to_date=${endDateStr}`;
+            
+            const response = await fetch(apiUrl, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             
-            if (!response.ok) return;
+            
+            if (!response.ok) {
+                return;
+            }
             
             const data = await response.json();
             const appointments = data.appointments || [];
             
+            // Debug: Check for lead appointments  
+            const leadAppointments = appointments.filter(apt => apt.person_type === 'lead');
+            if (leadAppointments.length > 0) {
+            }
+            
             // Group appointments by date and type
             const appointmentsByDate = {};
+            
             appointments.forEach(appointment => {
-                const date = appointment.appointment_date;
+                // Normalize date format - handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss.sssZ" formats
+                let originalDate = appointment.appointment_date;
+                let date = appointment.appointment_date;
+                if (date && date.includes('T')) {
+                    date = date.split('T')[0]; // Extract just the date part
+                }
+                
+                
                 if (!appointmentsByDate[date]) {
                     appointmentsByDate[date] = {
                         leads: [],
@@ -8712,15 +8750,25 @@ class App {
             const today = new Date();
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             
+            // Debug logging for calendar indicators
+            
             // Apply density visualization to calendar day cells themselves
             const allDaysInMonth = this.getAllDaysInCurrentMonth();
+            
             allDaysInMonth.forEach(date => {
                 const dayCell = document.querySelector(`[data-date="${date}"]`);
+                const dayElement = document.getElementById(`day-${date}`);
+                
+                
                 if (dayCell) {
                     const dayData = appointmentsByDate[date] || { leads: [], customers: [], total: [] };
                     const leadCount = dayData.leads.length;
                     const customerCount = dayData.customers.length;
                     const totalCount = dayData.total.length;
+                    
+                    if (totalCount > 0) {
+                        console.log(`  - Appointments:`, dayData.total);
+                    }
                     
                     const density = Math.min(totalCount / maxAppointments, 1);
                     const isToday = date === todayStr;
@@ -8729,12 +8777,13 @@ class App {
                     this.applyDensityStylesToCell(dayCell, density, isToday, leadCount, customerCount);
                     
                     // Add visual indicators in the day element
-                    const dayElement = document.getElementById(`day-${date}`);
                     if (dayElement && (leadCount > 0 || customerCount > 0)) {
-                        dayElement.innerHTML = this.createAppointmentIndicators(leadCount, customerCount);
+                        const indicators = this.createAppointmentIndicators(leadCount, customerCount);
+                        dayElement.innerHTML = indicators;
                     } else if (dayElement) {
                         dayElement.innerHTML = '';
                     }
+                } else {
                 }
             });
             
@@ -8788,11 +8837,11 @@ class App {
         
         // Create small dot indicators
         if (leadCount > 0) {
-            indicators += `<span class="badge badge-sm" style="background-color: #f59e0b; font-size: 10px; margin-right: 2px;" title="Trial Termine">${leadCount}T</span>`;
+            indicators += `<span class="badge badge-sm" style="background-color: #f59e0b; font-size: 10px; margin-right: 2px;" title="Trial Termine">${leadCount}</span>`;
         }
         
         if (customerCount > 0) {
-            indicators += `<span class="badge badge-sm" style="background-color: #10b981; font-size: 10px;" title="Kunden Termine">${customerCount}K</span>`;
+            indicators += `<span class="badge badge-sm" style="background-color: #10b981; font-size: 10px;" title="Kunden Termine">${customerCount}</span>`;
         }
         
         return indicators;
@@ -9121,9 +9170,7 @@ class App {
         if (!this.currentUser) {
             // Guest navigation
             navItems = [
-                { icon: 'fas fa-home', text: 'Home', section: 'welcome', active: true },
-                { icon: 'fas fa-sign-in-alt', text: 'Login', section: 'login' },
-                { icon: 'fas fa-user-plus', text: 'Registrieren', section: 'register' }
+                { icon: 'fas fa-home', text: 'Home', section: 'welcome', active: true }
             ];
         } else {
             // Authenticated user navigation based on role
@@ -9139,10 +9186,6 @@ class App {
                     break;
                     
                 case 'studio_owner':
-                    // Add studio selector before navigation items
-                    const studioSelectorHTML = '<div id="studioSelector"></div>';
-                    sidebarNav.innerHTML = studioSelectorHTML;
-                    
                     navItems = [
                         { icon: 'fas fa-tachometer-alt', text: 'Dashboard', section: 'dashboard', active: true },
                         { icon: 'fas fa-calendar-alt', text: 'Termine', section: 'termine' },
@@ -9179,12 +9222,8 @@ class App {
             </li>
         `).join('');
 
-        // For studio owners, append nav items after studio selector
-        if (this.currentUser?.role === 'studio_owner') {
-            sidebarNav.innerHTML += navHTML;
-        } else {
-            sidebarNav.innerHTML = navHTML;
-        }
+        // Always replace navigation content completely
+        sidebarNav.innerHTML = navHTML;
 
         // Add click event listeners
         sidebarNav.querySelectorAll('.nav-link').forEach(link => {
@@ -9206,6 +9245,17 @@ class App {
     }
 
     navigateToSection(section) {
+        // Update sidebar active state
+        const sidebarNav = document.getElementById('sidebarNav');
+        if (sidebarNav) {
+            sidebarNav.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('data-section') === section) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
         // Clear any existing intervals when navigating away from dashboard
         if (this.metricsRefreshInterval) {
             clearInterval(this.metricsRefreshInterval);
@@ -9218,10 +9268,10 @@ class App {
                 this.showWelcomePage();
                 break;
             case 'login':
-                this.showLoginModal();
+                this.showStudioLogin();
                 break;
             case 'register':
-                this.showRegisterModal();
+                this.showStudioLogin();
                 break;
             case 'dashboard':
                 if (this.currentUser) {
@@ -9283,11 +9333,7 @@ class App {
                 }
                 break;
             case 'profile':
-                if (this.currentUser.role === 'studio_owner') {
-                    this.showStudioSetup();
-                } else {
-                    this.showProfileView();
-                }
+                this.showProfileView();
                 break;
             case 'settings':
                 this.showSettingsView();
@@ -9312,6 +9358,180 @@ class App {
             default:
                 console.log(`Navigation to ${section} not implemented yet`);
         }
+    }
+
+    // Navigate to Kunden tab with Aktive Kunden filter
+    navigateToKundenWithFilter() {
+        // Navigate to kunden section
+        this.navigateToSection('kunden');
+        
+        // Set filter to active customers after a short delay to ensure the UI is loaded
+        setTimeout(() => {
+            const filterSelect = document.getElementById('filter-status');
+            if (filterSelect) {
+                filterSelect.value = 'active_sessions';
+                // Trigger the filter change event
+                if (window.customerManagement && typeof window.customerManagement.filterByStatus === 'function') {
+                    window.customerManagement.filterByStatus('active_sessions');
+                }
+            }
+        }, 500);
+    }
+
+    // Show Auslastung settings modal
+    showAuslastungModal() {
+        // Create modal HTML
+        const modalHTML = `
+            <div class="modal fade" id="auslastungModal" tabindex="-1" aria-labelledby="auslastungModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="auslastungModalLabel">
+                                <i class="fas fa-chart-line me-2"></i>
+                                Auslastung Einstellungen
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Legen Sie fest, wie viele Termine Sie pro Woche erwarten, um die Auslastung korrekt zu berechnen.
+                            </div>
+                            <form id="auslastung-form">
+                                <div class="mb-3">
+                                    <label for="expectedWeeklyAppointments" class="form-label">Erwartete wöchentliche Termine</label>
+                                    <input type="number" class="form-control" id="expectedWeeklyAppointments" 
+                                           min="1" max="200" step="1" placeholder="z.B. 40">
+                                    <div class="form-text">Anzahl der Termine, die Sie pro Woche erwarten (inkl. Kunden- und Lead-Termine)</div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" onclick="app.saveAuslastungSettings()">
+                                <i class="fas fa-save me-2"></i>
+                                Speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if any
+        const existingModal = document.getElementById('auslastungModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Load current settings
+        this.loadCurrentAuslastungSettings();
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('auslastungModal'));
+        modal.show();
+    }
+
+    // Load current auslastung settings
+    async loadCurrentAuslastungSettings() {
+        try {
+            const studioId = this.currentStudioId;
+            if (!studioId) {
+                console.error('No studio ID available');
+                return;
+            }
+
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/settings`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const input = document.getElementById('expectedWeeklyAppointments');
+                if (input && data.settings) {
+                    input.value = data.settings.expected_weekly_appointments || 40;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading auslastung settings:', error);
+        }
+    }
+
+    // Save auslastung settings
+    async saveAuslastungSettings() {
+        const input = document.getElementById('expectedWeeklyAppointments');
+        const value = parseInt(input.value);
+
+        if (!value || value < 1 || value > 200) {
+            alert('Bitte geben Sie eine gültige Anzahl zwischen 1 und 200 ein.');
+            return;
+        }
+
+        try {
+            const studioId = this.currentStudioId;
+            if (!studioId) {
+                throw new Error('Studio ID nicht verfügbar');
+            }
+
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios/${studioId}/settings`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    expected_weekly_appointments: value
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Fehler beim Speichern der Einstellungen');
+            }
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('auslastungModal'));
+            modal.hide();
+
+            // Show success message
+            this.showSuccessNotification('Auslastung-Einstellungen erfolgreich gespeichert!');
+
+            // Refresh dashboard metrics to show updated calculation
+            this.loadDashboardMetrics();
+
+        } catch (error) {
+            console.error('Error saving auslastung settings:', error);
+            alert('Fehler beim Speichern: ' + error.message);
+        }
+    }
+
+    // Show today's appointments
+    showTodayAppointments() {
+        // Navigate to termine section which shows appointments
+        this.navigateToSection('termine');
+    }
+
+    // Show success notification
+    showSuccessNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-success position-fixed top-0 end-0 m-3';
+        notification.style.zIndex = '9999';
+        notification.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle me-2"></i>
+                ${message}
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 4000);
     }
 
     // Helper method to get current studio ID
@@ -9463,48 +9683,442 @@ class App {
         `;
     }
 
-    showProfileView() {
+    async showProfileView() {
         const content = document.getElementById('content');
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4><i class="fas fa-user me-2"></i>Mein Profil</h4>
+        
+        try {
+            // Get user profile data
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/profile`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            
+            if (!response.ok) throw new Error('Failed to load profile');
+            
+            const data = await response.json();
+            const user = data.user;
+            
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-8 mx-auto">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4><i class="fas fa-user me-2"></i>Mein Profil</h4>
+                            </div>
+                            <div class="card-body">
+                                <div id="profileError" class="alert alert-danger d-none"></div>
+                                <div id="profileSuccess" class="alert alert-success d-none"></div>
+                                
+                                <form id="profileForm">
+                                    <h5 class="mb-3">Persönliche Daten</h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="profileFirstName" class="form-label">Vorname</label>
+                                                <input type="text" class="form-control" id="profileFirstName" value="${user.firstName || ''}">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="profileLastName" class="form-label">Nachname</label>
+                                                <input type="text" class="form-control" id="profileLastName" value="${user.lastName || ''}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="mb-3">
+                                                <label for="profileEmail" class="form-label">E-Mail</label>
+                                                <input type="email" class="form-control" id="profileEmail" value="${user.email || ''}" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" class="btn btn-outline-primary w-100" id="editEmailBtn">E-Mail ändern</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="profilePhone" class="form-label">Telefon</label>
+                                        <input type="tel" class="form-control" id="profilePhone" value="${user.phone || ''}">
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="profileCity" class="form-label">Stadt</label>
+                                                <input type="text" class="form-control" id="profileCity" value="${user.city || ''}">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="profileAddress" class="form-label">Adresse</label>
+                                                <input type="text" class="form-control" id="profileAddress" value="${user.address || ''}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    ${this.currentUser.role === 'studio_owner' ? `
+                                        <h5 class="mb-3 mt-4">Studio-Einstellungen</h5>
+                                        <div class="mb-3">
+                                            <label for="machinesCount" class="form-label">Anzahl der Behandlungsgeräte</label>
+                                            <select class="form-control" id="machinesCount">
+                                                <option value="1" ${(user.machinesCount || 1) == 1 ? 'selected' : ''}>1</option>
+                                                <option value="2" ${(user.machinesCount || 1) == 2 ? 'selected' : ''}>2</option>
+                                                <option value="3" ${(user.machinesCount || 1) == 3 ? 'selected' : ''}>3</option>
+                                            </select>
+                                        </div>
+                                    ` : ''}
+                                    
+                                    <button type="submit" class="btn btn-primary" id="saveProfileBtn">Profil speichern</button>
+                                </form>
+                            </div>
                         </div>
-                        <div class="card-body">
+                    </div>
+                </div>
+            `;
+            
+            // Add form handler
+            document.getElementById('profileForm').addEventListener('submit', (e) => {
+                this.handleProfileUpdate(e);
+            });
+            
+            // Add email change handler
+            document.getElementById('editEmailBtn').addEventListener('click', () => {
+                this.showEmailChangeModal();
+            });
+            
+        } catch (error) {
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Fehler beim Laden des Profils: ${error.message}
+                </div>
+            `;
+        }
+    }
+    
+    async handleProfileUpdate(e) {
+        e.preventDefault();
+        
+        const firstName = document.getElementById('profileFirstName').value.trim();
+        const lastName = document.getElementById('profileLastName').value.trim();
+        const phone = document.getElementById('profilePhone').value.trim();
+        const city = document.getElementById('profileCity').value.trim();
+        const address = document.getElementById('profileAddress').value.trim();
+        
+        const errorDiv = document.getElementById('profileError');
+        
+        // Validate all required fields are filled
+        if (!firstName || !lastName || !phone || !city || !address) {
+            errorDiv.textContent = 'Alle Felder müssen ausgefüllt werden.';
+            errorDiv.classList.remove('d-none');
+            return;
+        }
+        
+        const formData = {
+            firstName: firstName,
+            lastName: lastName,
+            phone: phone,
+            city: city,
+            address: address
+        };
+        
+        if (this.currentUser.role === 'studio_owner') {
+            formData.machinesCount = document.getElementById('machinesCount').value;
+        }
+        
+        const saveBtn = document.getElementById('saveProfileBtn');
+        const successDiv = document.getElementById('profileSuccess');
+        
+        try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Speichere...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Speichern');
+            }
+            
+            successDiv.textContent = 'Profil erfolgreich gespeichert!';
+            successDiv.classList.remove('d-none');
+            
+            // Refresh the profile view with updated data from server
+            setTimeout(() => {
+                this.showProfileView();
+            }, 1000);
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Profil speichern';
+        }
+    }
+
+    showEmailChangeModal() {
+        const modalHTML = `
+            <div class="modal fade" id="emailChangeModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">E-Mail-Adresse ändern</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="emailChangeError" class="alert alert-danger d-none"></div>
+                            <div id="emailChangeSuccess" class="alert alert-success d-none"></div>
+                            
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>
-                                <strong>Coming Soon!</strong> Profilverwaltung ist in Entwicklung.
-                                <br><small>Hier können Sie bald Ihre persönlichen Daten verwalten.</small>
+                                <strong>Sicherheitshinweis:</strong> Zur Änderung Ihrer E-Mail-Adresse benötigen wir Ihr aktuelles Passwort. 
+                                Eine Bestätigungs-E-Mail wird an die neue Adresse gesendet.
                             </div>
+                            
+                            <form id="emailChangeForm">
+                                <div class="mb-3">
+                                    <label for="newEmail" class="form-label">Neue E-Mail-Adresse</label>
+                                    <input type="email" class="form-control" id="newEmail" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="confirmPassword" class="form-label">Aktuelles Passwort zur Bestätigung</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required>
+                                    <div class="form-text">
+                                        Geben Sie Ihr aktuelles Passwort ein, um die Änderung zu bestätigen.
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" id="confirmEmailChangeBtn">
+                                <i class="fas fa-envelope"></i> Bestätigungs-E-Mail senden
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('emailChangeModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set up event listeners
+        document.getElementById('confirmEmailChangeBtn').addEventListener('click', () => {
+            this.handleEmailChangeRequest();
+        });
+        
+        document.getElementById('emailChangeForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleEmailChangeRequest();
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('emailChangeModal'));
+        modal.show();
+    }
+
+    async handleEmailChangeRequest() {
+        const newEmail = document.getElementById('newEmail').value.trim();
+        const password = document.getElementById('confirmPassword').value;
+        const confirmBtn = document.getElementById('confirmEmailChangeBtn');
+        const errorDiv = document.getElementById('emailChangeError');
+        const successDiv = document.getElementById('emailChangeSuccess');
+
+        // Basic validation
+        if (!newEmail || !password) {
+            errorDiv.textContent = 'Bitte füllen Sie alle Felder aus.';
+            errorDiv.classList.remove('d-none');
+            successDiv.classList.add('d-none');
+            return;
+        }
+
+        if (newEmail === this.currentUser.email) {
+            errorDiv.textContent = 'Die neue E-Mail-Adresse muss sich von der aktuellen unterscheiden.';
+            errorDiv.classList.remove('d-none');
+            successDiv.classList.add('d-none');
+            return;
+        }
+
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Wird gesendet...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/request-email-change`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    newEmail: newEmail,
+                    password: password
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Fehler beim Senden der Bestätigungs-E-Mail');
+            }
+
+            successDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Bestätigungs-E-Mail gesendet!</strong><br>
+                Bitte überprüfen Sie Ihr Postfach bei <strong>${newEmail}</strong> und klicken Sie auf den Bestätigungslink, 
+                um die E-Mail-Änderung abzuschließen.
+            `;
+            successDiv.classList.remove('d-none');
+
+            // Hide form after successful request
+            document.getElementById('emailChangeForm').style.display = 'none';
+            confirmBtn.style.display = 'none';
+
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-envelope"></i> Bestätigungs-E-Mail senden';
+        }
     }
 
     showSettingsView() {
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="row">
-                <div class="col-md-12">
+                <div class="col-md-8 mx-auto">
                     <div class="card">
                         <div class="card-header">
                             <h4><i class="fas fa-cog me-2"></i>Einstellungen</h4>
                         </div>
                         <div class="card-body">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <strong>Coming Soon!</strong> Einstellungen werden bald verfügbar sein.
-                                <br><small>Hier können Sie bald Systemeinstellungen und Präferenzen konfigurieren.</small>
-                            </div>
+                            <h5 class="mb-3">Passwort ändern</h5>
+                            <div id="passwordError" class="alert alert-danger d-none"></div>
+                            <div id="passwordSuccess" class="alert alert-success d-none"></div>
+                            
+                            <form id="changePasswordForm">
+                                <div class="mb-3">
+                                    <label for="currentPassword" class="form-label">Aktuelles Passwort</label>
+                                    <input type="password" class="form-control" id="currentPassword" required>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="newPassword" class="form-label">Neues Passwort</label>
+                                            <input type="password" class="form-control" id="newPassword" required>
+                                            <div class="form-text">
+                                                Mind. 8 Zeichen, Groß-/Kleinbuchstaben und Zahl
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="confirmNewPassword" class="form-label">Neues Passwort wiederholen</label>
+                                            <input type="password" class="form-control" id="confirmNewPassword" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" id="changePasswordBtn">Passwort ändern</button>
+                            </form>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+        
+        // Add form handler
+        document.getElementById('changePasswordForm').addEventListener('submit', (e) => {
+            this.handlePasswordChange(e);
+        });
+    }
+    
+    async handlePasswordChange(e) {
+        e.preventDefault();
+        
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmNewPassword').value;
+        
+        // Validate password confirmation
+        if (newPassword !== confirmPassword) {
+            const errorDiv = document.getElementById('passwordError');
+            errorDiv.textContent = 'Neue Passwörter stimmen nicht überein';
+            errorDiv.classList.remove('d-none');
+            return;
+        }
+        
+        const formData = {
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+            confirmPassword: confirmPassword
+        };
+        
+        const changeBtn = document.getElementById('changePasswordBtn');
+        const errorDiv = document.getElementById('passwordError');
+        const successDiv = document.getElementById('passwordSuccess');
+        
+        try {
+            changeBtn.disabled = true;
+            changeBtn.textContent = 'Ändere Passwort...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Ändern des Passworts');
+            }
+            
+            successDiv.textContent = 'Passwort erfolgreich geändert!';
+            successDiv.classList.remove('d-none');
+            
+            // Clear form
+            document.getElementById('changePasswordForm').reset();
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            changeBtn.disabled = false;
+            changeBtn.textContent = 'Passwort ändern';
+        }
     }
 
 }

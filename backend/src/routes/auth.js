@@ -6,7 +6,8 @@ const {
   validateLogin, 
   validateProfileUpdate, 
   validateCustomerRegistration,
-  validateStudioRegistration 
+  validateStudioRegistration,
+  validatePasswordChange 
 } = require('../middleware/validation');
 
 const router = express.Router();
@@ -27,6 +28,8 @@ router.post('/register-customer-enhanced', validateCustomerRegistration, authCon
 // Protected routes
 router.get('/profile', authenticate, authController.getProfile);
 router.put('/profile', authenticate, validateProfileUpdate, authController.updateProfile);
+router.post('/change-password', authenticate, validatePasswordChange, authController.changePassword);
+router.post('/request-email-change', authenticate, authController.requestEmailChange);
 router.post('/logout', authenticate, authController.logout);
 
 module.exports = router;

@@ -259,18 +259,20 @@ class AuthController {
     try {
       const userId = req.user.userId;
 
-      const user = await new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const user = await db.get('SELECT * FROM users WHERE id = ? AND is_active = 1', [userId]);
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      res.json({
+      // Get additional data for studio owners
+      let machinesCount = null;
+      if (user.role === 'studio_owner') {
+        const studio = await db.get('SELECT machine_count FROM studios WHERE owner_id = ?', [userId]);
+        machinesCount = studio ? studio.machine_count : 1;
+      }
+
+      const responseData = {
         user: {
           id: user.id,
           email: user.email,
@@ -278,9 +280,18 @@ class AuthController {
           firstName: user.first_name,
           lastName: user.last_name,
           phone: user.phone,
+          city: user.city,
+          address: user.address,
           createdAt: user.created_at
         }
-      });
+      };
+
+      // Add machine count for studio owners
+      if (user.role === 'studio_owner') {
+        responseData.user.machinesCount = machinesCount;
+      }
+
+      res.json(responseData);
 
     } catch (error) {
       console.error('Profile error:', error);
@@ -297,12 +308,13 @@ class AuthController {
       }
 
       const userId = req.user.userId;
-      const { firstName, lastName, phone } = req.body;
+      const { firstName, lastName, phone, city, address, machinesCount } = req.body;
 
+      // Update user table with personal info
       await new Promise((resolve, reject) => {
         db.run(
-          'UPDATE users SET first_name = ?, last_name = ?, phone = ?, updated_at = datetime("now") WHERE id = ?',
-          [firstName, lastName, phone, userId],
+          'UPDATE users SET first_name = ?, last_name = ?, phone = ?, city = ?, address = ?, updated_at = datetime("now") WHERE id = ?',
+          [firstName, lastName, phone, city, address, userId],
           (err) => {
             if (err) reject(err);
             else resolve();
@@ -310,10 +322,141 @@ class AuthController {
         );
       });
 
+      // If studio owner and machinesCount provided, update studio
+      if (req.user.role === 'studio_owner' && machinesCount !== undefined) {
+        await db.run(
+          'UPDATE studios SET machine_count = ? WHERE owner_id = ?',
+          [machinesCount, userId]
+        );
+      }
+
       res.json({ message: 'Profile updated successfully' });
 
     } catch (error) {
       console.error('Profile update error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  // Change user password
+  async changePassword(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const userId = req.user.userId;
+      const { currentPassword, newPassword } = req.body;
+
+      // Get user from database
+      const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+      
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Current password is incorrect' });
+      }
+
+      // Hash new password
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update password in database
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE users SET password_hash = ?, updated_at = datetime("now") WHERE id = ?',
+          [hashedPassword, userId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      res.json({ message: 'Password changed successfully' });
+
+    } catch (error) {
+      console.error('Password change error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  // Request email change with password verification
+  async requestEmailChange(req, res) {
+    try {
+      const userId = req.user.userId;
+      const { newEmail, password } = req.body;
+
+      if (!newEmail || !password) {
+        return res.status(400).json({ message: 'Neue E-Mail und Passwort sind erforderlich' });
+      }
+
+      // Get user from database
+      const user = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM users WHERE id = ?', [userId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      if (!isPasswordValid) {
+        return res.status(400).json({ message: 'Ungültiges Passwort' });
+      }
+
+      // Check if new email is already in use
+      const existingUser = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM users WHERE email = ? AND id != ?', [newEmail, userId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (existingUser) {
+        return res.status(400).json({ message: 'Diese E-Mail-Adresse wird bereits verwendet' });
+      }
+
+      // Generate email change token
+      const emailChangeToken = crypto.randomBytes(32).toString('hex');
+      const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Store email change request
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE users SET email_change_token = ?, email_change_token_expires = ?, new_email_pending = ? WHERE id = ?',
+          [emailChangeToken, tokenExpires.toISOString(), newEmail, userId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      // Send verification email (in a real app, you would send this via email service)
+      const verificationUrl = `${req.protocol}://${req.get('host')}/verify-email-change?token=${emailChangeToken}`;
+      
+      // For now, just log the verification URL (in production, send email)
+      console.log(`Email change verification URL for ${newEmail}: ${verificationUrl}`);
+
+      res.json({ 
+        message: 'Bestätigungs-E-Mail wurde gesendet',
+        // In development, also return the token for testing
+        ...(process.env.NODE_ENV === 'development' && { verificationUrl })
+      });
+
+    } catch (error) {
+      console.error('Email change request error:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -484,10 +627,10 @@ class AuthController {
         firstName, 
         lastName, 
         phone,
-        studioName,
-        studioAddress,
-        studioCity,
-        studioPhone
+        city,
+        address,
+        termsAccepted,
+        privacyAccepted
       } = req.body;
 
       // Check if email already exists
@@ -502,6 +645,13 @@ class AuthController {
 
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Validate legal compliance
+      if (!termsAccepted || !privacyAccepted) {
+        return res.status(400).json({ 
+          message: 'You must accept the terms and conditions and privacy policy' 
+        });
+      }
 
       // Generate verification token
       const verificationToken = emailService.generateVerificationToken();
@@ -521,11 +671,17 @@ class AuthController {
               first_name, 
               last_name, 
               phone,
+              city,
+              address,
+              terms_accepted,
+              terms_accepted_at,
+              privacy_accepted,
+              privacy_accepted_at,
               email_verified,
               email_verification_token,
               email_verification_expires
-            ) VALUES (?, ?, 'studio_owner', ?, ?, ?, FALSE, ?, ?)`,
-            [email, hashedPassword, firstName, lastName, phone, verificationToken, tokenExpiry],
+            ) VALUES (?, ?, 'studio_owner', ?, ?, ?, ?, ?, TRUE, datetime('now'), TRUE, datetime('now'), FALSE, ?, ?)`,
+            [email, hashedPassword, firstName, lastName, phone, city, address, verificationToken, tokenExpiry],
             function(err) {
               if (err) reject(err);
               else resolve(this.lastID);
@@ -533,52 +689,15 @@ class AuthController {
           );
         });
 
-        // Format studio name as "AIL CityName" if not already formatted
-        let finalStudioName = studioName;
-        if (!studioName.toLowerCase().startsWith('ail ')) {
-          finalStudioName = `AIL ${studioCity}`;
-        }
-
-        // Determine studio unique identifier based on city
-        let uniqueIdentifier = 'STU';
-        const cityLower = studioCity.toLowerCase();
-        
-        if (cityLower.includes('berlin')) uniqueIdentifier = 'BER';
-        else if (cityLower.includes('munich') || cityLower.includes('münchen')) uniqueIdentifier = 'MUC';
-        else if (cityLower.includes('hamburg')) uniqueIdentifier = 'HAM';
-        else if (cityLower.includes('frankfurt')) uniqueIdentifier = 'FRA';
-        else if (cityLower.includes('cologne') || cityLower.includes('köln')) uniqueIdentifier = 'CGN';
-        else if (cityLower.includes('stuttgart')) uniqueIdentifier = 'STR';
-        else if (cityLower.includes('düsseldorf')) uniqueIdentifier = 'DUS';
-        else if (cityLower.includes('leipzig')) uniqueIdentifier = 'LEJ';
-        else if (cityLower.includes('dresden')) uniqueIdentifier = 'DRS';
-        else if (cityLower.includes('hannover') || cityLower.includes('hanover')) uniqueIdentifier = 'HAJ';
-
-        // Create studio (inactive until email verified)
-        const studioId = await new Promise((resolve, reject) => {
-          db.run(
-            `INSERT INTO studios (
-              owner_id,
-              name,
-              address,
-              city,
-              phone,
-              unique_identifier,
-              is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, FALSE)`,
-            [userId, finalStudioName, studioAddress, studioCity, studioPhone, uniqueIdentifier],
-            function(err) {
-              if (err) reject(err);
-              else resolve(this.lastID);
-            }
-          );
-        });
+        // Note: Studio will be created after email verification
+        // This follows the proper registration flow:
+        // User → Email Verification → Studio Creation → Activation
 
         // Send verification email
         const emailResult = await emailService.sendStudioVerificationEmail(
           email,
           verificationToken,
-          finalStudioName,
+          `AIL ${city}`, // Temporary studio name for email
           `${firstName} ${lastName}`
         );
 
@@ -638,18 +757,66 @@ class AuthController {
         [user.id]
       );
 
-      // If studio owner, activate their studio
+      // If studio owner, create and activate their studio
       if (user.role === 'studio_owner') {
-        await db.run(
-          'UPDATE studios SET is_active = TRUE WHERE owner_id = ?',
-          [user.id]
-        );
-
-        // Get studio info
-        const studio = await db.get(
+        // Check if studio already exists
+        let studio = await db.get(
           'SELECT * FROM studios WHERE owner_id = ?',
           [user.id]
         );
+
+        if (!studio) {
+          // Create studio with auto-generated name based on city
+          const finalStudioName = `AIL ${user.city || 'Studio'}`;
+          
+          // Generate enhanced unique identifier: {CITY_3_LETTERS}-{SEQUENCE}{RANDOM_LETTER}
+          const cityName = user.city || 'STU';
+          const cityPrefix = cityName.toUpperCase().substring(0, 3).padEnd(3, 'X');
+          
+          // Get sequence number for this city prefix
+          const existingStudios = await db.all(
+            'SELECT unique_identifier FROM studios WHERE unique_identifier LIKE ?',
+            [`${cityPrefix}-%`]
+          );
+          const sequenceNumber = existingStudios.length + 1;
+          
+          // Generate random letter (exclude confusing characters: I, O, 0, 1)
+          const randomLetters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+          const randomLetter = randomLetters[Math.floor(Math.random() * randomLetters.length)];
+          
+          const uniqueIdentifier = `${cityPrefix}-${sequenceNumber}${randomLetter}`;
+          
+          // Create the studio
+          const studioId = await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO studios (
+                owner_id,
+                name,
+                address,
+                city,
+                unique_identifier,
+                is_active
+              ) VALUES (?, ?, ?, ?, ?, TRUE)`,
+              [user.id, finalStudioName, user.address, user.city, uniqueIdentifier],
+              function(err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+              }
+            );
+          });
+          
+          // Get the newly created studio
+          studio = await db.get(
+            'SELECT * FROM studios WHERE id = ?',
+            [studioId]
+          );
+        } else {
+          // Activate existing studio
+          await db.run(
+            'UPDATE studios SET is_active = TRUE WHERE owner_id = ?',
+            [user.id]
+          );
+        }
 
         // Send welcome email
         await emailService.sendWelcomeEmail(

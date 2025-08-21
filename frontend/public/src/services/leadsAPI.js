@@ -1,5 +1,4 @@
 // Studio Owner Leads API Service - LOADED AT: 1753731733
-console.log('🚀 LOADING leadsAPI.js at timestamp:', new Date().toISOString());
 
 class LeadsAPI {
     constructor() {
@@ -101,7 +100,6 @@ class LeadsAPI {
         try {
             // Status values now match directly with database
             const dbStatus = status;
-            console.log('🔄 Updating lead status:', leadId, 'to status:', dbStatus);
 
             const response = await fetch(`${this.baseURL}/leads/${leadId}/status`, {
                 method: 'PATCH',
@@ -272,12 +270,9 @@ class LeadsAPI {
             { value: 'kontaktiert', label: 'Kontaktiert' },
             { value: 'konvertiert', label: 'Konvertiert' }
         ];
-        console.log('🎯 getAvailableStatuses() called - returning 3 options:', options);
         return options;
     }
 }
 
 // Global instance
 window.leadsAPI = new LeadsAPI();
-console.log('✅ window.leadsAPI created:', window.leadsAPI);
-console.log('✅ getAvailableStatuses available:', typeof window.leadsAPI.getAvailableStatuses === 'function');

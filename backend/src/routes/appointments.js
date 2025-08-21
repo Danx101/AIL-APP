@@ -20,32 +20,40 @@ router.get('/', (req, res) => {
 // Get appointments for a studio
 router.get('/studio/:studioId', async (req, res) => {
   try {
+    console.log('[APPOINTMENTS API] GET /studio/:studioId called');
+    console.log('[APPOINTMENTS API] studioId:', req.params.studioId);
+    console.log('[APPOINTMENTS API] query params:', req.query);
+    console.log('[APPOINTMENTS API] user:', req.user);
+    
+    // Auto-update past appointment statuses
+    const Appointment = require('../models/Appointment');
+    await Appointment.updatePastAppointmentStatuses();
+    
     const { studioId } = req.params;
     const { date, from_date, to_date } = req.query;
     
     let query = `
       SELECT 
-        a.*,
-        CASE 
-          WHEN a.person_type = 'customer' THEN c.contact_first_name
-          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', 1)
-          ELSE 'Unknown'
-        END as customer_first_name,
-        CASE 
-          WHEN a.person_type = 'customer' THEN c.contact_last_name
-          WHEN a.person_type = 'lead' THEN SUBSTRING_INDEX(l.name, ' ', -1)
-          ELSE 'Person'
-        END as customer_last_name,
-        CASE 
-          WHEN a.person_type = 'customer' THEN c.contact_email
-          WHEN a.person_type = 'lead' THEN l.email
-          ELSE NULL
-        END as customer_email,
-        CASE 
-          WHEN a.person_type = 'customer' THEN c.contact_phone
-          WHEN a.person_type = 'lead' THEN l.phone_number
-          ELSE NULL
-        END as customer_phone,
+        'customer' as appointment_source,
+        a.id,
+        a.studio_id,
+        a.customer_id,
+        a.customer_ref_id,
+        NULL as lead_id,
+        'customer' as person_type,
+        a.appointment_type_id,
+        a.appointment_date,
+        a.start_time,
+        a.end_time,
+        a.status,
+        a.notes,
+        a.created_by_user_id,
+        a.created_at,
+        a.updated_at,
+        COALESCE(c.contact_first_name, '') as customer_first_name,
+        COALESCE(c.contact_last_name, '') as customer_last_name,
+        c.contact_email as customer_email,
+        c.contact_phone as customer_phone,
         at.name as appointment_type_name,
         at.duration_minutes,
         at.color as appointment_type_color,
@@ -53,28 +61,77 @@ router.get('/studio/:studioId', async (req, res) => {
         cs.remaining_sessions,
         s.machine_count
       FROM appointments a
-      LEFT JOIN customers c ON a.customer_ref_id = c.id AND a.person_type = 'customer'
-      LEFT JOIN leads l ON a.lead_id = l.id AND a.person_type = 'lead'
+      LEFT JOIN customers c ON a.customer_ref_id = c.id
       LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
       LEFT JOIN customer_sessions cs ON cs.customer_id = c.id AND cs.status = 'active'
       LEFT JOIN studios s ON a.studio_id = s.id
       WHERE a.studio_id = ?
+
+      UNION ALL
+
+      SELECT 
+        'lead' as appointment_source,
+        la.id,
+        la.studio_id,
+        NULL as customer_id,
+        NULL as customer_ref_id,
+        la.lead_id,
+        'lead' as person_type,
+        la.appointment_type_id,
+        la.appointment_date,
+        la.start_time,
+        la.end_time,
+        la.status,
+        la.notes,
+        la.created_by_user_id,
+        la.created_at,
+        la.updated_at,
+        SUBSTRING_INDEX(l.name, ' ', 1) as customer_first_name,
+        SUBSTRING_INDEX(l.name, ' ', -1) as customer_last_name,
+        l.email as customer_email,
+        l.phone_number as customer_phone,
+        at.name as appointment_type_name,
+        at.duration_minutes,
+        at.color as appointment_type_color,
+        at.consumes_session,
+        NULL as remaining_sessions,
+        s.machine_count
+      FROM lead_appointments la
+      LEFT JOIN leads l ON la.lead_id = l.id
+      LEFT JOIN appointment_types at ON la.appointment_type_id = at.id
+      LEFT JOIN studios s ON la.studio_id = s.id
+      WHERE la.studio_id = ?
     `;
     
-    const params = [studioId];
+    // Build params array based on filter type
+    let params = [];
+    let dateFilter = '';
     
-    // Handle date filtering
     if (date) {
-      query += ' AND a.appointment_date = ?';
-      params.push(date);
+      // Single date filter: studio_id, date for first query, then studio_id, date for second query
+      dateFilter = ' AND appointment_date = ?';
+      params = [studioId, date, studioId, date];
     } else if (from_date && to_date) {
-      query += ' AND a.appointment_date >= ? AND a.appointment_date <= ?';
-      params.push(from_date, to_date);
+      // Date range filter: studio_id, from, to for first query, then studio_id, from, to for second query
+      dateFilter = ' AND appointment_date >= ? AND appointment_date <= ?';
+      params = [studioId, from_date, to_date, studioId, from_date, to_date];
+    } else {
+      // No date filter: just studio_id for each query
+      params = [studioId, studioId];
     }
     
-    query += ' ORDER BY a.appointment_date, a.start_time';
+    // Apply date filter to both parts of UNION by replacing WHERE clauses
+    if (dateFilter) {
+      query = query.replace('WHERE a.studio_id = ?', `WHERE a.studio_id = ?${dateFilter}`);
+      query = query.replace('WHERE la.studio_id = ?', `WHERE la.studio_id = ?${dateFilter}`);
+    }
+    
+    query += ' ORDER BY appointment_date, start_time';
     
     const appointments = await db.all(query, params);
+    
+    console.log('[APPOINTMENTS API] Query result:', appointments.length, 'appointments found');
+    console.log('[APPOINTMENTS API] Sample appointments:', appointments.slice(0, 2));
     
     res.json({ appointments });
   } catch (error) {

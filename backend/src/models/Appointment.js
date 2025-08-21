@@ -299,9 +299,10 @@ class Appointment {
 
   /**
    * Check for time conflicts considering studio machine count and appointment types
+   * Includes both customer appointments AND lead appointments in conflict detection
    * Beratung can overlap with Behandlung, but only 1 Beratung at a time
    */
-  static async checkConflicts(studioId, appointmentDate, startTime, endTime, excludeId = null, appointmentTypeId = null) {
+  static async checkConflicts(studioId, appointmentDate, startTime, endTime, excludeId = null, appointmentTypeId = null, appointmentSource = 'customer') {
     return new Promise(async (resolve, reject) => {
       try {
         // First, get the studio's machine count and appointment type info
@@ -369,38 +370,74 @@ class Appointment {
             return;
           }
           
-          // For Behandlung, check against other Behandlungen only (not Beratung)
-          let conflictQuery = `
+          // For Behandlung and Probebehandlung, check against ALL machine-consuming appointments
+          // Count overlapping customer appointments (Behandlung)
+          let customerQuery = `
             SELECT COUNT(*) as count
             FROM appointments a
             JOIN appointment_types at ON a.appointment_type_id = at.id
             WHERE a.studio_id = ? 
               AND a.appointment_date = ? 
               AND at.name = 'Behandlung'
-              AND a.status NOT IN ('cancelled', 'no_show')
+              AND a.status NOT IN ('cancelled', 'storniert', 'no_show', 'nicht_erschienen')
               AND (
                 (a.start_time < ? AND a.end_time > ?) OR
                 (a.start_time < ? AND a.end_time > ?) OR
                 (a.start_time >= ? AND a.end_time <= ?)
               )
           `;
-
-          const params = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
-
-          if (excludeId) {
-            conflictQuery += ' AND a.id != ?';
-            params.push(excludeId);
+          
+          const customerParams = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
+          
+          // Exclude current appointment if updating customer appointment
+          if (excludeId && appointmentSource === 'customer') {
+            customerQuery += ' AND a.id != ?';
+            customerParams.push(excludeId);
           }
 
-          db.get(conflictQuery, params, (err, row) => {
-            if (err) {
-              reject(err);
-            } else {
-              // If the number of overlapping Behandlung appointments is >= machine count, there's a conflict
-              const hasConflict = row.count >= machineCount;
-              resolve(hasConflict);
-            }
-          });
+          // Count overlapping lead appointments (Probebehandlung)  
+          let leadQuery = `
+            SELECT COUNT(*) as count
+            FROM lead_appointments la
+            JOIN appointment_types at ON la.appointment_type_id = at.id
+            WHERE la.studio_id = ? 
+              AND la.appointment_date = ? 
+              AND at.name = 'Probebehandlung'
+              AND la.status NOT IN ('abgesagt', 'nicht_erschienen')
+              AND (
+                (la.start_time < ? AND la.end_time > ?) OR
+                (la.start_time < ? AND la.end_time > ?) OR
+                (la.start_time >= ? AND la.end_time <= ?)
+              )
+          `;
+          
+          const leadParams = [studioId, appointmentDate, startTime, startTime, endTime, endTime, startTime, endTime];
+          
+          // Exclude current appointment if updating lead appointment
+          if (excludeId && appointmentSource === 'lead') {
+            leadQuery += ' AND la.id != ?';
+            leadParams.push(excludeId);
+          }
+
+          // Execute both queries and combine results
+          Promise.all([
+            new Promise((resolve, reject) => {
+              db.get(customerQuery, customerParams, (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.count || 0);
+              });
+            }),
+            new Promise((resolve, reject) => {
+              db.get(leadQuery, leadParams, (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.count || 0);
+              });
+            })
+          ]).then(([customerCount, leadCount]) => {
+            const totalOverlapping = customerCount + leadCount;
+            const hasConflict = totalOverlapping >= machineCount;
+            resolve(hasConflict);
+          }).catch(reject);
         });
       } catch (error) {
         reject(error);
@@ -411,49 +448,63 @@ class Appointment {
   /**
    * Auto-update appointment statuses based on date and current status
    * Changes past 'confirmed' appointments to 'completed' when appointment end time has passed
+   * Also updates lead appointments from 'geplant' to 'abgeschlossen'
    */
   static async updatePastAppointmentStatuses() {
     return new Promise(async (resolve, reject) => {
       try {
         // Get current date and time for comparison
         const now = new Date();
+        // Use local time for the server's timezone (likely Europe/Berlin)
         const currentDate = now.toISOString().split('T')[0];
-        const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+        const currentTime = now.toTimeString().split(' ')[0].substring(0, 8); // Include seconds
         
-        console.log(`Checking for past appointments to auto-complete. Current date/time: ${currentDate} ${currentTime}`);
+        console.log(`[AUTO-UPDATE] Checking for past appointments. Current: ${currentDate} ${currentTime} (Server time: ${now.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})`);
+        
+        // Update lead appointments first
+        const LeadAppointment = require('./LeadAppointment');
+        const leadUpdatedCount = await LeadAppointment.updatePastAppointmentStatuses();
         
         // First, get all confirmed appointments that have ended (end time has passed)
+        // Account for Vienna timezone (UTC+2) by adding 2 hours to MySQL UTC time
         const appointmentsToComplete = await new Promise((resolveQuery, rejectQuery) => {
           const query = `
             SELECT a.*, at.consumes_session 
             FROM appointments a
             LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-            WHERE (a.appointment_date < ? OR (a.appointment_date = ? AND a.end_time <= ?))
-              AND (a.status = 'confirmed' OR a.status = 'bestätigt')
+            WHERE (
+              DATE(a.appointment_date) < DATE(DATE_ADD(NOW(), INTERVAL 2 HOUR))
+              OR (DATE(a.appointment_date) = DATE(DATE_ADD(NOW(), INTERVAL 2 HOUR)) AND a.end_time <= TIME(DATE_ADD(NOW(), INTERVAL 2 HOUR)))
+            )
+              AND (a.status IN ('confirmed', 'bestätigt', 'scheduled', 'pending', 'geplant'))
           `;
 
-          db.all(query, [currentDate, currentDate, currentTime], (err, rows) => {
+          db.all(query, [], (err, rows) => {
             if (err) rejectQuery(err);
             else resolveQuery(rows || []);
           });
         });
 
         if (appointmentsToComplete.length === 0) {
-          console.log('No appointments to auto-complete');
-          return resolve(0);
+          console.log(`No customer appointments to auto-complete (${leadUpdatedCount} lead appointments updated)`);
+          return resolve(leadUpdatedCount);
         }
 
         console.log(`Found ${appointmentsToComplete.length} appointments to auto-complete`);
 
-        // Update appointment statuses to 'abgeschlossen' (German completed status)
+        // Update appointment statuses to 'completed' (or 'abgeschlossen' for German)
+        // Account for Vienna timezone (UTC+2) by adding 2 hours to MySQL UTC time
         const updateQuery = `
           UPDATE appointments 
-          SET status = 'abgeschlossen', updated_at = CURRENT_TIMESTAMP
-          WHERE (appointment_date < ? OR (appointment_date = ? AND end_time <= ?))
-            AND (status = 'confirmed' OR status = 'bestätigt')
+          SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+          WHERE (
+            DATE(appointment_date) < DATE(DATE_ADD(NOW(), INTERVAL 2 HOUR))
+            OR (DATE(appointment_date) = DATE(DATE_ADD(NOW(), INTERVAL 2 HOUR)) AND end_time <= TIME(DATE_ADD(NOW(), INTERVAL 2 HOUR)))
+          )
+            AND (status IN ('confirmed', 'bestätigt', 'scheduled', 'pending', 'geplant'))
         `;
 
-        db.run(updateQuery, [currentDate, currentDate, currentTime], async (err) => {
+        db.run(updateQuery, [], async (err) => {
           if (err) {
             return reject(err);
           }
@@ -481,8 +532,8 @@ class Appointment {
             }
           }
 
-          console.log(`✅ Updated ${appointmentsToComplete.length} past appointments to completed, deducted ${sessionDeductions} sessions`);
-          resolve(appointmentsToComplete.length);
+          console.log(`✅ Updated ${appointmentsToComplete.length} past customer appointments to completed, deducted ${sessionDeductions} sessions (${leadUpdatedCount} lead appointments also updated)`);
+          resolve(appointmentsToComplete.length + leadUpdatedCount);
         });
 
       } catch (error) {

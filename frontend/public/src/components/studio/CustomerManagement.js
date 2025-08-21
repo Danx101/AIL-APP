@@ -111,12 +111,12 @@ class CustomerManagement {
 
                 <!-- Statistics -->
                 <div class="row g-3 mb-4">
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex align-items-center">
                                     <div class="icon-circle bg-primary bg-opacity-10">
-                                        <i class="bi bi-people text-primary"></i>
+                                        <i class="bi bi-people icon-very-light"></i>
                                     </div>
                                     <div class="ms-3">
                                         <div class="fs-4 fw-bold text-primary" id="stat-total">0</div>
@@ -126,46 +126,16 @@ class CustomerManagement {
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex align-items-center">
                                     <div class="icon-circle bg-success bg-opacity-10">
-                                        <i class="bi bi-phone text-success"></i>
+                                        <i class="bi bi-check-circle icon-deep-green"></i>
                                     </div>
                                     <div class="ms-3">
-                                        <div class="fs-4 fw-bold text-success" id="stat-registered">0</div>
-                                        <div class="text-muted small">App Benutzer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="icon-circle bg-warning bg-opacity-10">
-                                        <i class="bi bi-box-seam text-warning"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="fs-4 fw-bold text-warning" id="stat-active-blocks">0</div>
-                                        <div class="text-muted small">Aktive Blöcke</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="icon-circle bg-info bg-opacity-10">
-                                        <i class="bi bi-receipt text-info"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="fs-4 fw-bold text-info" id="stat-sessions">0</div>
-                                        <div class="text-muted small">Behandlungen Gesamt</div>
+                                        <div class="fs-4 fw-bold text-success" id="stat-active">0</div>
+                                        <div class="text-muted small">Aktive Kunden</div>
                                     </div>
                                 </div>
                             </div>
@@ -177,7 +147,7 @@ class CustomerManagement {
                 <div class="card border-0 shadow-sm mb-4">
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-5">
+                            <div class="col-md-6">
                                 <div class="input-group">
                                     <span class="input-group-text">
                                         <i class="bi bi-search"></i>
@@ -192,31 +162,22 @@ class CustomerManagement {
                             <div class="col-md-3">
                                 <select class="form-select" id="filter-status" onchange="customerManagement.filterByStatus(this.value)">
                                     <option value="all">Alle Kunden</option>
-                                    <option value="registered">App Benutzer</option>
-                                    <option value="not_registered">Nicht registriert</option>
-                                    <option value="active_sessions">Mit aktiven Sessions</option>
-                                    <option value="no_sessions">Keine aktiven Sessions</option>
+                                    <option value="active_sessions">Aktive Kunden</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="btn-group w-100" role="group">
-                                    <button type="button" class="btn btn-outline-secondary ${this.viewMode === 'cards' ? 'active' : ''}" 
+                                    <button type="button" class="btn view-toggle-btn ${this.viewMode === 'cards' ? 'view-active' : ''}" 
                                             onclick="customerManagement.setViewMode('cards')"
                                             title="Card View">
                                         <i class="bi bi-grid-3x2-gap"></i>
                                     </button>
-                                    <button type="button" class="btn btn-outline-secondary ${this.viewMode === 'list' ? 'active' : ''}" 
+                                    <button type="button" class="btn view-toggle-btn ${this.viewMode === 'list' ? 'view-active' : ''}" 
                                             onclick="customerManagement.setViewMode('list')"
                                             title="List View">
                                         <i class="bi bi-list-ul"></i>
                                     </button>
                                 </div>
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-outline-secondary w-100" onclick="customerManagement.loadCustomers()">
-                                    <i class="bi bi-arrow-clockwise me-1"></i>
-                                    Aktualisieren
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -235,7 +196,7 @@ class CustomerManagement {
             ${this.renderModals()}
 
             <style>
-                .customer-management { padding: 20px; }
+                .customer-management { padding: 0; }
                 .icon-circle {
                     width: 48px;
                     height: 48px;
@@ -315,6 +276,33 @@ class CustomerManagement {
                 }
                 .block-indicator.active { background: #28a745; }
                 .block-indicator.inactive { background: #6c757d; }
+                .view-toggle-btn {
+                    border: 1px solid #B8A8D8;
+                    color: #B8A8D8;
+                    background: transparent;
+                    transition: all 0.2s;
+                }
+                .view-toggle-btn:hover {
+                    border-color: #B8A8D8;
+                    color: #B8A8D8;
+                    background: rgba(184, 168, 216, 0.1);
+                }
+                .view-toggle-btn.view-active {
+                    background: #B8A8D8;
+                    border-color: #B8A8D8;
+                    color: white;
+                }
+                .view-toggle-btn.view-active:hover {
+                    background: #B8A8D8;
+                    border-color: #B8A8D8;
+                    color: white;
+                }
+                .icon-very-light {
+                    color: #E8DDF0 !important;
+                }
+                .icon-deep-green {
+                    color: #198754 !important;
+                }
             </style>
         `;
     }
@@ -380,7 +368,7 @@ class CustomerManagement {
                                         '<span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-phone-fill me-1"></i>App Benutzer</span>' :
                                         '<span class="badge bg-warning bg-opacity-10 text-warning"><i class="bi bi-clock me-1"></i>Nicht registriert</span>'}
                                     ${hasActiveSessions ? 
-                                        '<span class="badge bg-info bg-opacity-10 text-info"><i class="bi bi-check-circle me-1"></i>Aktiv</span>' :
+                                        '<span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-check-circle me-1"></i>Aktiv</span>' :
                                         '<span class="badge bg-secondary bg-opacity-10 text-secondary">Inaktiv</span>'}
                                 </div>
                             </div>
@@ -406,11 +394,11 @@ class CustomerManagement {
                             <small class="text-muted d-block mb-1">Behandlungen</small>
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="fs-5 fw-bold ${hasActiveSessions ? 'text-info' : 'text-secondary'}">${customer.remaining_sessions}</span>
+                                    <span class="fs-5 fw-bold ${hasActiveSessions ? 'text-success' : 'text-secondary'}">${customer.remaining_sessions}</span>
                                     <span class="text-muted">/ ${customer.total_sessions_purchased}</span>
                                 </div>
                                 <div class="progress" style="width: 100px; height: 8px;">
-                                    <div class="progress-bar ${hasActiveSessions ? 'bg-info' : 'bg-secondary'}" 
+                                    <div class="progress-bar ${hasActiveSessions ? 'bg-success' : 'bg-secondary'}" 
                                          style="width: ${(customer.remaining_sessions / customer.total_sessions_purchased * 100) || 0}%"></div>
                                 </div>
                             </div>
@@ -422,12 +410,6 @@ class CustomerManagement {
                             ${customer.contact_email ? `<div class="text-truncate"><i class="bi bi-envelope me-1"></i>${customer.contact_email}</div>` : ''}
                         </div>
 
-                        <!-- Action Buttons -->
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); customerManagement.showCustomerDetails(${customer.id})">
-                                <i class="bi bi-eye me-1"></i>Details anzeigen
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -491,7 +473,7 @@ class CustomerManagement {
                 </td>
                 <td>
                     <div>
-                        <span class="badge ${hasActiveSessions ? 'bg-info' : 'bg-secondary'}">
+                        <span class="badge ${hasActiveSessions ? 'bg-success' : 'bg-secondary'}">
                             ${customer.remaining_sessions}/${customer.total_sessions_purchased} sessions
                         </span>
                     </div>
@@ -755,11 +737,6 @@ class CustomerManagement {
                                     <small class="text-muted">Anzahl der abgeschlossenen Behandlungen eingeben</small>
                                 </div>
 
-                                <div class="mb-3">
-                                    <label class="form-label">Grund/Notizen</label>
-                                    <textarea class="form-control" id="consume-reason" rows="2" 
-                                              placeholder="z.B. Regulärer Termin, Nachholtermin"></textarea>
-                                </div>
                             </form>
                         </div>
                         <div class="modal-footer">
@@ -800,8 +777,8 @@ class CustomerManagement {
 
                                 <div class="mb-3">
                                     <label class="form-label">Grund <span class="text-danger">*</span></label>
-                                    <textarea class="form-control" id="refund-reason" rows="2" required
-                                              placeholder="z.B. Termin abgesagt, Fehler beim Verbrauch"></textarea>
+                                    <input type="text" class="form-control" id="refund-reason" required
+                                           placeholder="z.B. Termin abgesagt, Fehler beim Verbrauch">
                                 </div>
                             </form>
                         </div>
@@ -810,6 +787,48 @@ class CustomerManagement {
                             <button type="button" class="btn btn-success" onclick="customerManagement.refundSessions()">
                                 <i class="bi bi-check-circle me-1"></i>
                                 Behandlungen erstatten
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Contact Modal -->
+            <div class="modal fade" id="editContactModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-pencil me-2"></i>
+                                Kontaktinformationen bearbeiten
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="edit-contact-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Vorname <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="edit-first-name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Nachname <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="edit-last-name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Telefon <span class="text-danger">*</span></label>
+                                    <input type="tel" class="form-control" id="edit-phone" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">E-Mail</label>
+                                    <input type="email" class="form-control" id="edit-email">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="button" class="btn btn-primary" onclick="customerManagement.updateContact()">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Speichern
                             </button>
                         </div>
                     </div>
@@ -919,6 +938,9 @@ class CustomerManagement {
             const historyBlocks = sessionBlocks.filter(s => s.status === 'completed');
 
             const initials = `${customer.name.split(' ')[0]?.[0]}${customer.name.split(' ')[1]?.[0]}`.toUpperCase();
+            
+            // Calculate combined remaining sessions from active + pending blocks
+            const combinedRemainingSessions = (activeBlock?.remaining_sessions || 0) + (pendingBlock?.remaining_sessions || 0);
 
             const content = `
                 <div class="row g-4">
@@ -934,10 +956,10 @@ class CustomerManagement {
                                     <div class="d-flex gap-3 flex-wrap">
                                         ${customer.has_app_access ? 
                                             '<span class="badge bg-success"><i class="bi bi-phone-fill me-1"></i>App Benutzer</span>' :
-                                            '<span class="badge bg-warning"><i class="bi bi-clock me-1"></i>Not Registered</span>'}
+                                            '<span class="badge bg-warning"><i class="bi bi-clock me-1"></i>Nicht registriert</span>'}
                                         ${customer.remaining_sessions > 0 ? 
-                                            '<span class="badge bg-info"><i class="bi bi-check-circle me-1"></i>Active</span>' :
-                                            '<span class="badge bg-secondary">Inactive</span>'}
+                                            '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Aktiv</span>' :
+                                            '<span class="badge bg-secondary">Inaktiv</span>'}
                                         <span class="text-muted">Kunde seit ${new Date(customer.customer_since).toLocaleDateString()}</span>
                                     </div>
                                 </div>
@@ -950,14 +972,17 @@ class CustomerManagement {
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body">
                                 <h5 class="card-title mb-3">
-                                    <i class="bi bi-person-lines-fill me-2"></i>Contact Information
+                                    <i class="bi bi-person-lines-fill me-2"></i>Kontaktinformationen
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="customerManagement.showEditContactModal(${customer.id})">
+                                        <i class="bi bi-pencil"></i> Bearbeiten
+                                    </button>
                                 </h5>
                                 <div class="mb-3">
-                                    <label class="text-muted small">Phone</label>
+                                    <label class="text-muted small">Telefon</label>
                                     <div class="fw-medium">${customer.phone || 'Nicht angegeben'}</div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="text-muted small">Email</label>
+                                    <label class="text-muted small">E-Mail</label>
                                     <div class="fw-medium">${customer.email || 'Nicht angegeben'}</div>
                                 </div>
                                 <div class="mb-3">
@@ -998,26 +1023,26 @@ class CustomerManagement {
                                 <!-- ACTIVE BLOCK (Most Prominent) -->
                                 ${activeBlock ? `
                                     <div class="session-block position-relative mb-3" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                        <div class="dropdown position-absolute" style="top: 10px; right: 10px;">
-                                            <button class="btn btn-sm btn-link text-white p-0" type="button" data-bs-toggle="dropdown">
+                                        <div class="dropdown position-absolute" style="top: 8px; right: 8px; z-index: 10;">
+                                            <button class="btn btn-sm btn-link text-white p-1" type="button" data-bs-toggle="dropdown" style="line-height: 1;">
                                                 <i class="bi bi-three-dots-vertical"></i>
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li>
                                                     <a class="dropdown-item" href="#" onclick="event.preventDefault(); customerManagement.showConsumeSessionsModal(${customer.id}, ${activeBlock.id}, ${activeBlock.remaining_sessions})">
-                                                        <i class="bi bi-dash-circle me-2"></i>Consume Sessions
+                                                        <i class="bi bi-dash-circle me-2"></i>Behandlungen verbrauchen
                                                     </a>
                                                 </li>
                                                 <li>
                                                     <a class="dropdown-item" href="#" onclick="event.preventDefault(); customerManagement.showRefundSessionsModal(${customer.id}, ${activeBlock.id})">
-                                                        <i class="bi bi-plus-circle me-2"></i>Refund Sessions
+                                                        <i class="bi bi-plus-circle me-2"></i>Behandlungen erstatten
                                                     </a>
                                                 </li>
                                                 ${activeBlock.used_sessions === 0 ? `
                                                     <li><hr class="dropdown-divider"></li>
                                                     <li>
                                                         <a class="dropdown-item text-danger" href="#" onclick="event.preventDefault(); customerManagement.deleteSessionBlock(${customer.id}, ${activeBlock.id})">
-                                                            <i class="bi bi-trash me-2"></i>Delete Block
+                                                            <i class="bi bi-trash me-2"></i>Block löschen
                                                         </a>
                                                     </li>
                                                 ` : ''}
@@ -1025,12 +1050,12 @@ class CustomerManagement {
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <span class="badge bg-white text-success me-2 fw-bold">🟢 ACTIVE</span>
-                                                <strong>${activeBlock.total_sessions} Session Block</strong>
+                                                <span class="badge bg-white text-success me-2 fw-bold">AKTIV</span>
+                                                <strong>${activeBlock.total_sessions} Behandlungen</strong>
                                             </div>
                                             <div class="text-end">
                                                 <div class="fs-4 fw-bold">${activeBlock.remaining_sessions}</div>
-                                                <small>Sessions Left</small>
+                                                <small>Verbleibend</small>
                                             </div>
                                         </div>
                                         <div class="progress mt-2" style="height: 8px;">
@@ -1038,8 +1063,8 @@ class CustomerManagement {
                                                  style="width: ${(activeBlock.remaining_sessions / activeBlock.total_sessions * 100)}%"></div>
                                         </div>
                                         <div class="d-flex justify-content-between mt-2">
-                                            <small>Purchased: ${new Date(activeBlock.purchase_date).toLocaleDateString()}</small>
-                                            <small>Used: ${activeBlock.used_sessions || 0} sessions</small>
+                                            <small>Gekauft: ${new Date(activeBlock.purchase_date).toLocaleDateString()}</small>
+                                            <small>Verbraucht: ${activeBlock.used_sessions || 0} Behandlungen</small>
                                         </div>
                                     </div>
                                 ` : ''}
@@ -1047,21 +1072,23 @@ class CustomerManagement {
                                 <!-- PENDING BLOCK (Secondary Prominence) -->
                                 ${pendingBlock ? `
                                     <div class="session-block position-relative mb-3" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                                        <div class="dropdown position-absolute" style="top: 8px; right: 8px; z-index: 10;">
+                                            <button class="btn btn-sm btn-link text-white p-1" type="button" disabled style="line-height: 1; opacity: 0.5;">
+                                                <i class="bi bi-three-dots-vertical"></i>
+                                            </button>
+                                        </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <span class="badge bg-white text-warning me-2 fw-bold">🟡 PENDING</span>
-                                                <strong>${pendingBlock.total_sessions} Sessions</strong>
+                                                <span class="badge bg-white text-warning me-2 fw-bold">WARTEND</span>
+                                                <strong>${pendingBlock.total_sessions} Behandlungen</strong>
                                             </div>
                                             <div class="text-end">
                                                 <div class="fs-5 fw-bold">${pendingBlock.remaining_sessions}</div>
-                                                <small>Ready to Activate</small>
+                                                <small>Bereit zur Aktivierung</small>
                                             </div>
                                         </div>
-                                        <div class="mt-2">
-                                            <small class="text-white">💡 Will activate when current block is consumed</small>
-                                        </div>
                                         <div class="d-flex justify-content-between mt-2">
-                                            <small>Purchased: ${new Date(pendingBlock.purchase_date).toLocaleDateString()}</small>
+                                            <small>Gekauft: ${new Date(pendingBlock.purchase_date).toLocaleDateString()}</small>
                                             <small>Zahlung: ${pendingBlock.payment_method || 'Unbekannt'}</small>
                                         </div>
                                     </div>
@@ -1071,15 +1098,15 @@ class CustomerManagement {
                                 ${historyBlocks.length > 0 ? `
                                     <div class="mt-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <small class="text-muted">📜 History</small>
+                                            <small class="text-muted">Verlauf</small>
                                             <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="collapse" data-bs-target="#historyBlocks${customer.id}">
-                                                <small>View ${historyBlocks.length} completed</small>
+                                                <small>${historyBlocks.length} abgeschlossene anzeigen</small>
                                             </button>
                                         </div>
                                         <div class="collapse" id="historyBlocks${customer.id}">
                                             ${historyBlocks.map(block => `
                                                 <div class="d-flex justify-content-between text-muted small py-1 border-bottom">
-                                                    <span>${block.total_sessions} sessions • Completed</span>
+                                                    <span>${block.total_sessions} Behandlungen • Abgeschlossen</span>
                                                     <span>${new Date(block.purchase_date).toLocaleDateString()}</span>
                                                 </div>
                                             `).join('')}
@@ -1087,7 +1114,7 @@ class CustomerManagement {
                                     </div>
                                 ` : ''}
                                 
-                                ${!activeBlock && !pendingBlock ? '<div class="alert alert-info mb-3"><i class="bi bi-info-circle me-2"></i>No active session blocks. Add sessions to get started.</div>' : ''}
+                                ${!activeBlock && !pendingBlock ? '<div class="alert alert-info mb-3"><i class="bi bi-info-circle me-2"></i>Keine aktiven Behandlungsblöcke. Fügen Sie Behandlungen hinzu, um zu beginnen.</div>' : ''}
                             </div>
                         </div>
                     </div>
@@ -1096,12 +1123,19 @@ class CustomerManagement {
                     <div class="col-md-6">
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">
-                                    <i class="bi bi-calendar-event me-2"></i>Upcoming Appointments
-                                </h5>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-calendar-event me-2"></i>Bevorstehende Termine
+                                    </h5>
+                                    ${upcomingAppointments.length > 3 ? `
+                                        <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="collapse" data-bs-target="#upcomingAppointments${customer.id}">
+                                            <small>Alle ${upcomingAppointments.length} anzeigen</small>
+                                        </button>
+                                    ` : ''}
+                                </div>
                                 ${upcomingAppointments.length > 0 ? `
                                     <div class="appointments-list">
-                                        ${upcomingAppointments.slice(0, 5).map(apt => `
+                                        ${upcomingAppointments.slice(0, 3).map(apt => `
                                             <div class="appointment-item">
                                                 <div class="d-flex justify-content-between">
                                                     <div>
@@ -1110,14 +1144,33 @@ class CustomerManagement {
                                                     </div>
                                                     <div>
                                                         <span class="badge bg-${apt.status === 'confirmed' ? 'success' : 'warning'}">
-                                                            ${apt.status}
+                                                            ${apt.status === 'confirmed' ? 'Bestätigt' : apt.status === 'pending' ? 'Ausstehend' : apt.status}
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                         `).join('')}
+                                        ${upcomingAppointments.length > 3 ? `
+                                            <div class="collapse" id="upcomingAppointments${customer.id}">
+                                                ${upcomingAppointments.slice(3).map(apt => `
+                                                    <div class="appointment-item">
+                                                        <div class="d-flex justify-content-between">
+                                                            <div>
+                                                                <strong>${new Date(apt.appointment_date).toLocaleDateString()}</strong>
+                                                                <div class="text-muted small">${apt.appointment_time || 'Zeit folgt'}</div>
+                                                            </div>
+                                                            <div>
+                                                                <span class="badge bg-${apt.status === 'confirmed' ? 'success' : 'warning'}">
+                                                                    ${apt.status === 'confirmed' ? 'Bestätigt' : apt.status === 'pending' ? 'Ausstehend' : apt.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
                                     </div>
-                                ` : '<p class="text-muted mb-0">No upcoming appointments</p>'}
+                                ` : '<p class="text-muted mb-0">Keine bevorstehenden Termine</p>'}
                             </div>
                         </div>
                     </div>
@@ -1126,31 +1179,57 @@ class CustomerManagement {
                     <div class="col-md-6">
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">
-                                    <i class="bi bi-clock-history me-2"></i>Appointment History
-                                </h5>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-clock-history me-2"></i>Terminverlauf
+                                    </h5>
+                                    ${pastAppointments.length > 3 ? `
+                                        <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="collapse" data-bs-target="#pastAppointments${customer.id}">
+                                            <small>Alle ${pastAppointments.length} anzeigen</small>
+                                        </button>
+                                    ` : ''}
+                                </div>
                                 ${pastAppointments.length > 0 ? `
                                     <div class="appointments-list">
-                                        ${pastAppointments.slice(0, 5).map(apt => `
+                                        ${pastAppointments.slice(0, 3).map(apt => `
                                             <div class="appointment-item past">
                                                 <div class="d-flex justify-content-between">
                                                     <div>
                                                         <strong>${new Date(apt.appointment_date).toLocaleDateString()}</strong>
-                                                        <div class="text-muted small">${apt.appointment_time || 'Completed'}</div>
+                                                        <div class="text-muted small">${apt.appointment_time || 'Abgeschlossen'}</div>
                                                     </div>
                                                     <div>
                                                         <span class="badge bg-secondary">
-                                                            ${apt.status}
+                                                            ${apt.status === 'completed' ? 'Abgeschlossen' : apt.status === 'cancelled' ? 'Abgesagt' : apt.status}
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                         `).join('')}
+                                        ${pastAppointments.length > 3 ? `
+                                            <div class="collapse" id="pastAppointments${customer.id}">
+                                                ${pastAppointments.slice(3).map(apt => `
+                                                    <div class="appointment-item past">
+                                                        <div class="d-flex justify-content-between">
+                                                            <div>
+                                                                <strong>${new Date(apt.appointment_date).toLocaleDateString()}</strong>
+                                                                <div class="text-muted small">${apt.appointment_time || 'Abgeschlossen'}</div>
+                                                            </div>
+                                                            <div>
+                                                                <span class="badge bg-secondary">
+                                                                    ${apt.status === 'completed' ? 'Abgeschlossen' : apt.status === 'cancelled' ? 'Abgesagt' : apt.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
                                     </div>
                                     <div class="text-center mt-3">
-                                        <small class="text-muted">Total appointments: ${pastAppointments.length}</small>
+                                        <small class="text-muted">Termine insgesamt: ${pastAppointments.length}</small>
                                     </div>
-                                ` : '<p class="text-muted mb-0">No appointment history</p>'}
+                                ` : '<p class="text-muted mb-0">Kein Terminverlauf</p>'}
                             </div>
                         </div>
                     </div>
@@ -1160,24 +1239,24 @@ class CustomerManagement {
                         <div class="card border-0 shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title mb-3">
-                                    <i class="bi bi-graph-up me-2"></i>Statistics
+                                    <i class="bi bi-graph-up me-2"></i>Statistiken
                                 </h5>
                                 <div class="row text-center">
                                     <div class="col-md-3">
                                         <div class="fs-3 fw-bold text-primary">${customer.total_sessions_purchased}</div>
-                                        <small class="text-muted">Total Sessions Purchased</small>
+                                        <small class="text-muted">Behandlungen Gesamt</small>
                                     </div>
                                     <div class="col-md-3">
-                                        <div class="fs-3 fw-bold text-info">${customer.remaining_sessions}</div>
-                                        <small class="text-muted">Sessions Remaining</small>
+                                        <div class="fs-3 fw-bold text-success">${combinedRemainingSessions}</div>
+                                        <small class="text-muted">Behandlungen Verbleibend</small>
                                     </div>
                                     <div class="col-md-3">
-                                        <div class="fs-3 fw-bold text-success">${customer.stats?.total_appointments || 0}</div>
-                                        <small class="text-muted">Total Appointments</small>
+                                        <div class="fs-3 fw-bold text-primary">${customer.stats?.total_appointments || 0}</div>
+                                        <small class="text-muted">Termine Gesamt</small>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="fs-3 fw-bold text-warning">${customer.stats?.upcoming_appointments || 0}</div>
-                                        <small class="text-muted">Upcoming</small>
+                                        <small class="text-muted">Bevorstehend</small>
                                     </div>
                                 </div>
                             </div>
@@ -1235,6 +1314,24 @@ class CustomerManagement {
 
     setViewMode(mode) {
         this.viewMode = mode;
+        
+        // Update button classes immediately
+        const cardBtn = document.querySelector('button[onclick="customerManagement.setViewMode(\'cards\')"]');
+        const listBtn = document.querySelector('button[onclick="customerManagement.setViewMode(\'list\')"]');
+        
+        if (cardBtn && listBtn) {
+            // Remove active class from both
+            cardBtn.classList.remove('view-active');
+            listBtn.classList.remove('view-active');
+            
+            // Add active class to selected button
+            if (mode === 'cards') {
+                cardBtn.classList.add('view-active');
+            } else {
+                listBtn.classList.add('view-active');
+            }
+        }
+        
         this.updateUI();
     }
 
@@ -1269,17 +1366,8 @@ class CustomerManagement {
             // Status filter
             if (this.filterStatus !== 'all') {
                 switch (this.filterStatus) {
-                    case 'registered':
-                        if (!customer.has_app_access) return false;
-                        break;
-                    case 'not_registered':
-                        if (customer.has_app_access) return false;
-                        break;
                     case 'active_sessions':
                         if (customer.remaining_sessions <= 0) return false;
-                        break;
-                    case 'no_sessions':
-                        if (customer.remaining_sessions > 0) return false;
                         break;
                 }
             }
@@ -1502,21 +1590,15 @@ class CustomerManagement {
     updateStatistics() {
         const stats = {
             total: this.customers.length,
-            registered: this.customers.filter(c => c.has_app_access).length,
-            activeBlocks: this.customers.filter(c => c.remaining_sessions > 0).length,
-            sessions: this.customers.reduce((sum, c) => sum + (c.remaining_sessions || 0), 0)
+            active: this.customers.filter(c => c.remaining_sessions > 0).length
         };
 
         // Check if elements exist before updating
         const totalEl = document.getElementById('stat-total');
-        const registeredEl = document.getElementById('stat-registered');
-        const activeBlocksEl = document.getElementById('stat-active-blocks');
-        const sessionsEl = document.getElementById('stat-sessions');
+        const activeEl = document.getElementById('stat-active');
 
         if (totalEl) totalEl.textContent = stats.total;
-        if (registeredEl) registeredEl.textContent = stats.registered;
-        if (activeBlocksEl) activeBlocksEl.textContent = stats.activeBlocks;
-        if (sessionsEl) sessionsEl.textContent = stats.sessions;
+        if (activeEl) activeEl.textContent = stats.active;
     }
 
     updateUI() {
@@ -1586,7 +1668,6 @@ class CustomerManagement {
 
     async consumeSessions() {
         const sessionsToConsume = parseInt(document.getElementById('sessions-to-consume').value);
-        const reason = document.getElementById('consume-reason').value.trim();
 
         if (!sessionsToConsume || sessionsToConsume < 1) {
             this.showNotification('Bitte geben Sie eine gültige Anzahl von Behandlungen ein', 'error');
@@ -1603,7 +1684,7 @@ class CustomerManagement {
                 },
                 body: JSON.stringify({
                     sessions_to_consume: sessionsToConsume,
-                    reason: reason || null
+                    reason: 'Behandlung verbraucht'
                 })
             });
 
@@ -1783,7 +1864,75 @@ class CustomerManagement {
         }
     }
 
+    showEditContactModal(customerId) {
+        const customer = this.customers.find(c => c.id === customerId) || 
+                        { contact_first_name: '', contact_last_name: '', contact_phone: '', contact_email: '' };
+        
+        this.currentCustomerId = customerId;
+        
+        // Pre-fill the form
+        document.getElementById('edit-first-name').value = customer.contact_first_name || customer.name?.split(' ')[0] || '';
+        document.getElementById('edit-last-name').value = customer.contact_last_name || customer.name?.split(' ')[1] || '';
+        document.getElementById('edit-phone').value = customer.contact_phone || customer.phone || '';
+        document.getElementById('edit-email').value = customer.contact_email || customer.email || '';
+        
+        const modal = new bootstrap.Modal(document.getElementById('editContactModal'));
+        modal.show();
+    }
+
+    async updateContact() {
+        const firstName = document.getElementById('edit-first-name').value.trim();
+        const lastName = document.getElementById('edit-last-name').value.trim();
+        const phone = document.getElementById('edit-phone').value.trim();
+        const email = document.getElementById('edit-email').value.trim();
+
+        if (!firstName || !lastName || !phone) {
+            this.showNotification('Bitte füllen Sie alle Pflichtfelder aus', 'error');
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${this.currentCustomerId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contact_first_name: firstName,
+                    contact_last_name: lastName,
+                    contact_phone: phone,
+                    contact_email: email || null
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to update contact');
+            }
+
+            const result = await response.json();
+            this.showNotification(result.message || 'Kontaktinformationen erfolgreich aktualisiert', 'success');
+
+            // Close modal and refresh
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editContactModal'));
+            modal.hide();
+            document.getElementById('edit-contact-form').reset();
+
+            // Refresh customer details modal and main list
+            await this.loadCustomers();
+            setTimeout(() => {
+                this.showCustomerDetails(this.currentCustomerId);
+            }, 500);
+
+        } catch (error) {
+            console.error('Error updating contact:', error);
+            this.showNotification(error.message || 'Fehler beim Aktualisieren der Kontaktinformationen', 'error');
+        }
+    }
+
 }
 
-// Global instance
-window.customerManagement = new CustomerManagement();
+// Global instance will be created when needed
+// window.customerManagement = new CustomerManagement();

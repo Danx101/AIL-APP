@@ -22,21 +22,23 @@ router.get('/studio/:studioId/kanban', async (req, res) => {
       return res.status(404).json({ message: 'Studio not found or access denied' });
     }
     
-    // Get all active leads grouped by status
+    // Get all active leads grouped by status (ordered by updated_at so recently moved leads appear at bottom)
     const leads = await db.all(
       `SELECT id, name, phone_number, email, studio_id, status, source, notes, 
-              last_contact_date, next_contact_date, created_at, updated_at 
+              last_contact_date, next_contact_date, created_at, updated_at,
+              archive_date, stage_entered_at
        FROM leads 
        WHERE studio_id = ? 
        AND status IN ('new', 'working', 'qualified', 'trial_scheduled')
-       ORDER BY created_at DESC`,
+       ORDER BY updated_at ASC`,
       [studioId]
     );
     
     // Get archived leads
     const archived = await db.all(
       `SELECT id, name, phone_number, email, studio_id, status, source, notes, 
-              last_contact_date, next_contact_date, created_at, updated_at 
+              last_contact_date, next_contact_date, created_at, updated_at, 
+              archive_date, stage_entered_at
        FROM leads 
        WHERE studio_id = ? 
        AND status IN ('converted', 'unreachable', 'wrong_number', 'not_interested', 'lost')
@@ -44,20 +46,47 @@ router.get('/studio/:studioId/kanban', async (req, res) => {
       [studioId]
     );
     
-    // Get metrics
-    const metrics = await db.get(
+    // Get current status metrics (snapshot)
+    const currentMetrics = await db.get(
       `SELECT 
         COUNT(CASE WHEN status = 'new' THEN 1 END) as new_count,
         COUNT(CASE WHEN status = 'working' THEN 1 END) as working_count,
         COUNT(CASE WHEN status = 'qualified' THEN 1 END) as qualified_count,
         COUNT(CASE WHEN status = 'trial_scheduled' THEN 1 END) as trial_scheduled_count,
-        COUNT(CASE WHEN status = 'converted' THEN 1 END) as converted_count,
-        COUNT(*) as total_count,
-        ROUND(COUNT(CASE WHEN status = 'converted' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1) as conversion_rate
+        COUNT(*) as total_active
       FROM leads 
-      WHERE studio_id = ?`,
+      WHERE studio_id = ? AND status IN ('new', 'working', 'qualified', 'trial_scheduled')`,
       [studioId]
     );
+
+    // Get 30-day stats from lead_stats table (persistent historical data)
+    let thirtyDayStats = null;
+    try {
+      thirtyDayStats = await db.get(
+        `SELECT 
+          SUM(CASE WHEN event_type = 'created' THEN 1 ELSE 0 END) as leads_created_30d,
+          SUM(CASE WHEN event_type = 'converted' THEN 1 ELSE 0 END) as leads_converted_30d
+        FROM lead_stats 
+        WHERE studio_id = ? AND event_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`,
+        [studioId]
+      );
+    } catch (error) {
+      console.log('lead_stats table not found, using fallback data:', error.message);
+      // Fallback to leads table for temporary stats
+      thirtyDayStats = await db.get(
+        `SELECT 
+          COUNT(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as leads_created_30d,
+          COUNT(CASE WHEN status = 'converted' AND updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as leads_converted_30d
+        FROM leads 
+        WHERE studio_id = ?`,
+        [studioId]
+      );
+    }
+
+    // Calculate 30-day conversion rate
+    const leads_created = thirtyDayStats?.leads_created_30d || 0;
+    const leads_converted = thirtyDayStats?.leads_converted_30d || 0;
+    const conversion_rate_30d = leads_created > 0 ? (leads_converted / leads_created * 100) : 0;
     
     // Organize leads by status
     const kanbanData = {
@@ -79,13 +108,17 @@ router.get('/studio/:studioId/kanban', async (req, res) => {
         }
       },
       metrics: {
-        total: metrics.total_count || 0,
-        new: metrics.new_count || 0,
-        working: metrics.working_count || 0,
-        qualified: metrics.qualified_count || 0,
-        trial_scheduled: metrics.trial_scheduled_count || 0,
-        converted: metrics.converted_count || 0,
-        conversionRate: metrics.conversion_rate || 0
+        // Current active leads (snapshot)
+        total_active: currentMetrics?.total_active || 0,
+        new: currentMetrics?.new_count || 0,
+        working: currentMetrics?.working_count || 0,
+        qualified: currentMetrics?.qualified_count || 0,
+        trial_scheduled: currentMetrics?.trial_scheduled_count || 0,
+        
+        // 30-day historical stats (persistent)
+        total_converted: leads_converted,
+        conversion_rate: Math.round(conversion_rate_30d * 10) / 10, // Round to 1 decimal
+        avg_time_to_convert: '0d' // Placeholder - will calculate later if needed
       }
     };
     
@@ -164,154 +197,11 @@ router.get('/studio/:studioId/stats', async (req, res) => {
   }
 });
 
-// Get lead history for a studio
-router.get('/studio/:studioId/history', async (req, res) => {
-  try {
-    const { studioId } = req.params;
-    const { 
-      page = 1, 
-      limit = 50, 
-      activity_type, 
-      lead_id, 
-      date_from, 
-      date_to,
-      search 
-    } = req.query;
+// History endpoint removed - lead_activities tracking discontinued
 
-    // Verify user owns this studio
-    const studio = await db.get(
-      'SELECT * FROM studios WHERE id = ? AND owner_id = ?',
-      [studioId, req.user.userId]
-    );
 
-    if (!studio) {
-      return res.status(404).json({ message: 'Studio not found or access denied' });
-    }
-    
-    // Build dynamic query with 12-month default filter
-    let query = `
-      SELECT 
-        la.*,
-        l.name as lead_name,
-        l.phone_number as lead_phone,
-        l.email as lead_email,
-        u.first_name,
-        u.last_name
-      FROM lead_activities la
-      LEFT JOIN leads l ON la.lead_id = l.id
-      LEFT JOIN users u ON la.created_by = u.id
-      WHERE la.studio_id = ? 
-      AND la.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    `;
-    
-    const queryParams = [studioId];
-    
-    // Add filters
-    if (activity_type) {
-      query += ' AND la.activity_type = ?';
-      queryParams.push(activity_type);
-    }
-    
-    if (lead_id) {
-      query += ' AND la.lead_id = ?';
-      queryParams.push(lead_id);
-    }
-    
-    if (date_from) {
-      query += ' AND la.created_at >= ?';
-      queryParams.push(date_from);
-    }
-    
-    if (date_to) {
-      query += ' AND la.created_at <= ?';
-      queryParams.push(date_to);
-    }
-    
-    if (search) {
-      query += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
-      const searchPattern = `%${search}%`;
-      queryParams.push(searchPattern, searchPattern, searchPattern);
-    }
-    
-    // Add ordering and pagination
-    query += ' ORDER BY la.created_at DESC LIMIT ? OFFSET ?';
-    queryParams.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
 
-    // Get total count for pagination (with 12-month filter)
-    let countQuery = `
-      SELECT COUNT(*) as total
-      FROM lead_activities la
-      LEFT JOIN leads l ON la.lead_id = l.id
-      WHERE la.studio_id = ?
-      AND la.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    `;
-    
-    const countParams = [studioId];
-    
-    if (activity_type) {
-      countQuery += ' AND la.activity_type = ?';
-      countParams.push(activity_type);
-    }
-    
-    if (lead_id) {
-      countQuery += ' AND la.lead_id = ?';
-      countParams.push(lead_id);
-    }
-    
-    if (date_from) {
-      countQuery += ' AND la.created_at >= ?';
-      countParams.push(date_from);
-    }
-    
-    if (date_to) {
-      countQuery += ' AND la.created_at <= ?';
-      countParams.push(date_to);
-    }
-    
-    if (search) {
-      countQuery += ' AND (l.name LIKE ? OR l.phone_number LIKE ? OR la.description LIKE ?)';
-      const searchPattern = `%${search}%`;
-      countParams.push(searchPattern, searchPattern, searchPattern);
-    }
 
-    // Execute queries with error handling
-    let activities = [];
-    let countResult = { total: 0 };
-    
-    try {
-      [activities, countResult] = await Promise.all([
-        db.all(query, queryParams),
-        db.get(countQuery, countParams)
-      ]);
-    } catch (tableError) {
-      console.log('Lead activities table might not exist or be empty, returning empty result:', tableError.message);
-      // Return empty results if table doesn't exist
-      activities = [];
-      countResult = { total: 0 };
-    }
-
-    res.json({
-      history: activities || [],
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: countResult ? countResult.total : 0,
-        totalPages: Math.ceil((countResult ? countResult.total : 0) / parseInt(limit))
-      },
-      filters: {
-        activity_type,
-        lead_id,
-        date_from,
-        date_to,
-        search
-      }
-    });
-
-  } catch (error) {
-    console.error('Error getting studio history:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 
 // Create a new lead (optimized)
 router.post('/', async (req, res) => {
@@ -341,8 +231,14 @@ router.post('/', async (req, res) => {
     );
     
     // Return the created lead immediately
+    const leadId = result.insertId || result.lastID;
+    
+    // Log lead creation for stats tracking
+    const LeadStatsLogger = require('../utils/LeadStatsLogger');
+    await LeadStatsLogger.logLeadCreated(studio_id, leadId);
+    
     const newLead = {
-      id: result.insertId || result.lastID,
+      id: leadId,
       name,
       phone_number,
       email: email || null,
@@ -472,6 +368,37 @@ router.patch('/:id/status', async (req, res) => {
     res.json({ message: 'Lead status updated', status });
   } catch (error) {
     console.error('Error updating lead status:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Delete a lead
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get lead to verify studio ownership
+    const lead = await db.get('SELECT * FROM leads WHERE id = ?', [id]);
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+    
+    // Verify user owns this studio
+    const studio = await db.get(
+      'SELECT * FROM studios WHERE id = ? AND owner_id = ?',
+      [lead.studio_id, req.user.userId]
+    );
+    
+    if (!studio) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Delete the lead
+    await db.run('DELETE FROM leads WHERE id = ?', [id]);
+    
+    res.json({ message: 'Lead deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting lead:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

@@ -147,7 +147,8 @@ router.get('/',
 const validateStudioSettings = [
   body('cancellation_advance_hours').optional().isInt({ min: 1, max: 168 }).withMessage('Cancellation advance notice must be between 1 and 168 hours'),
   body('postponement_advance_hours').optional().isInt({ min: 1, max: 168 }).withMessage('Postponement advance notice must be between 1 and 168 hours'),
-  body('max_advance_booking_days').optional().isInt({ min: 1, max: 365 }).withMessage('Max advance booking must be between 1 and 365 days')
+  body('max_advance_booking_days').optional().isInt({ min: 1, max: 365 }).withMessage('Max advance booking must be between 1 and 365 days'),
+  body('expected_weekly_appointments').optional().isInt({ min: 1, max: 200 }).withMessage('Expected weekly appointments must be between 1 and 200')
 ];
 
 router.get('/:id/settings',

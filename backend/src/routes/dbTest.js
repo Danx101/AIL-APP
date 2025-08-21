@@ -198,4 +198,102 @@ router.post('/reset-appointment-types', async (req, res) => {
   }
 });
 
+// Check users in database
+router.get('/users', async (req, res) => {
+  try {
+    const users = await db.all('SELECT id, email, role, first_name, last_name, is_active, created_at FROM users');
+    res.json({ users });
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Create manager account
+router.post('/create-manager', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    
+    // Check if manager already exists
+    const existingManager = await db.get('SELECT * FROM users WHERE email = ?', ['manager@abnehmen.com']);
+    
+    if (existingManager) {
+      return res.json({ 
+        message: 'Manager account already exists',
+        user: {
+          id: existingManager.id,
+          email: existingManager.email,
+          role: existingManager.role,
+          is_active: existingManager.is_active
+        }
+      });
+    }
+    
+    // Create manager account
+    const password = 'Manager123!';
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    
+    const result = await db.run(
+      `INSERT INTO users (email, password_hash, role, first_name, last_name, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      ['manager@abnehmen.com', hashedPassword, 'manager', 'System', 'Manager', 1]
+    );
+    
+    res.json({ 
+      message: 'Manager account created successfully',
+      userId: result.lastID,
+      credentials: {
+        email: 'manager@abnehmen.com',
+        password: 'Manager123!'
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Update manager password
+router.post('/update-manager-password', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    
+    // New password
+    const password = 'Manager123!';
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    
+    // Update manager password
+    const result = await db.run(
+      `UPDATE users SET password_hash = ?, updated_at = NOW() WHERE email = ?`,
+      [hashedPassword, 'manager@abnehmen.com']
+    );
+    
+    if (result.changes > 0) {
+      res.json({ 
+        message: 'Manager password updated successfully',
+        changes: result.changes,
+        credentials: {
+          email: 'manager@abnehmen.com',
+          password: 'Manager123!'
+        }
+      });
+    } else {
+      res.status(404).json({ message: 'Manager account not found' });
+    }
+    
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
 module.exports = router;

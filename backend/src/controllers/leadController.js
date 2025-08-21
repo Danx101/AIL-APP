@@ -4,7 +4,7 @@ const LeadCallLog = require('../models/LeadCallLog');
 const Studio = require('../models/Studio');
 const twilioService = require('../services/twilioService');
 const googleSheetsService = require('../services/googleSheetsService');
-const LeadActivityLogger = require('../utils/LeadActivityLogger');
+const LeadStatsLogger = require('../utils/LeadStatsLogger');
 
 // TODO: Dialogflow integration temporarily disabled
 // Uncomment when Dialogflow is properly configured
@@ -137,6 +137,9 @@ class LeadController {
 
       const leadId = await lead.save(req.user.userId);
       const createdLead = await Lead.findById(leadId);
+
+      // Log lead creation for stats tracking
+      await LeadStatsLogger.logLeadCreated(studio_id, leadId);
 
       // Trigger Google Sheets sync for this studio if enabled
       this.triggerStudioSync(studio_id);
