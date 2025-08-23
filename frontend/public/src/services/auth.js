@@ -25,7 +25,10 @@ class AuthService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
+        const error = new Error(data.message || 'Registration failed');
+        error.code = data.code;
+        error.data = data;
+        throw error;
       }
 
       // Store token and user data
@@ -55,7 +58,10 @@ class AuthService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Studio registration failed');
+        const error = new Error(data.message || 'Studio registration failed');
+        error.code = data.code;
+        error.data = data;
+        throw error;
       }
 
       return data;
@@ -78,7 +84,10 @@ class AuthService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        const error = new Error(data.message || 'Login failed');
+        error.code = data.code;
+        error.data = data;
+        throw error;
       }
 
       // Store token and user data
@@ -246,6 +255,29 @@ class AuthService {
     } catch (error) {
       console.error('Token validation failed:', error);
       return false;
+    }
+  }
+
+  // Resend verification email
+  async resendVerificationEmail(email) {
+    try {
+      const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend verification email');
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
     }
   }
 }

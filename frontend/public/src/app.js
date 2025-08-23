@@ -27,37 +27,49 @@ class App {
             
             // Check for 401 Unauthorized response
             if (response.status === 401 && !self.isLoggingOut) {
-                self.isLoggingOut = true;
+                // Get the request URL to determine if this is a login attempt
+                const url = args[0];
+                const isLoginAttempt = url && (
+                    url.includes('/api/v1/auth/login') || 
+                    url.includes('/login')
+                );
                 
-                // Clear all auth data
+                // Only show session expired for authenticated users, not for login failures
+                const wasAuthenticated = localStorage.getItem('authToken') && localStorage.getItem('user');
+                
+                if (wasAuthenticated && !isLoginAttempt) {
+                    self.isLoggingOut = true;
+                    
+                    // Show session expired notification
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-warning alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertDiv.style.zIndex = '9999';
+                    alertDiv.innerHTML = `
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(alertDiv);
+                    
+                    // Auto-dismiss after 5 seconds
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 5000);
+                    
+                    // Redirect to login page after a short delay
+                    setTimeout(() => {
+                        self.isLoggingOut = false;
+                        self.showLoginModal();
+                        self.updateUIForGuestUser();
+                    }, 1000);
+                }
+                
+                // Always clear auth data on 401
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('user');
                 localStorage.removeItem('userRole');
-                
-                // Show notification
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-warning alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-                alertDiv.style.zIndex = '9999';
-                alertDiv.innerHTML = `
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                document.body.appendChild(alertDiv);
-                
-                // Auto-dismiss after 5 seconds
-                setTimeout(() => {
-                    if (alertDiv.parentNode) {
-                        alertDiv.remove();
-                    }
-                }, 5000);
-                
-                // Redirect to login page after a short delay
-                setTimeout(() => {
-                    self.isLoggingOut = false;
-                    self.showLoginModal();
-                    self.updateUIForGuestUser();
-                }, 1000);
             }
             
             return response;
@@ -69,6 +81,9 @@ class App {
         this.initSidebar();
         this.checkAPIStatus();
         await this.checkAuthStatus();
+        
+        // Handle email verification parameters
+        this.handleEmailVerification();
         
         // Initialize CustomerManagement component for shared modal access
         // Don't initialize on startup - wait until we have a studio ID
@@ -99,21 +114,95 @@ class App {
         }
     }
 
+    // Handle email verification URL parameters
+    handleEmailVerification() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const verification = urlParams.get('verification');
+        const token = urlParams.get('token');
+        const message = urlParams.get('message');
+
+        if (verification === 'success' && token) {
+            // Auto-login with the verification token
+            localStorage.setItem('authToken', token);
+            localStorage.setItem('token', token);
+            
+            // Show success message
+            this.showNotification(
+                message || 'Email erfolgreich bestätigt! Sie sind jetzt angemeldet.', 
+                'success'
+            );
+            
+            // Clear URL parameters and reload auth status
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } else if (verification === 'error') {
+            // Show error message
+            this.showNotification(
+                message || 'E-Mail-Bestätigung fehlgeschlagen. Bitte versuchen Sie es erneut.', 
+                'error'
+            );
+            
+            // Clear URL parameters
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+
+    // Show notification to user
+    showNotification(message, type = 'info') {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+        alertDiv.style.zIndex = '9999';
+        alertDiv.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 8000);
+    }
+
     async checkAuthStatus() {
         
         if (window.authService && window.authService.isAuthenticated()) {
-            try {
-                await window.authService.validateToken();
-                this.currentUser = window.authService.getCurrentUser();
+            // Don't validate token on startup - only validate when user performs actions
+            // This prevents premature "session expired" messages on page load
+            this.currentUser = window.authService.getCurrentUser();
+            
+            // Only update UI if we have user data
+            if (this.currentUser) {
                 this.updateUIForAuthenticatedUser();
-            } catch (error) {
-                console.error('Token validation failed:', error);
-                this.currentUser = null;
+            } else {
                 this.updateUIForGuestUser();
             }
         } else {
             this.updateUIForGuestUser();
         }
+    }
+
+    // Validate token when needed (e.g., before making authenticated requests)
+    async validateTokenIfNeeded() {
+        if (window.authService && window.authService.isAuthenticated()) {
+            try {
+                await window.authService.validateToken();
+                this.currentUser = window.authService.getCurrentUser();
+                return true;
+            } catch (error) {
+                console.error('Token validation failed:', error);
+                this.currentUser = null;
+                this.updateUIForGuestUser();
+                return false;
+            }
+        }
+        return false;
     }
 
     updateUIForAuthenticatedUser() {
@@ -214,6 +303,14 @@ class App {
 
         // Show welcome page
         this.showWelcomePage();
+    }
+
+    updateSidebarUser() {
+        // Update sidebar user display with current user data
+        const userDisplayNameSidebar = document.getElementById('userDisplayNameSidebar');
+        if (userDisplayNameSidebar && this.currentUser) {
+            userDisplayNameSidebar.textContent = `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+        }
     }
 
     showMainPage() {
@@ -389,7 +486,35 @@ class App {
             }
             
         } catch (error) {
-            errorDiv.textContent = error.message;
+            // Handle unverified email error with resend option
+            if (error.code === 'EMAIL_NOT_VERIFIED') {
+                errorDiv.innerHTML = `
+                    <div class="mb-2">${error.message}</div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="resendVerificationBtn">
+                        E-Mail-Bestätigung erneut senden
+                    </button>
+                `;
+                
+                // Add resend verification functionality
+                document.getElementById('resendVerificationBtn').addEventListener('click', async () => {
+                    const resendBtn = document.getElementById('resendVerificationBtn');
+                    try {
+                        resendBtn.disabled = true;
+                        resendBtn.textContent = 'Wird gesendet...';
+                        
+                        await window.authService.resendVerificationEmail(email);
+                        
+                        resendBtn.className = 'btn btn-sm btn-success';
+                        resendBtn.textContent = 'Versendet! Überprüfen Sie Ihre E-Mails.';
+                    } catch (resendError) {
+                        resendBtn.textContent = 'Fehler beim Versenden';
+                        resendBtn.className = 'btn btn-sm btn-danger';
+                        console.error('Resend verification error:', resendError);
+                    }
+                });
+            } else {
+                errorDiv.textContent = error.message;
+            }
             errorDiv.classList.remove('d-none');
         } finally {
             submitBtn.disabled = false;
@@ -2834,20 +2959,62 @@ class App {
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioPhone" class="form-label">Telefon *</label>
-                                    <input type="tel" class="form-control" id="studioPhone" required placeholder="+43 660 800 3836">
-                                </div>
-                                <div class="mb-3">
                                     <label for="studioConfirmPassword" class="form-label">Passwort wiederholen *</label>
                                     <input type="password" class="form-control" id="studioConfirmPassword" required>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioCity" class="form-label">Stadt *</label>
-                                    <input type="text" class="form-control" id="studioCity" required placeholder="z.B. Berlin">
+                                    <label for="studioPhone" class="form-label">Telefon *</label>
+                                    <input type="tel" class="form-control" id="studioPhone" required>
+                                </div>
+                                
+                                <h5 class="mb-3 mt-4">Adresse</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="studioCountry" class="form-label">Land *</label>
+                                            <select class="form-control" id="studioCountry" required>
+                                                <option value="Österreich" selected>Österreich</option>
+                                                <option value="Deutschland">Deutschland</option>
+                                                <option value="Schweiz">Schweiz</option>
+                                                <option value="Italien">Italien</option>
+                                                <option value="Slowenien">Slowenien</option>
+                                                <option value="Tschechien">Tschechien</option>
+                                                <option value="Ungarn">Ungarn</option>
+                                                <option value="Slowakei">Slowakei</option>
+                                                <option value="Kroatien">Kroatien</option>
+                                                <option value="Andere">Andere</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="studioPostalCode" class="form-label">PLZ *</label>
+                                            <input type="text" class="form-control" id="studioPostalCode" required>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="studioAddress" class="form-label">Adresse *</label>
-                                    <input type="text" class="form-control" id="studioAddress" required placeholder="Straße, Hausnummer, PLZ">
+                                    <label for="studioCity" class="form-label">Ort *</label>
+                                    <input type="text" class="form-control" id="studioCity" required>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="mb-3">
+                                            <label for="studioStreet" class="form-label">Straße *</label>
+                                            <input type="text" class="form-control" id="studioStreet" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="studioHouseNumber" class="form-label">Haus NR/Stiege *</label>
+                                            <input type="text" class="form-control" id="studioHouseNumber" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studioDoorApartment" class="form-label">Tür</label>
+                                    <input type="text" class="form-control" id="studioDoorApartment">
+                                    <div class="form-text">Optional - Wohnungs- oder Büronummer</div>
                                 </div>
                                 
                                 <h5 class="mb-3 mt-4">Rechtliches</h5>
@@ -2866,12 +3033,6 @@ class App {
                                             Ich akzeptiere die <a href="/privacy-policy.html" target="_blank">Datenschutzerklärung</a> *
                                         </label>
                                     </div>
-                                </div>
-                                
-                                <div class="alert alert-info mt-3">
-                                    <small>
-                                        <strong>30 Tage kostenlose Testphase!</strong> Danach €20/Monat oder €199/Jahr.
-                                    </small>
                                 </div>
                                 
                                 <button type="submit" class="btn btn-primary w-100 btn-lg" id="studioRegisterSubmitBtn">Jetzt registrieren</button>
@@ -2916,8 +3077,12 @@ class App {
             password: password,
             confirmPassword: confirmPassword,
             phone: document.getElementById('studioPhone').value,
+            country: document.getElementById('studioCountry').value,
+            postalCode: document.getElementById('studioPostalCode').value,
             city: document.getElementById('studioCity').value,
-            address: document.getElementById('studioAddress').value,
+            street: document.getElementById('studioStreet').value,
+            houseNumber: document.getElementById('studioHouseNumber').value,
+            doorApartment: document.getElementById('studioDoorApartment').value,
             termsAccepted: document.getElementById('termsAccepted').checked,
             privacyAccepted: document.getElementById('privacyAccepted').checked
         };
@@ -2946,11 +3111,68 @@ class App {
             }, 3000);
             
         } catch (error) {
-            errorDiv.textContent = error.message;
+            console.error('Studio registration error:', error);
+            
+            // Check for specific error codes
+            if (error.code === 'EMAIL_NOT_VERIFIED') {
+                errorDiv.innerHTML = `
+                    <div class="mb-3">
+                        <strong>E-Mail bereits registriert aber nicht verifiziert</strong><br>
+                        Bitte überprüfen Sie Ihre E-Mail (auch den Spam-Ordner) für den Verifizierungslink.
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="app.resendVerificationEmail('${formData.email}')">
+                        Verifizierungs-E-Mail erneut senden
+                    </button>
+                `;
+            } else if (error.code === 'EMAIL_SEND_FAILED') {
+                errorDiv.innerHTML = `
+                    <div class="mb-3">
+                        <strong>E-Mail konnte nicht gesendet werden</strong><br>
+                        Ihre Registrierung war erfolgreich, aber die Verifizierungs-E-Mail konnte nicht gesendet werden.
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="app.resendVerificationEmail('${formData.email}')">
+                        Verifizierungs-E-Mail erneut senden
+                    </button>
+                `;
+            } else {
+                errorDiv.textContent = error.message;
+            }
             errorDiv.classList.remove('d-none');
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Studio Registrieren';
+        }
+    }
+
+    async resendVerificationEmail(email) {
+        const errorDiv = document.getElementById('studioRegisterError');
+        const successDiv = document.getElementById('studioRegisterSuccess');
+        
+        try {
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const result = await window.authService.resendVerificationEmail(email);
+            
+            successDiv.innerHTML = `
+                <strong>Verifizierungs-E-Mail erneut gesendet!</strong><br>
+                Bitte überprüfen Sie Ihre E-Mail (auch den Spam-Ordner).<br>
+                <small class="text-muted">Verbleibende Versuche: ${result.attemptsRemaining || 'Unbekannt'}</small>
+            `;
+            successDiv.classList.remove('d-none');
+            
+        } catch (error) {
+            console.error('Resend verification error:', error);
+            
+            if (error.message.includes('TOO_MANY_ATTEMPTS')) {
+                errorDiv.innerHTML = `
+                    <strong>Zu viele Versuche</strong><br>
+                    Sie haben das Limit für Verifizierungs-E-Mails erreicht. Bitte versuchen Sie es später erneut.
+                `;
+            } else {
+                errorDiv.textContent = error.message;
+            }
+            errorDiv.classList.remove('d-none');
         }
     }
 
@@ -8930,6 +9152,7 @@ class App {
             if (response.ok) {
                 const data = await response.json();
                 this.userStudios = data.studios || [];
+                this.subscriptionInfo = data.subscription || null;
                 
                 // If no selected studio, select the first one
                 if (this.userStudios.length > 0 && !this.currentStudioId) {
@@ -8960,40 +9183,76 @@ class App {
         const currentStudio = this.userStudios.find(s => s.id === this.currentStudioId);
         const machineCount = currentStudio?.machine_count || 1;
         
-        // Show selector only if user has multiple studios
-        if (this.userStudios.length > 1) {
+        // Create subscription status info
+        const subscriptionStatus = this.subscriptionInfo ? `
+            <div class="text-muted small mt-1">
+                ${this.subscriptionInfo.current_studios}/${this.subscriptionInfo.max_studios_allowed} Studios
+            </div>
+        ` : '';
+        
+        // Create add studio button if allowed
+        const canAddStudio = this.subscriptionInfo?.can_create_studio;
+        const addStudioButton = canAddStudio ? `
+            <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="window.app.showCreateStudioForm()">
+                <i class="fas fa-plus me-1"></i>
+                Neues Studio hinzufügen
+            </button>
+        ` : '';
+        
+        // Create upgrade button if at limit
+        const upgradeButton = this.subscriptionInfo && !canAddStudio && this.subscriptionInfo.subscription_active ? `
+            <button class="btn btn-outline-warning btn-sm w-100 mt-2" onclick="window.app.showUpgradeOptions()">
+                <i class="fas fa-crown me-1"></i>
+                Plan erweitern
+            </button>
+        ` : '';
+        
+        // Always show as dropdown now (even for single studio) for consistency
+        if (this.userStudios.length >= 1) {
             studioSelector.innerHTML = `
                 <div class="studio-selector mb-3 px-3">
-                    <label class="small text-muted mb-1">Aktuelles Studio:</label>
-                    <select class="form-select form-select-sm" id="studioSelectorDropdown">
-                        ${this.userStudios.map(studio => `
-                            <option value="${studio.id}" ${studio.id === this.currentStudioId ? 'selected' : ''}>
-                                ${studio.name}
-                            </option>
-                        `).join('')}
-                    </select>
-                    <div class="d-flex align-items-center mt-2">
-                        <i class="fas fa-cogs text-muted me-2"></i>
-                        <small class="text-muted">
-                            ${machineCount} ${machineCount === 1 ? 'Gerät' : 'Geräte'} verfügbar
-                        </small>
-                        <button class="btn btn-link btn-sm ms-auto p-0" onclick="window.app.editStudioMachineCount()">
-                            <i class="fas fa-edit"></i>
+                    <label class="small text-muted mb-1">
+                        <i class="fas fa-building me-1"></i>
+                        Studio auswählen:
+                    </label>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center" 
+                                type="button" id="studioDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="fw-medium">${currentStudio?.name || 'Studio wählen'}</span>
+                            <i class="fas fa-chevron-down"></i>
                         </button>
+                        <ul class="dropdown-menu w-100" aria-labelledby="studioDropdownButton">
+                            ${this.userStudios.map(studio => `
+                                <li>
+                                    <a class="dropdown-item ${studio.id === this.currentStudioId ? 'active' : ''}" 
+                                       href="#" onclick="window.app.switchStudio(${studio.id}); return false;">
+                                        <i class="fas fa-building me-2"></i>
+                                        ${studio.name}
+                                        ${studio.id === this.currentStudioId ? '<i class="fas fa-check ms-auto"></i>' : ''}
+                                    </a>
+                                </li>
+                            `).join('')}
+                            ${canAddStudio ? `
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-primary" href="#" onclick="window.app.showCreateStudioForm(); return false;">
+                                        <i class="fas fa-plus me-2"></i>
+                                        Neues Studio hinzufügen
+                                    </a>
+                                </li>
+                            ` : ''}
+                            ${upgradeButton && !canAddStudio ? `
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-warning" href="#" onclick="window.app.showUpgradeOptions(); return false;">
+                                        <i class="fas fa-crown me-2"></i>
+                                        Plan erweitern
+                                    </a>
+                                </li>
+                            ` : ''}
+                        </ul>
                     </div>
-                </div>
-            `;
-            
-            // Add change event listener
-            document.getElementById('studioSelectorDropdown').addEventListener('change', (e) => {
-                this.switchStudio(parseInt(e.target.value));
-            });
-        } else if (this.userStudios.length === 1) {
-            // Show studio name but not as dropdown
-            studioSelector.innerHTML = `
-                <div class="studio-info mb-3 px-3">
-                    <label class="small text-muted mb-1">Dein Studio:</label>
-                    <div class="fw-bold">${this.userStudios[0].name}</div>
+                    ${subscriptionStatus}
                     <div class="d-flex align-items-center mt-2">
                         <i class="fas fa-cogs text-muted me-2"></i>
                         <small class="text-muted">
@@ -9014,9 +9273,456 @@ class App {
         this.currentStudioId = studioId;
         localStorage.setItem('selectedStudioId', studioId);
         
-        // Reload the current view with new studio
+        // Update the studio selector to reflect the change
+        this.updateStudioSelector();
+        
+        // Reload the current view with new studio context
         if (this.currentUser?.role === 'studio_owner') {
             this.showStudioDashboard();
+        }
+        
+        // Close the dropdown after selection
+        const dropdown = document.getElementById('studioDropdownButton');
+        if (dropdown) {
+            const bootstrapDropdown = bootstrap.Dropdown.getInstance(dropdown);
+            if (bootstrapDropdown) {
+                bootstrapDropdown.hide();
+            }
+        }
+        
+        // Show success message
+        const selectedStudio = this.userStudios.find(s => s.id === studioId);
+        if (selectedStudio) {
+            this.showSuccessMessage('Studio gewechselt', `Aktives Studio: ${selectedStudio.name}`);
+        }
+    }
+
+    async showCreateStudioForm() {
+        // Check subscription limits first
+        if (!this.subscriptionInfo?.can_create_studio) {
+            if (!this.subscriptionInfo?.subscription_active) {
+                this.showErrorMessage('Abonnement erforderlich', 'Sie benötigen ein aktives Abonnement, um weitere Studios zu erstellen.');
+                return;
+            } else {
+                this.showUpgradeOptions();
+                return;
+            }
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'createStudioModal';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-plus-circle me-2"></i>
+                            Neues Studio erstellen
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Studio ${this.subscriptionInfo.current_studios + 1}/${this.subscriptionInfo.max_studios_allowed}</strong> - 
+                            Sie können noch ${this.subscriptionInfo.max_studios_allowed - this.subscriptionInfo.current_studios} Studio(s) erstellen.
+                        </div>
+                        
+                        <form id="newStudioForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="newStudioName" class="form-label">Studio Name *</label>
+                                        <input type="text" class="form-control" id="newStudioName" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="newStudioCity" class="form-label">Stadt *</label>
+                                        <input type="text" class="form-control" id="newStudioCity" required>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="newStudioAddress" class="form-label">Adresse *</label>
+                                <input type="text" class="form-control" id="newStudioAddress" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="newStudioPhone" class="form-label">Telefon</label>
+                                        <input type="tel" class="form-control" id="newStudioPhone">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="newStudioEmail" class="form-label">Studio E-Mail</label>
+                                        <input type="email" class="form-control" id="newStudioEmail">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="newStudioMachineCount" class="form-label">Anzahl Geräte</label>
+                                <select class="form-select" id="newStudioMachineCount">
+                                    <option value="1">1 Gerät</option>
+                                    <option value="2">2 Geräte</option>
+                                    <option value="3">3 Geräte</option>
+                                    <option value="4">4 Geräte</option>
+                                    <option value="5">5 Geräte</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                        <button type="button" class="btn btn-primary" onclick="window.app.handleCreateStudio()">
+                            <i class="fas fa-plus me-1"></i>
+                            Studio erstellen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+
+        // Clean up modal when hidden
+        modal.addEventListener('hidden.bs.modal', () => {
+            modal.remove();
+        });
+    }
+
+    async handleCreateStudio() {
+        const form = document.getElementById('newStudioForm');
+        const formData = new FormData(form);
+        
+        const studioData = {
+            name: document.getElementById('newStudioName').value,
+            city: document.getElementById('newStudioCity').value,
+            address: document.getElementById('newStudioAddress').value,
+            phone: document.getElementById('newStudioPhone').value,
+            email: document.getElementById('newStudioEmail').value,
+            machine_count: parseInt(document.getElementById('newStudioMachineCount').value)
+        };
+
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/studios`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(studioData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('createStudioModal'));
+                modal.hide();
+
+                // Show address update modal for profile sync
+                await this.showStudioAddressUpdateModal(studioData, result.studio);
+                
+                // Reload studios and switch to new one
+                await this.loadUserStudios();
+                await this.switchStudio(result.studio.id);
+                
+                this.showSuccessMessage('Studio erstellt', `${result.studio.name} wurde erfolgreich erstellt!`);
+            } else {
+                if (response.status === 402) {
+                    // Payment required - show upgrade options
+                    this.showUpgradeOptions(result);
+                } else {
+                    this.showErrorMessage('Fehler', result.message || 'Fehler beim Erstellen des Studios');
+                }
+            }
+        } catch (error) {
+            console.error('Error creating studio:', error);
+            this.showErrorMessage('Fehler', 'Netzwerkfehler beim Erstellen des Studios');
+        }
+    }
+
+    showUpgradeOptions(subscriptionError = null) {
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'upgradeModal';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">
+                            <i class="fas fa-crown me-2"></i>
+                            Plan erweitern
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${subscriptionError ? `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${subscriptionError.message}
+                            </div>
+                        ` : ''}
+                        
+                        <p class="mb-3">Um weitere Studios zu erstellen, erweitern Sie Ihren Plan:</p>
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="card border-primary">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Dual Studio Plan</h6>
+                                        <div class="h4 text-primary">€49<small class="text-muted">/Monat</small></div>
+                                        <ul class="list-unstyled">
+                                            <li><i class="fas fa-check text-success me-1"></i> Bis zu 2 Studios</li>
+                                            <li><i class="fas fa-check text-success me-1"></i> Alle Premium-Features</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="card border-success">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Triple Studio Plan</h6>
+                                        <div class="h4 text-success">€69<small class="text-muted">/Monat</small></div>
+                                        <ul class="list-unstyled">
+                                            <li><i class="fas fa-check text-success me-1"></i> Bis zu 3 Studios</li>
+                                            <li><i class="fas fa-check text-success me-1"></i> Alle Premium-Features</li>
+                                            <li><i class="fas fa-crown text-warning me-1"></i> Prioritäts-Support</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Aktuell: ${this.subscriptionInfo?.current_studios || 0}/${this.subscriptionInfo?.max_studios_allowed || 1} Studios verwendet
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Später</button>
+                        <button type="button" class="btn btn-primary" onclick="window.app.contactSupport()">
+                            <i class="fas fa-envelope me-1"></i>
+                            Upgrade anfragen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+
+        // Clean up modal when hidden
+        modal.addEventListener('hidden.bs.modal', () => {
+            modal.remove();
+        });
+    }
+
+    contactSupport() {
+        // Close upgrade modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('upgradeModal'));
+        if (modal) modal.hide();
+        
+        // Open email client or show contact info
+        const email = 'support@abnehmen-im-liegen.com';
+        const subject = 'Plan Upgrade Anfrage';
+        const body = `Hallo,\n\nich möchte meinen Plan erweitern, um weitere Studios erstellen zu können.\n\nAktuelle Situation:\n- Studios: ${this.subscriptionInfo?.current_studios || 0}/${this.subscriptionInfo?.max_studios_allowed || 1}\n\nBitte kontaktieren Sie mich für weitere Informationen.\n\nVielen Dank!`;
+        
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        this.showSuccessMessage('E-Mail geöffnet', 'Ihre E-Mail-Anwendung wurde geöffnet. Senden Sie die Nachricht ab, um Unterstützung zu erhalten.');
+    }
+
+    async showStudioAddressUpdateModal(studioData, createdStudio) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'studioAddressModal';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-map-marker-alt me-2"></i>
+                                Studio-Adresse für Profil übernehmen
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Studio "${createdStudio.name}" wurde erstellt!</strong><br>
+                                Möchten Sie die Studio-Adresse als Ihre Profil-Adresse übernehmen?
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Studio-Adresse:</h6>
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <div class="mb-2"><strong>Stadt:</strong> ${studioData.city}</div>
+                                            <div class="mb-2"><strong>Adresse:</strong> ${studioData.address}</div>
+                                            ${studioData.phone ? `<div><strong>Telefon:</strong> ${studioData.phone}</div>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Aktuelle Profil-Adresse:</h6>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <div class="mb-2"><strong>Stadt:</strong> ${this.currentUser.city || 'Nicht gesetzt'}</div>
+                                            <div class="mb-2"><strong>Straße:</strong> ${this.currentUser.street || 'Nicht gesetzt'}</div>
+                                            <div><strong>Telefon:</strong> ${this.currentUser.phone || 'Nicht gesetzt'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <form id="addressUpdateForm" class="mt-4">
+                                <h6 class="mb-3">Adress-Details für Profil-Update:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="updateCountry" class="form-label">Land</label>
+                                            <select class="form-control" id="updateCountry">
+                                                <option value="Österreich" selected>Österreich</option>
+                                                <option value="Deutschland">Deutschland</option>
+                                                <option value="Schweiz">Schweiz</option>
+                                                <option value="Italien">Italien</option>
+                                                <option value="Slowenien">Slowenien</option>
+                                                <option value="Tschechien">Tschechien</option>
+                                                <option value="Ungarn">Ungarn</option>
+                                                <option value="Slowakei">Slowakei</option>
+                                                <option value="Kroatien">Kroatien</option>
+                                                <option value="Andere">Andere</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="updatePostalCode" class="form-label">PLZ</label>
+                                            <input type="text" class="form-control" id="updatePostalCode" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="updateCity" class="form-label">Stadt</label>
+                                    <input type="text" class="form-control" id="updateCity" value="${studioData.city}" required>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="mb-3">
+                                            <label for="updateStreet" class="form-label">Straße</label>
+                                            <input type="text" class="form-control" id="updateStreet" value="${studioData.address.split(',')[0] || studioData.address}" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="updateHouseNumber" class="form-label">Haus NR/Stiege</label>
+                                            <input type="text" class="form-control" id="updateHouseNumber" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="updateDoorApartment" class="form-label">Tür (optional)</label>
+                                            <input type="text" class="form-control" id="updateDoorApartment">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="updatePhone" class="form-label">Telefon</label>
+                                            <input type="tel" class="form-control" id="updatePhone" value="${studioData.phone || ''}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" onclick="window.app.skipAddressUpdate('${modal.id}')">
+                                Überspringen
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="window.app.updateProfileFromStudio('${modal.id}')">
+                                <i class="fas fa-sync me-1"></i>
+                                Profil aktualisieren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+
+            // Store resolve function for later use
+            modal.resolve = resolve;
+
+            // Clean up modal when hidden
+            modal.addEventListener('hidden.bs.modal', () => {
+                modal.remove();
+                resolve();
+            });
+        });
+    }
+
+    skipAddressUpdate(modalId) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
+        if (modal) modal.hide();
+    }
+
+    async updateProfileFromStudio(modalId) {
+        const formData = {
+            country: document.getElementById('updateCountry').value,
+            postalCode: document.getElementById('updatePostalCode').value,
+            city: document.getElementById('updateCity').value,
+            street: document.getElementById('updateStreet').value,
+            houseNumber: document.getElementById('updateHouseNumber').value,
+            doorApartment: document.getElementById('updateDoorApartment').value,
+            phone: document.getElementById('updatePhone').value
+        };
+
+        // Keep current user's name
+        formData.firstName = this.currentUser.firstName;
+        formData.lastName = this.currentUser.lastName;
+
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/auth/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (response.ok) {
+                // Update current user data
+                Object.assign(this.currentUser, formData);
+
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
+                if (modal) modal.hide();
+
+                this.showSuccessMessage('Profil aktualisiert', 'Ihre Profil-Adresse wurde mit der Studio-Adresse synchronisiert!');
+            } else {
+                const error = await response.json();
+                this.showErrorMessage('Fehler', error.message || 'Fehler beim Aktualisieren des Profils');
+            }
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            this.showErrorMessage('Fehler', 'Netzwerkfehler beim Aktualisieren des Profils');
         }
     }
     
@@ -9699,6 +10405,23 @@ class App {
             const data = await response.json();
             const user = data.user;
             
+            // Get subscription status for studio owners
+            let subscriptionData = null;
+            if (this.currentUser.role === 'studio_owner') {
+                try {
+                    const subResponse = await fetch(`${window.API_BASE_URL}/api/v1/subscriptions/status`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                        }
+                    });
+                    if (subResponse.ok) {
+                        subscriptionData = await subResponse.json();
+                    }
+                } catch (error) {
+                    console.log('Could not load subscription data:', error);
+                }
+            }
+            
             content.innerHTML = `
                 <div class="row">
                     <div class="col-md-8 mx-auto">
@@ -9747,22 +10470,60 @@ class App {
                                         <input type="tel" class="form-control" id="profilePhone" value="${user.phone || ''}">
                                     </div>
                                     
+                                    <h5 class="mb-3 mt-4">Adresse</h5>
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="mb-3">
-                                                <label for="profileCity" class="form-label">Stadt</label>
-                                                <input type="text" class="form-control" id="profileCity" value="${user.city || ''}">
+                                                <label for="profileCountry" class="form-label">Land</label>
+                                                <select class="form-control" id="profileCountry">
+                                                    <option value="Österreich" ${(user.country || 'Österreich') === 'Österreich' ? 'selected' : ''}>Österreich</option>
+                                                    <option value="Deutschland" ${user.country === 'Deutschland' ? 'selected' : ''}>Deutschland</option>
+                                                    <option value="Schweiz" ${user.country === 'Schweiz' ? 'selected' : ''}>Schweiz</option>
+                                                    <option value="Italien" ${user.country === 'Italien' ? 'selected' : ''}>Italien</option>
+                                                    <option value="Slowenien" ${user.country === 'Slowenien' ? 'selected' : ''}>Slowenien</option>
+                                                    <option value="Tschechien" ${user.country === 'Tschechien' ? 'selected' : ''}>Tschechien</option>
+                                                    <option value="Ungarn" ${user.country === 'Ungarn' ? 'selected' : ''}>Ungarn</option>
+                                                    <option value="Slowakei" ${user.country === 'Slowakei' ? 'selected' : ''}>Slowakei</option>
+                                                    <option value="Kroatien" ${user.country === 'Kroatien' ? 'selected' : ''}>Kroatien</option>
+                                                    <option value="Andere" ${user.country === 'Andere' ? 'selected' : ''}>Andere</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="mb-3">
-                                                <label for="profileAddress" class="form-label">Adresse</label>
-                                                <input type="text" class="form-control" id="profileAddress" value="${user.address || ''}">
+                                                <label for="profilePostalCode" class="form-label">PLZ</label>
+                                                <input type="text" class="form-control" id="profilePostalCode" value="${user.postalCode || user.postal_code || ''}">
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="mb-3">
+                                        <label for="profileCity" class="form-label">Ort</label>
+                                        <input type="text" class="form-control" id="profileCity" value="${user.city || ''}">
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="mb-3">
+                                                <label for="profileStreet" class="form-label">Straße</label>
+                                                <input type="text" class="form-control" id="profileStreet" value="${user.street || ''}">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="profileHouseNumber" class="form-label">Haus NR/Stiege</label>
+                                                <input type="text" class="form-control" id="profileHouseNumber" value="${user.houseNumber || user.house_number || ''}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="profileDoorApartment" class="form-label">Tür</label>
+                                        <input type="text" class="form-control" id="profileDoorApartment" value="${user.doorApartment || user.door_apartment || ''}">
+                                        <div class="form-text">Optional - Wohnungs- oder Büronummer</div>
+                                    </div>
                                     
                                     ${this.currentUser.role === 'studio_owner' ? `
+                                        <h5 class="mb-3 mt-4">Abonnement</h5>
+                                        ${this.renderSubscriptionSection(subscriptionData)}
+                                        
                                         <h5 class="mb-3 mt-4">Studio-Einstellungen</h5>
                                         <div class="mb-3">
                                             <label for="machinesCount" class="form-label">Anzahl der Behandlungsgeräte</label>
@@ -9792,6 +10553,14 @@ class App {
                 this.showEmailChangeModal();
             });
             
+            // Add subscription management handler if button exists
+            const manageSubBtn = document.getElementById('manageSubscriptionBtn');
+            if (manageSubBtn) {
+                manageSubBtn.addEventListener('click', () => {
+                    this.showSubscriptionManagementModal(subscriptionData);
+                });
+            }
+            
         } catch (error) {
             content.innerHTML = `
                 <div class="alert alert-danger">
@@ -9808,14 +10577,18 @@ class App {
         const firstName = document.getElementById('profileFirstName').value.trim();
         const lastName = document.getElementById('profileLastName').value.trim();
         const phone = document.getElementById('profilePhone').value.trim();
+        const country = document.getElementById('profileCountry').value.trim();
+        const postalCode = document.getElementById('profilePostalCode').value.trim();
         const city = document.getElementById('profileCity').value.trim();
-        const address = document.getElementById('profileAddress').value.trim();
+        const street = document.getElementById('profileStreet').value.trim();
+        const houseNumber = document.getElementById('profileHouseNumber').value.trim();
+        const doorApartment = document.getElementById('profileDoorApartment').value.trim();
         
         const errorDiv = document.getElementById('profileError');
         
         // Validate all required fields are filled
-        if (!firstName || !lastName || !phone || !city || !address) {
-            errorDiv.textContent = 'Alle Felder müssen ausgefüllt werden.';
+        if (!firstName || !lastName || !phone || !country || !postalCode || !city || !street || !houseNumber) {
+            errorDiv.textContent = 'Alle Pflichtfelder müssen ausgefüllt werden.';
             errorDiv.classList.remove('d-none');
             return;
         }
@@ -9824,8 +10597,12 @@ class App {
             firstName: firstName,
             lastName: lastName,
             phone: phone,
+            country: country,
+            postalCode: postalCode,
             city: city,
-            address: address
+            street: street,
+            houseNumber: houseNumber,
+            doorApartment: doorApartment
         };
         
         if (this.currentUser.role === 'studio_owner') {
@@ -9858,6 +10635,14 @@ class App {
             
             successDiv.textContent = 'Profil erfolgreich gespeichert!';
             successDiv.classList.remove('d-none');
+            
+            // Update current user data and refresh UI
+            this.currentUser.firstName = formData.firstName;
+            this.currentUser.lastName = formData.lastName;
+            this.currentUser.phone = formData.phone;
+            
+            // Update sidebar display with new name
+            this.updateSidebarUser();
             
             // Refresh the profile view with updated data from server
             setTimeout(() => {
@@ -10119,6 +10904,515 @@ class App {
             changeBtn.disabled = false;
             changeBtn.textContent = 'Passwort ändern';
         }
+    }
+    
+    // Render subscription section for profile
+    renderSubscriptionSection(subscriptionData) {
+        if (!subscriptionData) {
+            return `
+                <div class="card border-0 bg-light">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-secondary me-2">Keine Abonnement-Daten</span>
+                                <span class="text-muted">Abonnement-Status konnte nicht geladen werden</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.location.reload()">
+                                Aktualisieren
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Determine status badge
+        let statusBadge = '';
+        let statusText = '';
+        let daysText = '';
+        
+        if (subscriptionData.subscription?.status === 'trial') {
+            if (subscriptionData.days_remaining > 0) {
+                statusBadge = '<span class="badge bg-info me-2">Probezeit</span>';
+                statusText = `${subscriptionData.subscription.plan_type === 'trial' ? 'Trial Plan' : subscriptionData.subscription.plan_type}`;
+                daysText = `${subscriptionData.days_remaining} Tage verbleibend`;
+            } else {
+                statusBadge = '<span class="badge bg-warning me-2">Probezeit abgelaufen</span>';
+                statusText = 'Upgrade erforderlich';
+                daysText = 'Jetzt upgraden';
+            }
+        } else if (subscriptionData.subscription?.status === 'active') {
+            statusBadge = '<span class="badge bg-success me-2">Aktiv</span>';
+            statusText = subscriptionData.subscription.plan_type || 'Premium Plan';
+            if (subscriptionData.days_until_renewal > 0) {
+                daysText = `Erneuert sich in ${subscriptionData.days_until_renewal} Tagen`;
+            }
+        } else {
+            statusBadge = '<span class="badge bg-danger me-2">Inaktiv</span>';
+            statusText = 'Kein aktives Abonnement';
+            daysText = 'Aktivierung erforderlich';
+        }
+        
+        return `
+            <div class="card border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            ${statusBadge}
+                            <span class="fw-medium">${statusText}</span>
+                            ${daysText ? `<br><small class="text-muted">${daysText}</small>` : ''}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="manageSubscriptionBtn">
+                            Verwalten
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Show subscription management modal
+    showSubscriptionManagementModal(subscriptionData) {
+        // Remove existing modal if present
+        const existingModal = document.getElementById('subscriptionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        const modalHtml = `
+            <div class="modal fade" id="subscriptionModal" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-credit-card me-2"></i>
+                                Abonnement verwalten
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${this.renderSubscriptionManagement(subscriptionData)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('subscriptionModal'));
+        modal.show();
+    }
+    
+    // Render subscription management content
+    renderSubscriptionManagement(subscriptionData) {
+        // Get plan information
+        const plans = [
+            {
+                id: 'single_studio',
+                name: 'Single Studio',
+                price: '29',
+                currency: 'EUR',
+                period: 'Monat',
+                studios: 1,
+                features: ['1 Studio verwalten', 'Unbegrenzte Termine', 'Google Sheets Integration', 'Kunden-Management', 'E-Mail Support']
+            },
+            {
+                id: 'dual_studio',
+                name: 'Dual Studio',
+                price: '49',
+                currency: 'EUR', 
+                period: 'Monat',
+                studios: 2,
+                features: ['2 Studios verwalten', 'Unbegrenzte Termine', 'Google Sheets Integration', 'Kunden-Management', 'Prioritäts-Support'],
+                popular: true
+            },
+            {
+                id: 'triple_studio',
+                name: 'Triple Studio',
+                price: '69',
+                currency: 'EUR',
+                period: 'Monat',
+                studios: 3,
+                features: ['3 Studios verwalten', 'Unbegrenzte Termine', 'Google Sheets Integration', 'Kunden-Management', 'Prioritäts-Support', 'Erweiterte Analytics']
+            }
+        ];
+        
+        const currentPlan = subscriptionData?.subscription?.plan_type || 'trial';
+        
+        return `
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs mb-4" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#current-plan-tab">
+                        <i class="bi bi-info-circle me-1"></i>Aktueller Plan
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#plans-tab">
+                        <i class="bi bi-grid-3x3 me-1"></i>Pläne
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#promocode-tab">
+                        <i class="bi bi-ticket-perforated me-1"></i>Promo Code
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#billing-tab">
+                        <i class="bi bi-receipt me-1"></i>Rechnung
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- Tab content -->
+            <div class="tab-content">
+                ${this.renderCurrentPlanTab(subscriptionData)}
+                ${this.renderPlansTab(plans, currentPlan)}
+                ${this.renderPromoCodeTab()}
+                ${this.renderBillingTab()}
+            </div>
+        `;
+    }
+    
+    // Render current plan tab
+    renderCurrentPlanTab(subscriptionData) {
+        if (!subscriptionData) {
+            return `
+                <div class="tab-pane fade show active" id="current-plan-tab">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Keine Abonnement-Daten verfügbar
+                    </div>
+                </div>
+            `;
+        }
+        
+        const statusColor = subscriptionData.subscription?.status === 'active' ? 'success' : 
+                           subscriptionData.subscription?.status === 'trial' ? 'info' : 'warning';
+        
+        return `
+            <div class="tab-pane fade show active" id="current-plan-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Plan Status</h6>
+                                <div class="mb-3">
+                                    <span class="badge bg-${statusColor} fs-6">${subscriptionData.subscription?.plan_type || 'Trial'}</span>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <small class="text-muted d-block">Status</small>
+                                    <strong>${subscriptionData.subscription?.status === 'trial' ? 'Probezeit' : subscriptionData.subscription?.status === 'active' ? 'Aktiv' : 'Inaktiv'}</strong>
+                                </div>
+                                
+                                ${subscriptionData.days_remaining || subscriptionData.days_until_renewal ? `
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block">${subscriptionData.subscription?.status === 'trial' ? 'Verbleibende Probezeit' : 'Bis zur Verlängerung'}</small>
+                                        <strong>${subscriptionData.days_remaining || subscriptionData.days_until_renewal} Tage</strong>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="mb-3">
+                                    <small class="text-muted d-block">Studios erlaubt</small>
+                                    <strong>${subscriptionData.max_studios_allowed || 1}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card border-0">
+                            <div class="card-body">
+                                <h6 class="card-title">Nutzung</h6>
+                                <div class="mb-3">
+                                    <small class="text-muted d-block">Aktuelle Studios</small>
+                                    <strong>${subscriptionData.current_studios || 0} von ${subscriptionData.max_studios_allowed || 1}</strong>
+                                </div>
+                                
+                                ${subscriptionData.subscription?.status === 'trial' && subscriptionData.days_remaining <= 7 ? `
+                                    <div class="alert alert-warning py-2 px-3">
+                                        <small>
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            Ihre Probezeit läuft bald ab. Upgraden Sie jetzt!
+                                        </small>
+                                    </div>
+                                ` : ''}
+                                
+                                ${subscriptionData.can_create_studios === false ? `
+                                    <div class="alert alert-info py-2 px-3">
+                                        <small>
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Studio-Limit erreicht. Upgraden für mehr Studios.
+                                        </small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Render plans tab
+    renderPlansTab(plans, currentPlan) {
+        return `
+            <div class="tab-pane fade" id="plans-tab">
+                <div class="mb-4">
+                    <h6 class="text-center mb-3">Wählen Sie Ihren Plan</h6>
+                    <p class="text-muted text-center">Alle Pläne beinhalten eine 30-tägige kostenlose Testphase</p>
+                </div>
+                
+                <div class="row g-4">
+                    ${plans.map(plan => `
+                        <div class="col-lg-4">
+                            <div class="card ${plan.popular ? 'border-primary' : 'border-0'} ${currentPlan === plan.id ? 'bg-light' : ''} h-100">
+                                ${plan.popular ? '<div class="card-header bg-primary text-white text-center py-2"><small>Am beliebtesten</small></div>' : ''}
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">${plan.name}</h5>
+                                    <div class="mb-3">
+                                        <span class="h2">€${plan.price}</span>
+                                        <small class="text-muted">/${plan.period}</small>
+                                    </div>
+                                    <div class="mb-4">
+                                        <strong>${plan.studios} Studio${plan.studios > 1 ? 's' : ''}</strong>
+                                    </div>
+                                    
+                                    <ul class="list-unstyled mb-4">
+                                        ${plan.features.map(feature => `
+                                            <li class="mb-2">
+                                                <i class="bi bi-check-circle text-success me-2"></i>
+                                                <small>${feature}</small>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                    
+                                    ${currentPlan === plan.id ? `
+                                        <button class="btn btn-outline-secondary w-100" disabled>
+                                            Aktueller Plan
+                                        </button>
+                                    ` : `
+                                        <button class="btn ${plan.popular ? 'btn-primary' : 'btn-outline-primary'} w-100" 
+                                                onclick="window.app.selectPlan('${plan.id}', '${plan.name}', ${plan.price})">
+                                            ${currentPlan === 'trial' ? 'Plan auswählen' : 'Plan wechseln'}
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Render promo code tab
+    renderPromoCodeTab() {
+        return `
+            <div class="tab-pane fade" id="promocode-tab">
+                <div class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title text-center mb-4">
+                                    <i class="bi bi-ticket-perforated me-2"></i>
+                                    Promo Code einlösen
+                                </h6>
+                                
+                                <form id="promoCodeForm" onsubmit="window.app.redeemPromoCode(event)">
+                                    <div class="mb-3">
+                                        <label for="promoCode" class="form-label">Promo Code</label>
+                                        <input type="text" class="form-control" id="promoCode" 
+                                               placeholder="Geben Sie Ihren Code ein" required>
+                                        <div class="form-text">
+                                            Promo Codes verlängern Ihre Probezeit um zusätzliche Monate
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="promoCodeError" class="alert alert-danger d-none"></div>
+                                    <div id="promoCodeSuccess" class="alert alert-success d-none"></div>
+                                    
+                                    <button type="submit" class="btn btn-primary w-100" id="redeemPromoBtn">
+                                        Code einlösen
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Render billing tab
+    renderBillingTab() {
+        return `
+            <div class="tab-pane fade" id="billing-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Zahlungsmethode</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-credit-card text-muted me-2"></i>
+                                        <span class="text-muted">Noch keine Zahlungsmethode hinterlegt</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="window.app.addPaymentMethod()">
+                                        Hinzufügen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Rechnungshistorie</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-receipt text-muted mb-2" style="font-size: 2rem;"></i>
+                                <p class="text-muted mb-0">Keine Rechnungen vorhanden</p>
+                                <small class="text-muted">Rechnungen erscheinen hier nach der ersten Zahlung</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Handle plan selection (dummy for now)
+    selectPlan(planId, planName, price) {
+        // Show dummy payment modal
+        this.showPaymentModal(planId, planName, price);
+    }
+    
+    // Show dummy payment modal
+    showPaymentModal(planId, planName, price) {
+        const modalHtml = `
+            <div class="modal fade" id="paymentModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Zahlung - ${planName}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center mb-4">
+                                <h4 class="text-primary">€${price}/Monat</h4>
+                                <p class="text-muted">${planName} Plan</p>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Demo Modus:</strong> Die Zahlungsverarbeitung ist noch nicht implementiert.
+                                Dieser Plan würde normalerweise über Stripe verarbeitet werden.
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-success" onclick="window.app.processDummyPayment('${planId}', '${planName}')">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Demo Zahlung simulieren
+                                </button>
+                                <button class="btn btn-secondary" data-bs-dismiss="modal">
+                                    Abbrechen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+        modal.show();
+        
+        // Remove modal after closing
+        modal._element.addEventListener('hidden.bs.modal', () => {
+            modal._element.remove();
+        });
+    }
+    
+    // Process dummy payment
+    processDummyPayment(planId, planName) {
+        // Close payment modal
+        const paymentModal = bootstrap.Modal.getInstance(document.getElementById('paymentModal'));
+        paymentModal.hide();
+        
+        // Show success message
+        this.showSuccessMessage('Demo Zahlung erfolgreich', 
+            `Der ${planName} Plan wurde erfolgreich simuliert. In der echten Version würde dies über Stripe verarbeitet werden.`);
+        
+        // Refresh subscription modal after delay
+        setTimeout(() => {
+            const subscriptionModal = bootstrap.Modal.getInstance(document.getElementById('subscriptionModal'));
+            if (subscriptionModal) {
+                subscriptionModal.hide();
+            }
+        }, 2000);
+    }
+    
+    // Redeem promo code
+    async redeemPromoCode(event) {
+        event.preventDefault();
+        
+        const promoCode = document.getElementById('promoCode').value.trim();
+        const errorDiv = document.getElementById('promoCodeError');
+        const successDiv = document.getElementById('promoCodeSuccess');
+        const submitBtn = document.getElementById('redeemPromoBtn');
+        
+        if (!promoCode) {
+            errorDiv.textContent = 'Bitte geben Sie einen Promo Code ein';
+            errorDiv.classList.remove('d-none');
+            return;
+        }
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Wird eingelöst...';
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+            
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/subscriptions/redeem-promocode`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ promocode: promoCode })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'Fehler beim Einlösen des Promo Codes');
+            }
+            
+            successDiv.textContent = `Promo Code erfolgreich eingelöst! ${result.months_added} Monate hinzugefügt.`;
+            successDiv.classList.remove('d-none');
+            
+            // Clear form
+            document.getElementById('promoCodeForm').reset();
+            
+            // Refresh the page after delay to show updated subscription
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } catch (error) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Code einlösen';
+        }
+    }
+    
+    // Add payment method (dummy)
+    addPaymentMethod() {
+        this.showInfoMessage('Demo Modus', 'Die Zahlungsmethoden-Verwaltung ist noch nicht implementiert. Dies würde normalerweise Stripe Elements verwenden.');
     }
 
 }

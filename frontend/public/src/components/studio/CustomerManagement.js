@@ -695,17 +695,13 @@ class CustomerManagement {
                                     </select>
                                 </div>
 
-                                <div class="mt-3">
-                                    <label class="form-label">Notizen</label>
-                                    <textarea class="form-control" id="add-sessions-notes" rows="2"></textarea>
-                                </div>
                             </form>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-primary" onclick="customerManagement.addSessions()">
                                 <i class="bi bi-plus-circle me-1"></i>
-                                Behandlungen hinzufügen
+                                Block hinzufügen
                             </button>
                         </div>
                     </div>
@@ -775,11 +771,6 @@ class CustomerManagement {
                                     <small class="text-muted">Anzahl der zurückzufügenden Behandlungen</small>
                                 </div>
 
-                                <div class="mb-3">
-                                    <label class="form-label">Grund <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="refund-reason" required
-                                           placeholder="z.B. Termin abgesagt, Fehler beim Verbrauch">
-                                </div>
                             </form>
                         </div>
                         <div class="modal-footer">
@@ -1048,12 +1039,12 @@ class CustomerManagement {
                                                 ` : ''}
                                             </ul>
                                         </div>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
+                                        <div class="d-flex justify-content-between align-items-center" style="padding-right: 35px;">
+                                            <div class="flex-shrink-0">
                                                 <span class="badge bg-white text-success me-2 fw-bold">AKTIV</span>
                                                 <strong>${activeBlock.total_sessions} Behandlungen</strong>
                                             </div>
-                                            <div class="text-end">
+                                            <div class="text-end flex-shrink-0">
                                                 <div class="fs-4 fw-bold">${activeBlock.remaining_sessions}</div>
                                                 <small>Verbleibend</small>
                                             </div>
@@ -1062,7 +1053,7 @@ class CustomerManagement {
                                             <div class="progress-bar bg-white" 
                                                  style="width: ${(activeBlock.remaining_sessions / activeBlock.total_sessions * 100)}%"></div>
                                         </div>
-                                        <div class="d-flex justify-content-between mt-2">
+                                        <div class="d-flex justify-content-between mt-2" style="padding-right: 35px;">
                                             <small>Gekauft: ${new Date(activeBlock.purchase_date).toLocaleDateString()}</small>
                                             <small>Verbraucht: ${activeBlock.used_sessions || 0} Behandlungen</small>
                                         </div>
@@ -1263,6 +1254,28 @@ class CustomerManagement {
                         </div>
                     </div>
                 </div>
+                
+                <!-- Delete Customer Action (only if no active/pending blocks) -->
+                ${!activeBlock && !pendingBlock ? `
+                    <div class="col-12">
+                        <div class="card border-danger">
+                            <div class="card-body text-center">
+                                <h6 class="text-danger mb-3">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    Kundenverwaltung
+                                </h6>
+                                <p class="text-muted mb-3">
+                                    Dieser Kunde hat keine aktiven oder wartenden Behandlungsblöcke.
+                                    Der Kunde kann sicher aus dem System entfernt werden.
+                                </p>
+                                <button class="btn btn-outline-danger" onclick="customerManagement.deleteCustomer(${customer.id})">
+                                    <i class="bi bi-trash me-1"></i>
+                                    Kunde löschen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
             `;
 
             // Ensure modal exists before trying to use it
@@ -1479,7 +1492,6 @@ class CustomerManagement {
     async addSessions() {
         const sessionPackage = document.querySelector('input[name="addSessionPackage"]:checked')?.value;
         const paymentMethod = document.getElementById('add-sessions-payment').value;
-        const notes = document.getElementById('add-sessions-notes').value.trim();
 
         if (!sessionPackage || !paymentMethod) {
             this.showNotification('Bitte wählen Sie Paket und Zahlungsart aus', 'error');
@@ -1502,8 +1514,7 @@ class CustomerManagement {
                 },
                 body: JSON.stringify({
                     total_sessions: parseInt(sessionPackage),
-                    payment_method: paymentMethod,
-                    notes: notes || null
+                    payment_method: paymentMethod
                 })
             });
 
@@ -1724,15 +1735,9 @@ class CustomerManagement {
 
     async refundSessions() {
         const sessionsToRefund = parseInt(document.getElementById('sessions-to-refund').value);
-        const reason = document.getElementById('refund-reason').value.trim();
 
         if (!sessionsToRefund || sessionsToRefund < 1) {
             this.showNotification('Bitte geben Sie eine gültige Anzahl von Behandlungen ein', 'error');
-            return;
-        }
-
-        if (!reason) {
-            this.showNotification('Bitte geben Sie einen Grund für die Erstattung an', 'error');
             return;
         }
 
@@ -1746,8 +1751,7 @@ class CustomerManagement {
                 },
                 body: JSON.stringify({
                     sessions_to_refund: sessionsToRefund,
-                    block_id: this.currentBlockId,
-                    reason
+                    block_id: this.currentBlockId
                 })
             });
 
@@ -1929,6 +1933,71 @@ class CustomerManagement {
         } catch (error) {
             console.error('Error updating contact:', error);
             this.showNotification(error.message || 'Fehler beim Aktualisieren der Kontaktinformationen', 'error');
+        }
+    }
+
+    // Delete customer (only if no active session blocks)
+    async deleteCustomer(customerId) {
+        const customer = this.customers.find(c => c.id === customerId);
+        const customerName = customer ? `${customer.contact_first_name} ${customer.contact_last_name}` : `Customer ${customerId}`;
+        
+        const confirmMessage = `⚠️ KUNDE LÖSCHEN\n\n` +
+                              `Kunde: ${customerName}\n\n` +
+                              `Dies wird den Kunden PERMANENT aus dem System entfernen.\n` +
+                              `Alle Behandlungshistorie und Termine werden gelöscht.\n\n` +
+                              `⚠️ Diese Aktion kann NICHT rückgängig gemacht werden!\n\n` +
+                              `Sind Sie sicher, dass Sie fortfahren möchten?`;
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/customers/${customerId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                
+                if (response.status === 400) {
+                    // Customer has active blocks or upcoming appointments
+                    this.showNotification(
+                        error.message || 'Kunde kann nicht gelöscht werden. Bitte alle aktiven Behandlungen und Termine zuerst abschließen.',
+                        'error'
+                    );
+                    return;
+                }
+                
+                throw new Error(error.message || 'Failed to delete customer');
+            }
+
+            const result = await response.json();
+            this.showNotification(
+                `Kunde ${result.customer_name} wurde erfolgreich gelöscht.`,
+                'success'
+            );
+
+            // Close the customer details modal if it's open
+            const detailsModal = document.getElementById('customerDetailsModal');
+            if (detailsModal && detailsModal.classList.contains('show')) {
+                const modal = bootstrap.Modal.getInstance(detailsModal);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+
+            // Refresh the customer list
+            await this.loadCustomers();
+            this.updateUI();
+
+        } catch (error) {
+            console.error('Error deleting customer:', error);
+            this.showNotification('Fehler beim Löschen des Kunden: ' + error.message, 'error');
         }
     }
 

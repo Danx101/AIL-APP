@@ -138,17 +138,10 @@ class ManagerDashboard {
                                 </a>
                             </li>
                             <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'overview' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('overview')">
-                                    <i class="bi bi-grid-3x3-gap me-2"></i>
-                                    Overview
-                                </a>
-                            </li>
-                            <li class="nav-item mb-1">
-                                <a class="nav-link ${this.activeTab === 'leads' ? 'active' : ''}" 
-                                   href="#" onclick="managerDashboard.switchTab('leads')">
-                                    <i class="bi bi-people me-2"></i>
-                                    Lead Analytics
+                                <a class="nav-link ${this.activeTab === 'promocodes' ? 'active' : ''}" 
+                                   href="#" onclick="managerDashboard.switchTab('promocodes')">
+                                    <i class="bi bi-ticket-perforated me-2"></i>
+                                    Promo Codes
                                 </a>
                             </li>
                         </ul>
@@ -202,14 +195,17 @@ class ManagerDashboard {
         const contentContainer = document.getElementById('dashboard-content');
         
         switch (this.activeTab) {
+            case 'studios':
+                this.renderStudios();
+                break;
+            case 'promocodes':
+                this.renderPromoCodes();
+                break;
             case 'overview':
                 this.renderOverview();
                 break;
             case 'integrations':
                 this.renderIntegrations();
-                break;
-            case 'studios':
-                this.renderStudios();
                 break;
             case 'leads':
                 this.renderLeads();
@@ -1038,7 +1034,7 @@ class ManagerDashboard {
                     <thead>
                         <tr>
                             <th>Studio Name</th>
-                            <th>Address</th>
+                            <th>Owner Email</th>
                             <th>Owner</th>
                             <th>Integrations</th>
                             <th>Total Leads</th>
@@ -1055,7 +1051,7 @@ class ManagerDashboard {
                                         <br>
                                         <small class="text-muted">ID: ${studio.id}</small>
                                     </td>
-                                    <td>${studio.address || 'N/A'}</td>
+                                    <td>${studio.owner_email || 'N/A'}</td>
                                     <td>${studio.owner_name || 'N/A'}</td>
                                     <td>
                                         <span class="badge bg-primary">${studioIntegrations.length}</span>
@@ -1282,6 +1278,10 @@ class ManagerDashboard {
         const leadCount = studio.total_leads || 0;
         const importedLeads = studio.google_sheets_integration?.total_leads_imported || studio.imported_leads || 0;
 
+        // Get subscription badge
+        const subscriptionBadge = this.getSubscriptionBadge(studio);
+        const subscriptionStatus = this.getSubscriptionStatus(studio);
+
         return `
             <div class="col-lg-6">
                 <div class="card border-0 shadow-sm h-100">
@@ -1296,15 +1296,19 @@ class ManagerDashboard {
                                     Owner: ${studio.owner_first_name || ''} ${studio.owner_last_name || ''}
                                 </p>
                             </div>
-                            <div>
+                            <div class="d-flex flex-column gap-1">
+                                ${subscriptionBadge}
                                 ${sheetBadge}
                             </div>
                         </div>
                         
+                        <!-- Subscription Status Bar -->
+                        ${subscriptionStatus}
+                        
                         <div class="mb-3">
                             <p class="mb-1">
-                                <i class="bi bi-geo-alt text-muted me-2"></i>
-                                <strong>Address:</strong> ${studio.address || 'Not specified'}
+                                <i class="bi bi-envelope text-muted me-2"></i>
+                                <strong>Owner Email:</strong> ${studio.owner_email || 'Not specified'}
                             </p>
                             <p class="mb-1">
                                 <i class="bi bi-pin-map text-muted me-2"></i>
@@ -1312,7 +1316,7 @@ class ManagerDashboard {
                             </p>
                             <p class="mb-1">
                                 <i class="bi bi-telephone text-muted me-2"></i>
-                                <strong>Phone:</strong> ${studio.phone || 'Not specified'}
+                                <strong>Owner Phone:</strong> ${studio.owner_phone || 'Not specified'}
                             </p>
                         </div>
 
@@ -1527,6 +1531,939 @@ class ManagerDashboard {
             console.error('Error disconnecting sheet:', error);
             this.showError('Failed to disconnect sheet: ' + (error.message || 'Unknown error'));
         }
+    }
+
+    // Render promo codes tab
+    renderPromoCodes() {
+        const contentContainer = document.getElementById('dashboard-content');
+        contentContainer.innerHTML = `
+            <div class="row mb-4">
+                <div class="col">
+                    <h2 class="h4 fw-bold">Promo Code Management</h2>
+                    <p class="text-muted">Create and manage promotional codes for trial extensions</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" onclick="managerDashboard.showGeneratePromoModal()">
+                        <i class="bi bi-plus-circle me-2"></i>Generate Promo Codes
+                    </button>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Active Promo Codes</h5>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="managerDashboard.loadPromoCodes()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="promo-codes-list">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Load promo codes data
+        this.loadPromoCodes();
+    }
+
+    // Load promo codes from API
+    async loadPromoCodes() {
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/subscriptions/promocodes?t=${Date.now()}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load promo codes');
+            }
+
+            const data = await response.json();
+            this.renderPromoCodesList(data.promocodes || []);
+        } catch (error) {
+            console.error('Error loading promo codes:', error);
+            document.getElementById('promo-codes-list').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Failed to load promo codes: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    // Render promo codes list
+    renderPromoCodesList(promoCodes) {
+        const container = document.getElementById('promo-codes-list');
+        
+        if (!promoCodes || promoCodes.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-ticket-perforated" style="font-size: 3rem; opacity: 0.3;"></i>
+                    <p class="mt-3">No promo codes created yet</p>
+                    <button class="btn btn-primary" onclick="managerDashboard.showGeneratePromoModal()">
+                        Create Your First Promo Code
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Extension</th>
+                            <th>Usage</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${promoCodes.map(code => `
+                            <tr data-promo-id="${code.id}" data-promo-code="${code.code}">
+                                <td>
+                                    <code class="bg-light px-2 py-1">${code.code}</code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">${code.extension_months} months</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">${code.used_count || 0}/${code.max_uses}</span>
+                                        <div class="progress" style="width: 60px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: ${((code.used_count || 0) / code.max_uses) * 100}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    ${this.getPromoStatusBadge(code)}
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        ${new Date(code.created_at).toLocaleDateString()}
+                                    </small>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        ${code.expires_at ? new Date(code.expires_at).toLocaleDateString() : 'Never'}
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        ${code.is_active ? `
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="managerDashboard.deactivatePromoCode(${code.id})"
+                                                    title="Deactivate">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        ` : ''}
+                                        <button class="btn btn-outline-info" 
+                                                onclick="managerDashboard.viewPromoUsage('${code.code}')"
+                                                title="View Usage">
+                                            <i class="bi bi-list-ul"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Get status badge for promo code
+    getPromoStatusBadge(code) {
+        if (!code.is_active) {
+            return '<span class="badge bg-secondary">Inactive</span>';
+        }
+        
+        if (code.expires_at && new Date(code.expires_at) <= new Date()) {
+            return '<span class="badge bg-warning">Expired</span>';
+        }
+        
+        if (code.used_count >= code.max_uses) {
+            return '<span class="badge bg-info">Used Up</span>';
+        }
+        
+        return '<span class="badge bg-success">Active</span>';
+    }
+
+    // Show generate promo code modal
+    showGeneratePromoModal() {
+        const modalHtml = `
+            <div class="modal fade" id="generatePromoModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Generate Promo Codes</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="generatePromoForm">
+                                <div class="mb-3">
+                                    <label for="extensionMonths" class="form-label">Trial Extension (months)</label>
+                                    <input type="number" class="form-control" id="extensionMonths" name="extensionMonths"
+                                           value="2" min="1" max="12" required>
+                                    <div class="form-text">How many months to extend the trial period</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="maxUses" class="form-label">Maximum Uses per Code</label>
+                                    <input type="number" class="form-control" id="maxUses" name="maxUses"
+                                           value="1" min="1" max="100" required>
+                                    <div class="form-text">How many times each code can be redeemed</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="codeCount" class="form-label">Number of Codes to Generate</label>
+                                    <input type="number" class="form-control" id="codeCount" name="codeCount"
+                                           value="1" min="1" max="50" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="codePrefix" class="form-label">Code Prefix (optional)</label>
+                                    <input type="text" class="form-control" id="codePrefix" name="codePrefix"
+                                           placeholder="e.g., SUMMER" maxlength="8">
+                                    <div class="form-text">Prefix for the generated codes</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="expiresInDays" class="form-label">Expires in Days (optional)</label>
+                                    <input type="number" class="form-control" id="expiresInDays" name="expiresInDays"
+                                           placeholder="e.g., 30" min="1">
+                                    <div class="form-text">Leave empty for codes that never expire</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Description (optional)</label>
+                                    <textarea class="form-control" id="description" name="description" rows="2" 
+                                              placeholder="e.g., Summer promotion codes"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="managerDashboard.generatePromoCodes()">
+                                <i class="bi bi-plus-circle me-2"></i>Generate Codes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal
+        const existingModal = document.getElementById('generatePromoModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add new modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('generatePromoModal'));
+        modal.show();
+    }
+
+    // Generate promo codes
+    async generatePromoCodes() {
+        const form = document.getElementById('generatePromoForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            extension_months: parseInt(formData.get('extensionMonths')),
+            max_uses: parseInt(formData.get('maxUses')),
+            count: parseInt(formData.get('codeCount')),
+            prefix: formData.get('codePrefix') || undefined,
+            expires_in_days: formData.get('expiresInDays') ? parseInt(formData.get('expiresInDays')) : undefined,
+            description: formData.get('description') || undefined
+        };
+        
+        console.log('Generating promo codes with data:', data);
+
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/subscriptions/promocodes/generate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to generate promo codes');
+            }
+
+            const result = await response.json();
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('generatePromoModal'));
+            modal.hide();
+            
+            // Show success message with generated codes
+            this.showGeneratedCodesSuccess(result.promocodes);
+            
+            // Reload promo codes list
+            this.loadPromoCodes();
+            
+        } catch (error) {
+            console.error('Error generating promo codes:', error);
+            this.showError('Failed to generate promo codes: ' + error.message);
+        }
+    }
+
+    // Show success message with generated codes
+    showGeneratedCodesSuccess(codes) {
+        const codesText = codes.map(code => code.code).join(', ');
+        const message = `Successfully generated ${codes.length} promo code(s): <br><code>${codesText}</code>`;
+        
+        const alertHtml = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        const container = document.getElementById('dashboard-content');
+        container.insertAdjacentHTML('afterbegin', alertHtml);
+        
+        // Auto-dismiss after 10 seconds
+        setTimeout(() => {
+            const alert = container.querySelector('.alert');
+            if (alert) {
+                alert.remove();
+            }
+        }, 10000);
+    }
+
+    // Deactivate promo code
+    async deactivatePromoCode(id) {
+        // Find the code details for confirmation message
+        const promocodes = document.querySelectorAll('[data-promo-id]');
+        let codeName = 'this code';
+        for (let elem of promocodes) {
+            if (elem.dataset.promoId == id) {
+                codeName = elem.dataset.promoCode;
+                break;
+            }
+        }
+        
+        if (!confirm(`Are you sure you want to deactivate the promo code "${codeName}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/subscriptions/promocodes/${id}/deactivate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to deactivate promo code');
+            }
+
+            this.showSuccess(`Promo code "${codeName}" has been deactivated`);
+            this.loadPromoCodes();
+        } catch (error) {
+            console.error('Error deactivating promo code:', error);
+            this.showError('Failed to deactivate promo code: ' + error.message);
+        }
+    }
+
+    // View promo code usage (placeholder)
+    viewPromoUsage(code) {
+        this.showInfo(`Usage details for "${code}" will be implemented in the next phase`);
+    }
+
+    // Get subscription badge for studio
+    getSubscriptionBadge(studio) {
+        const status = studio.subscription_display_status || 'No Subscription';
+        const planType = studio.plan_type || 'none';
+        
+        let badgeClass = 'bg-secondary';
+        let icon = 'bi-question-circle';
+        let text = 'No Subscription';
+        
+        if (status === 'Active Trial') {
+            badgeClass = 'bg-info';
+            icon = 'bi-clock-history';
+            text = 'Trial';
+        } else if (status === 'Expired Trial') {
+            badgeClass = 'bg-warning';
+            icon = 'bi-exclamation-triangle';
+            text = 'Trial Expired';
+        } else if (status === 'Paid Subscription') {
+            badgeClass = 'bg-success';
+            icon = 'bi-check-circle';
+            if (planType === 'single_studio') text = 'Single Studio';
+            else if (planType === 'dual_studio') text = 'Dual Studio';
+            else if (planType === 'triple_studio') text = 'Triple Studio';
+            else text = 'Paid';
+        } else if (status === 'Cancelled') {
+            badgeClass = 'bg-danger';
+            icon = 'bi-x-circle';
+            text = 'Cancelled';
+        }
+        
+        return `<span class="badge ${badgeClass}"><i class="bi ${icon} me-1"></i>${text}</span>`;
+    }
+    
+    // Get subscription status bar
+    getSubscriptionStatus(studio) {
+        const status = studio.subscription_display_status || 'No Subscription';
+        const trialEnds = studio.trial_ends_at;
+        const periodEnd = studio.current_period_end;
+        
+        if (status === 'No Subscription') {
+            return '';
+        }
+        
+        let endDate = null;
+        let label = '';
+        let progressClass = 'bg-info';
+        let daysRemaining = 0;
+        
+        if (status === 'Active Trial' && trialEnds) {
+            endDate = new Date(trialEnds);
+            label = 'Trial ends';
+            daysRemaining = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+            if (daysRemaining <= 7) progressClass = 'bg-warning';
+            if (daysRemaining <= 3) progressClass = 'bg-danger';
+        } else if (status === 'Paid Subscription' && periodEnd) {
+            endDate = new Date(periodEnd);
+            label = 'Renews';
+            progressClass = 'bg-success';
+            daysRemaining = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+        } else if (status === 'Expired Trial') {
+            return `
+                <div class="alert alert-warning py-2 px-3 mb-3">
+                    <small><i class="bi bi-exclamation-triangle me-1"></i>Trial expired - Upgrade required</small>
+                </div>
+            `;
+        }
+        
+        if (!endDate) return '';
+        
+        const totalDays = 30; // Assume 30-day periods
+        const progressPercent = Math.max(0, Math.min(100, ((totalDays - daysRemaining) / totalDays) * 100));
+        
+        return `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">${label}</small>
+                    <small class="fw-bold">${daysRemaining} days</small>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar ${progressClass}" style="width: ${progressPercent}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // View detailed studio information
+    async viewStudioDetails(studioId) {
+        try {
+            // Show loading state
+            this.showStudioDetailsModal(null, true);
+            
+            // Fetch detailed data
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/manager/studios/${studioId}/details`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load studio details');
+            }
+            
+            const studioDetails = await response.json();
+            
+            // Show modal with data
+            this.showStudioDetailsModal(studioDetails, false);
+            
+        } catch (error) {
+            console.error('Error loading studio details:', error);
+            this.showError('Failed to load studio details');
+        }
+    }
+    
+    // Show studio details modal
+    showStudioDetailsModal(data, loading = false) {
+        // Remove existing modal if present
+        const existingModal = document.getElementById('studioDetailsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        const modalHtml = `
+            <div class="modal fade" id="studioDetailsModal" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-building me-2"></i>
+                                ${data ? data.studio.name : 'Studio Details'}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${loading ? this.renderLoadingState() : this.renderStudioDetails(data)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('studioDetailsModal'));
+        modal.show();
+    }
+    
+    // Render loading state
+    renderLoadingState() {
+        return `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted">Loading studio details...</p>
+            </div>
+        `;
+    }
+    
+    // Render studio details
+    renderStudioDetails(data) {
+        if (!data) return '';
+        
+        return `
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs mb-4" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview-tab">
+                        <i class="bi bi-info-circle me-1"></i>Overview
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#subscription-tab">
+                        <i class="bi bi-credit-card me-1"></i>Subscription
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#payments-tab">
+                        <i class="bi bi-cash-stack me-1"></i>Payments
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#promocodes-tab">
+                        <i class="bi bi-ticket-perforated me-1"></i>Promo Codes
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#statistics-tab">
+                        <i class="bi bi-graph-up me-1"></i>Statistics
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- Tab content -->
+            <div class="tab-content">
+                ${this.renderOverviewTab(data)}
+                ${this.renderSubscriptionTab(data)}
+                ${this.renderPaymentsTab(data)}
+                ${this.renderPromoCodesTab(data)}
+                ${this.renderStatisticsTab(data)}
+            </div>
+        `;
+    }
+    
+    // Render overview tab
+    renderOverviewTab(data) {
+        return `
+            <div class="tab-pane fade show active" id="overview-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Studio Information</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <p class="mb-2"><strong>Name:</strong> ${data.studio.name}</p>
+                                <p class="mb-2"><strong>City:</strong> ${data.studio.city || 'N/A'}</p>
+                                <p class="mb-2"><strong>Address:</strong> ${data.studio.address || 'N/A'}</p>
+                                <p class="mb-2"><strong>Phone:</strong> ${data.studio.phone || 'N/A'}</p>
+                                <p class="mb-0"><strong>Created:</strong> ${new Date(data.studio.created_at).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Owner Information</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <p class="mb-2"><strong>Name:</strong> ${data.owner.name || 'N/A'}</p>
+                                <p class="mb-2"><strong>Email:</strong> ${data.owner.email}</p>
+                                <p class="mb-2"><strong>Phone:</strong> ${data.owner.phone || 'N/A'}</p>
+                                <p class="mb-0"><strong>Member Since:</strong> ${new Date(data.owner.created_at).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <h6 class="text-muted mb-3">Google Sheets Integration</h6>
+                    ${data.google_sheets_integration.connected ? `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>
+                            Connected to Google Sheets
+                            <div class="mt-2">
+                                <small>
+                                    <strong>Sheet ID:</strong> ${data.google_sheets_integration.sheet_id}<br>
+                                    <strong>Last Sync:</strong> ${data.google_sheets_integration.last_sync_at ? new Date(data.google_sheets_integration.last_sync_at).toLocaleString() : 'Never'}
+                                </small>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            No Google Sheets integration configured
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Render subscription tab
+    renderSubscriptionTab(data) {
+        const sub = data.subscription;
+        const statusColor = sub.status === 'active' ? 'success' : sub.status === 'trial' ? 'info' : 'warning';
+        
+        return `
+            <div class="tab-pane fade" id="subscription-tab">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card border-0">
+                            <div class="card-body">
+                                <h6 class="card-title">Current Subscription</h6>
+                                <div class="mb-3">
+                                    <span class="badge bg-${statusColor} fs-6">${sub.display_status}</span>
+                                </div>
+                                
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Plan Type</small>
+                                        <strong>${this.formatPlanType(sub.plan_type)}</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Max Studios</small>
+                                        <strong>${sub.max_studios_allowed}</strong>
+                                    </div>
+                                    ${sub.trial_started_at ? `
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Trial Started</small>
+                                            <strong>${new Date(sub.trial_started_at).toLocaleDateString()}</strong>
+                                        </div>
+                                    ` : ''}
+                                    ${sub.trial_ends_at ? `
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Trial Ends</small>
+                                            <strong>${new Date(sub.trial_ends_at).toLocaleDateString()}</strong>
+                                        </div>
+                                    ` : ''}
+                                    ${sub.current_period_start ? `
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Current Period Start</small>
+                                            <strong>${new Date(sub.current_period_start).toLocaleDateString()}</strong>
+                                        </div>
+                                    ` : ''}
+                                    ${sub.current_period_end ? `
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Current Period End</small>
+                                            <strong>${new Date(sub.current_period_end).toLocaleDateString()}</strong>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                
+                                ${sub.days_remaining > 0 ? `
+                                    <div class="mt-4">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Days Remaining</span>
+                                            <strong>${sub.days_remaining} days</strong>
+                                        </div>
+                                        <div class="progress" style="height: 10px;">
+                                            <div class="progress-bar bg-${statusColor}" style="width: ${(30 - sub.days_remaining) / 30 * 100}%"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Stripe Integration</h6>
+                                ${sub.stripe_customer_id ? `
+                                    <p class="mb-2">
+                                        <small class="text-muted d-block">Customer ID</small>
+                                        <code class="small">${sub.stripe_customer_id}</code>
+                                    </p>
+                                ` : ''}
+                                ${sub.stripe_subscription_id ? `
+                                    <p class="mb-0">
+                                        <small class="text-muted d-block">Subscription ID</small>
+                                        <code class="small">${sub.stripe_subscription_id}</code>
+                                    </p>
+                                ` : ''}
+                                ${!sub.stripe_customer_id && !sub.stripe_subscription_id ? `
+                                    <p class="text-muted mb-0">No Stripe integration</p>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Render payments tab
+    renderPaymentsTab(data) {
+        const payments = data.payment_history || [];
+        
+        return `
+            <div class="tab-pane fade" id="payments-tab">
+                <h6 class="mb-3">Payment History</h6>
+                ${payments.length > 0 ? `
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Period</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${payments.map(payment => `
+                                    <tr>
+                                        <td>${payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : 'N/A'}</td>
+                                        <td>€${payment.amount_euros}</td>
+                                        <td>${this.getPaymentStatusBadge(payment.status)}</td>
+                                        <td>
+                                            ${payment.period_start && payment.period_end ? `
+                                                <small>${new Date(payment.period_start).toLocaleDateString()} - ${new Date(payment.period_end).toLocaleDateString()}</small>
+                                            ` : 'N/A'}
+                                        </td>
+                                        <td>
+                                            ${payment.failure_reason ? `
+                                                <span class="text-danger" title="${payment.failure_reason}">
+                                                    <i class="bi bi-exclamation-circle"></i>
+                                                </span>
+                                            ` : '-'}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No payment history available
+                    </div>
+                `}
+            </div>
+        `;
+    }
+    
+    // Render promo codes tab
+    renderPromoCodesTab(data) {
+        const promoUsage = data.promo_code_usage || [];
+        
+        return `
+            <div class="tab-pane fade" id="promocodes-tab">
+                <h6 class="mb-3">Promo Code Usage</h6>
+                ${promoUsage.length > 0 ? `
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Used On</th>
+                                    <th>Months Added</th>
+                                    <th>Extension Period</th>
+                                    <th>Created By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${promoUsage.map(usage => `
+                                    <tr>
+                                        <td><code>${usage.promo_code}</code></td>
+                                        <td>${new Date(usage.used_at).toLocaleDateString()}</td>
+                                        <td>+${usage.months_added} months</td>
+                                        <td>
+                                            <small>
+                                                ${new Date(usage.previous_trial_end).toLocaleDateString()} → 
+                                                ${new Date(usage.new_trial_end).toLocaleDateString()}
+                                            </small>
+                                        </td>
+                                        <td>${usage.created_by_manager}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No promo codes have been used
+                    </div>
+                `}
+            </div>
+        `;
+    }
+    
+    // Render statistics tab
+    renderStatisticsTab(data) {
+        const stats = data.statistics;
+        
+        return `
+            <div class="tab-pane fade" id="statistics-tab">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Lead Statistics</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-3 fw-bold text-primary">${stats.leads.total}</div>
+                                            <small class="text-muted">Total Leads</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-3 fw-bold text-success">${stats.leads.converted}</div>
+                                            <small class="text-muted">Converted</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-5 fw-bold">${stats.leads.imported}</div>
+                                            <small class="text-muted">From Sheets</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-5 fw-bold">${stats.leads.manual}</div>
+                                            <small class="text-muted">Manual Entry</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <hr>
+                                        <div class="d-flex justify-content-between">
+                                            <span>New (Last 30 days)</span>
+                                            <strong>${stats.leads.last_30_days}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span>Contacted</span>
+                                            <strong>${stats.leads.contacted}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span>Pending</span>
+                                            <strong>${stats.leads.new}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Customer Statistics</h6>
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-3 fw-bold text-primary">${stats.customers.total}</div>
+                                            <small class="text-muted">Total Customers</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="fs-3 fw-bold text-success">${stats.customers.new_last_30_days}</div>
+                                            <small class="text-muted">New (30 days)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                ${stats.leads.total > 0 ? `
+                                    <div class="mt-4">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Conversion Rate</span>
+                                            <strong>${((stats.leads.converted / stats.leads.total) * 100).toFixed(1)}%</strong>
+                                        </div>
+                                        <div class="progress" style="height: 10px;">
+                                            <div class="progress-bar bg-success" style="width: ${(stats.leads.converted / stats.leads.total) * 100}%"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Format plan type
+    formatPlanType(planType) {
+        const types = {
+            'trial': 'Trial',
+            'single_studio': 'Single Studio',
+            'dual_studio': 'Dual Studio',
+            'triple_studio': 'Triple Studio',
+            'none': 'No Plan'
+        };
+        return types[planType] || planType;
+    }
+    
+    // Get payment status badge
+    getPaymentStatusBadge(status) {
+        const badges = {
+            'succeeded': '<span class="badge bg-success">Success</span>',
+            'pending': '<span class="badge bg-warning">Pending</span>',
+            'failed': '<span class="badge bg-danger">Failed</span>',
+            'cancelled': '<span class="badge bg-secondary">Cancelled</span>',
+            'refunded': '<span class="badge bg-info">Refunded</span>'
+        };
+        return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
     }
 }
 

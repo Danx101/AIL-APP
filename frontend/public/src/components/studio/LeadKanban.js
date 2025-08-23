@@ -660,7 +660,8 @@ class LeadKanban {
         };
 
         const archivedDate = lead.archive_date ? new Date(lead.archive_date).toLocaleDateString('de-DE') : 
-                           lead.stage_entered_at ? new Date(lead.stage_entered_at).toLocaleDateString('de-DE') : 'N/A';
+                           lead.stage_entered_at ? new Date(lead.stage_entered_at).toLocaleDateString('de-DE') : 
+                           lead.created_at ? new Date(lead.created_at).toLocaleDateString('de-DE') : 'N/A';
         const isSelected = this.selectedArchivedLeads.has(lead.id);
 
         return `
@@ -774,37 +775,37 @@ class LeadKanban {
             </div>
 
             <!-- Convert to Customer Modal -->
-            <div class="modal fade" id="convertModal" tabindex="-1">
+            <div class="modal fade" id="convertModal" tabindex="-1" style="z-index: 1060;">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">Convert Lead to Customer</h5>
+                            <h5 class="modal-title">Lead zu Kunde konvertieren</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <form id="convert-form">
                                 <div class="alert alert-success">
                                     <i class="bi bi-check-circle me-2"></i>
-                                    Converting: <strong id="convert-lead-name"></strong>
+                                    Konvertierung von: <strong id="convert-lead-name"></strong>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Session Package <span class="text-danger">*</span></label>
+                                    <label class="form-label">Behandlungspaket <span class="text-danger">*</span></label>
                                     <div class="row g-2">
                                         <div class="col-6">
                                             <div class="form-check card p-3">
                                                 <input class="form-check-input" type="radio" name="sessionPackage" 
                                                        id="package-10" value="10" required>
                                                 <label class="form-check-label w-100" for="package-10">
-                                                    <strong>10 Sessions</strong>
+                                                    <strong>10 Behandlungen</strong>
                                                 </label>
                                             </div>
                                         </div>
                                         <div class="col-6">
                                             <div class="form-check card p-3">
                                                 <input class="form-check-input" type="radio" name="sessionPackage" 
-                                                       id="package-20" value="20" required>
+                                                       id="package-20" value="20" required checked>
                                                 <label class="form-check-label w-100" for="package-20">
-                                                    <strong>20 Sessions</strong>
+                                                    <strong>20 Behandlungen</strong>
                                                 </label>
                                             </div>
                                         </div>
@@ -813,7 +814,7 @@ class LeadKanban {
                                                 <input class="form-check-input" type="radio" name="sessionPackage" 
                                                        id="package-30" value="30" required>
                                                 <label class="form-check-label w-100" for="package-30">
-                                                    <strong>30 Sessions</strong>
+                                                    <strong>30 Behandlungen</strong>
                                                 </label>
                                             </div>
                                         </div>
@@ -822,36 +823,32 @@ class LeadKanban {
                                                 <input class="form-check-input" type="radio" name="sessionPackage" 
                                                        id="package-40" value="40" required>
                                                 <label class="form-check-label w-100" for="package-40">
-                                                    <strong>40 Sessions</strong>
+                                                    <strong>40 Behandlungen</strong>
                                                 </label>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                                    <label class="form-label">Zahlungsart <span class="text-danger">*</span></label>
                                     <select class="form-select" id="payment-method" required>
-                                        <option value="">Select payment method</option>
-                                        <option value="cash">Cash</option>
-                                        <option value="card">Card</option>
-                                        <option value="transfer">Bank Transfer</option>
+                                        <option value="">Zahlungsart wählen</option>
+                                        <option value="cash">Bar</option>
+                                        <option value="card">Karte</option>
+                                        <option value="transfer">Banküberweisung</option>
                                     </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Notes</label>
-                                    <textarea class="form-control" id="conversion-notes" rows="2"></textarea>
                                 </div>
                                 <div class="alert alert-info">
                                     <i class="bi bi-info-circle me-2"></i>
-                                    Customer will receive a registration code for app access
+                                    Der Kunde erhält einen Registrierungscode für den App-Zugang und sein Behandlungspaket wird automatisch aktiviert.
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
                             <button type="button" class="btn btn-success" onclick="leadKanban.confirmConversion()">
                                 <i class="bi bi-check-circle me-1"></i>
-                                Convert to Customer
+                                Zu Kunde konvertieren
                             </button>
                         </div>
                     </div>
@@ -1677,7 +1674,7 @@ class LeadKanban {
                         <i class="bi bi-x-circle me-1"></i>
                         Verloren
                     </button>
-                    <button class="btn btn-outline-success btn-sm" onclick="leadKanban.updateLeadStatus('converted')">
+                    <button class="btn btn-outline-success btn-sm" onclick="leadKanban.showConvertModal('${lead.id}')">
                         <i class="bi bi-check-circle me-1"></i>
                         Zu Kunde konvertieren
                     </button>
@@ -1693,7 +1690,7 @@ class LeadKanban {
         buttonsContainer.innerHTML = buttonsHtml;
     }
 
-    // Update lead status
+    // Update lead status (for non-conversion status updates)
     async updateLeadStatus(newStatus) {
         try {
             const token = localStorage.getItem('authToken');
@@ -1721,6 +1718,101 @@ class LeadKanban {
         } catch (error) {
             console.error('Error updating lead status:', error);
             this.showNotification('Fehler beim Aktualisieren des Lead-Status', 'error');
+        }
+    }
+
+    // Show convert modal for lead to customer conversion with session block selection
+    showConvertModal(leadId) {
+        // Find the lead data
+        const lead = this.findLeadById(leadId);
+        if (!lead) {
+            this.showNotification('Lead nicht gefunden', 'error');
+            return;
+        }
+
+        // Store the lead ID for conversion
+        this.convertingLeadId = leadId;
+
+        // Pre-fill the modal
+        document.getElementById('convert-lead-name').textContent = lead.name || 'Unknown';
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('convertModal'));
+        modal.show();
+    }
+
+    // Confirm lead conversion with session block purchase
+    async confirmConversion() {
+        try {
+            const sessionPackage = document.querySelector('input[name="sessionPackage"]:checked')?.value;
+            const paymentMethod = document.getElementById('payment-method').value;
+
+            if (!sessionPackage) {
+                this.showNotification('Bitte wählen Sie ein Behandlungspaket aus', 'error');
+                return;
+            }
+
+            if (!paymentMethod) {
+                this.showNotification('Bitte wählen Sie eine Zahlungsart aus', 'error');
+                return;
+            }
+
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${window.API_BASE_URL}/api/v1/lead-kanban/leads/${this.convertingLeadId}/convert`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessionPackage: parseInt(sessionPackage),
+                    paymentMethod
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to convert lead');
+            }
+
+            const result = await response.json();
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('convertModal'));
+            modal.hide();
+
+            // Reset form
+            document.getElementById('convert-form').reset();
+            this.convertingLeadId = null;
+
+            // Show success notification with registration code
+            this.showNotification(
+                `Lead erfolgreich zu Kunde konvertiert! Registrierungscode: ${result.customer.registration_code}`,
+                'success'
+            );
+
+            // Copy registration code to clipboard
+            if (result.customer.registration_code) {
+                this.copyCodeToClipboard(result.customer.registration_code);
+            }
+
+            // Reload kanban data
+            await this.loadKanbanData();
+
+        } catch (error) {
+            console.error('Error converting lead:', error);
+            this.showNotification('Fehler beim Konvertieren des Leads: ' + error.message, 'error');
+        }
+    }
+
+    // Helper method to copy registration code
+    copyCodeToClipboard(code) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(code).then(() => {
+                console.log('Registration code copied to clipboard');
+            }).catch(err => {
+                console.warn('Failed to copy to clipboard:', err);
+            });
         }
     }
 

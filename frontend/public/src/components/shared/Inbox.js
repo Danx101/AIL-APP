@@ -320,7 +320,8 @@ class Inbox {
             'system': 'bi-gear',
             'warning': 'bi-exclamation-triangle',
             'success': 'bi-check-circle',
-            'error': 'bi-x-circle'
+            'error': 'bi-x-circle',
+            'welcome': 'bi-hand-wave'
         };
         return icons[type] || 'bi-bell';
     }
@@ -331,7 +332,8 @@ class Inbox {
             'system': 'text-primary',
             'warning': 'text-warning',
             'success': 'text-success',
-            'error': 'text-danger'
+            'error': 'text-danger',
+            'welcome': 'text-success'
         };
         return colors[type] || 'text-primary';
     }
