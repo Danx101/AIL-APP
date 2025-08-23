@@ -165,6 +165,44 @@ class Notification {
   }
 
   /**
+   * Create welcome notification for new users
+   */
+  static async createWelcomeNotification(studioId, userType, userName = '', studioName = '') {
+    let title, message;
+    
+    if (userType === 'customer') {
+      title = studioName ? `Willkommen bei ${studioName}!` : 'Willkommen!';
+      message = `Herzlich willkommen${userName ? `, ${userName}` : ''}! Sie können jetzt Termine buchen und Ihre Behandlungen verwalten. Wir freuen uns auf Sie!`;
+    } else if (userType === 'studio_owner') {
+      title = 'Willkommen bei Abnehmen im Liegen!';
+      message = `Herzlich willkommen${userName ? `, ${userName}` : ''}! Ihr Studio-Account wurde erfolgreich erstellt. Sie können jetzt Kunden verwalten, Termine organisieren und Ihr Studio erfolgreich führen.`;
+    } else if (userType === 'manager') {
+      title = studioName ? `Willkommen bei ${studioName}!` : 'Willkommen!';
+      message = `Herzlich willkommen${userName ? `, ${userName}` : ''} im Team! Sie haben jetzt Zugriff auf die Verwaltungsfunktionen und können bei der Studio-Organisation helfen.`;
+    } else {
+      // Default welcome message
+      title = 'Willkommen!';
+      message = `Herzlich willkommen${userName ? `, ${userName}` : ''}! Ihr Account wurde erfolgreich erstellt.`;
+    }
+
+    const notification = new Notification({
+      studio_id: studioId,
+      type: 'welcome',
+      title: title,
+      message: message,
+      metadata: {
+        user_type: userType,
+        user_name: userName,
+        studio_name: studioName,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    await notification.save();
+    return notification;
+  }
+
+  /**
    * Clean up old notifications (older than 30 days)
    */
   static async cleanupOld(retentionDays = 30) {

@@ -3,6 +3,9 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../database/database-wrapper');
 const emailService = require('../services/emailService');
+const SubscriptionService = require('../services/subscriptionService');
+const PromoCode = require('../models/PromoCode');
+const Notification = require('../models/Notification');
 
 class AuthController {
   // Register new user
@@ -208,6 +211,15 @@ class AuthController {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
+      // Check if email is verified
+      if (!user.email_verified) {
+        return res.status(403).json({ 
+          message: 'Bitte bestätigen Sie Ihre E-Mail-Adresse bevor Sie sich anmelden.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email
+        });
+      }
+
       // Generate JWT token
       const token = jwt.sign(
         { userId: user.id, email: user.email, role: user.role },
@@ -280,8 +292,13 @@ class AuthController {
           firstName: user.first_name,
           lastName: user.last_name,
           phone: user.phone,
+          country: user.country,
+          postalCode: user.postal_code,
           city: user.city,
-          address: user.address,
+          street: user.street,
+          houseNumber: user.house_number,
+          doorApartment: user.door_apartment,
+          address: user.address, // Keep for backward compatibility
           createdAt: user.created_at
         }
       };
@@ -301,23 +318,51 @@ class AuthController {
 
   // Update user profile
   async updateProfile(req, res) {
+    console.log('🔥 UPDATE PROFILE METHOD CALLED!!! 🔥');
     try {
+      console.log('=== UPDATE PROFILE REQUEST ===');
+      console.log('User ID:', req.user.userId);
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
       }
 
       const userId = req.user.userId;
-      const { firstName, lastName, phone, city, address, machinesCount } = req.body;
+      const { firstName, lastName, phone, country, postalCode, city, street, houseNumber, doorApartment, machinesCount } = req.body;
+      
+      console.log('Extracted fields:');
+      console.log('- firstName:', firstName);
+      console.log('- lastName:', lastName);
+      console.log('- phone:', phone);
+      console.log('- country:', country);
+      console.log('- postalCode:', postalCode);
+      console.log('- city:', city);
+      console.log('- street:', street);
+      console.log('- houseNumber:', houseNumber);
+      console.log('- doorApartment:', doorApartment);
 
       // Update user table with personal info
+      const updateQuery = 'UPDATE users SET first_name = ?, last_name = ?, phone = ?, country = ?, postal_code = ?, city = ?, street = ?, house_number = ?, door_apartment = ?, updated_at = NOW() WHERE id = ?';
+      const updateParams = [firstName, lastName, phone, country, postalCode, city, street, houseNumber, doorApartment, userId];
+      
+      console.log('Executing SQL query:', updateQuery);
+      console.log('With parameters:', updateParams);
+      
       await new Promise((resolve, reject) => {
         db.run(
-          'UPDATE users SET first_name = ?, last_name = ?, phone = ?, city = ?, address = ?, updated_at = datetime("now") WHERE id = ?',
-          [firstName, lastName, phone, city, address, userId],
+          updateQuery,
+          updateParams,
           (err) => {
-            if (err) reject(err);
-            else resolve();
+            if (err) {
+              console.log('SQL UPDATE ERROR:', err);
+              reject(err);
+            } else {
+              console.log('SQL UPDATE SUCCESS');
+              resolve();
+            }
           }
         );
       });
@@ -370,7 +415,7 @@ class AuthController {
       // Update password in database
       await new Promise((resolve, reject) => {
         db.run(
-          'UPDATE users SET password_hash = ?, updated_at = datetime("now") WHERE id = ?',
+          'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
           [hashedPassword, userId],
           (err) => {
             if (err) reject(err);
@@ -587,6 +632,19 @@ class AuthController {
         { expiresIn: '24h' }
       );
 
+      // Create welcome notification for new customer
+      try {
+        await Notification.createWelcomeNotification(
+          customer.studio_id,
+          'customer',
+          customer.contact_first_name,
+          customer.studio_name
+        );
+      } catch (notificationError) {
+        console.error('Error creating welcome notification:', notificationError);
+        // Don't fail registration if notification creation fails
+      }
+
       res.status(201).json({
         message: 'Registration successful',
         user: {
@@ -627,10 +685,15 @@ class AuthController {
         firstName, 
         lastName, 
         phone,
+        country,
+        postalCode,
         city,
-        address,
+        street,
+        houseNumber,
+        doorApartment,
         termsAccepted,
-        privacyAccepted
+        privacyAccepted,
+        promocode
       } = req.body;
 
       // Check if email already exists
@@ -640,7 +703,15 @@ class AuthController {
       );
 
       if (existingUser) {
-        return res.status(400).json({ message: 'Email already registered' });
+        // Check if user exists but is not verified
+        if (!existingUser.email_verified) {
+          return res.status(400).json({ 
+            message: 'Email already registered but not verified. Please check your email (including spam folder) for the verification link.',
+            code: 'EMAIL_NOT_VERIFIED',
+            canResendVerification: true
+          });
+        }
+        return res.status(400).json({ message: 'Email already registered and verified' });
       }
 
       // Hash password
@@ -651,6 +722,17 @@ class AuthController {
         return res.status(400).json({ 
           message: 'You must accept the terms and conditions and privacy policy' 
         });
+      }
+
+      // Check if email service is properly configured
+      if (!emailService.initialized) {
+        await emailService.initialize();
+        if (!emailService.initialized) {
+          return res.status(500).json({ 
+            message: 'Email service is not configured. Please contact support.',
+            code: 'EMAIL_SERVICE_UNAVAILABLE'
+          });
+        }
       }
 
       // Generate verification token
@@ -671,27 +753,28 @@ class AuthController {
               first_name, 
               last_name, 
               phone,
+              country,
+              postal_code,
               city,
-              address,
+              street,
+              house_number,
+              door_apartment,
               terms_accepted,
               terms_accepted_at,
               privacy_accepted,
               privacy_accepted_at,
               email_verified,
               email_verification_token,
-              email_verification_expires
-            ) VALUES (?, ?, 'studio_owner', ?, ?, ?, ?, ?, TRUE, datetime('now'), TRUE, datetime('now'), FALSE, ?, ?)`,
-            [email, hashedPassword, firstName, lastName, phone, city, address, verificationToken, tokenExpiry],
+              email_verification_expires,
+              verification_attempts
+            ) VALUES (?, ?, 'studio_owner', ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, NOW(), TRUE, NOW(), FALSE, ?, ?, 1)`,
+            [email, hashedPassword, firstName, lastName, phone, country, postalCode, city, street, houseNumber, doorApartment, verificationToken, tokenExpiry],
             function(err) {
               if (err) reject(err);
               else resolve(this.lastID);
             }
           );
         });
-
-        // Note: Studio will be created after email verification
-        // This follows the proper registration flow:
-        // User → Email Verification → Studio Creation → Activation
 
         // Send verification email
         const emailResult = await emailService.sendStudioVerificationEmail(
@@ -701,16 +784,22 @@ class AuthController {
           `${firstName} ${lastName}`
         );
 
-        await db.commit(connection);
-
         if (!emailResult.success) {
-          console.error('Failed to send verification email, but registration completed');
+          // Email failed - rollback transaction
+          await db.rollback(connection);
+          console.error('Failed to send verification email during registration:', emailResult.message);
+          return res.status(500).json({ 
+            message: 'Failed to send verification email. Please try again.',
+            code: 'EMAIL_SEND_FAILED'
+          });
         }
+
+        await db.commit(connection);
 
         res.status(201).json({
           message: 'Registration successful. Please check your email to verify your account.',
           requiresVerification: true,
-          emailSent: emailResult.success
+          emailSent: true
         });
 
       } catch (error) {
@@ -742,9 +831,9 @@ class AuthController {
       );
 
       if (!user) {
-        return res.status(400).json({ 
-          message: 'Invalid or expired verification token' 
-        });
+        // Redirect to frontend with error message
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/?verification=error&message=Invalid or expired verification token`);
       }
 
       // Update user as verified
@@ -818,12 +907,34 @@ class AuthController {
           );
         }
 
+        // Create trial subscription for studio owner
+        try {
+          const subscription = await SubscriptionService.createTrial(user.id, 30);
+          console.log(`Trial subscription created for user ${user.id}:`, subscription);
+        } catch (subscriptionError) {
+          console.error('Failed to create trial subscription:', subscriptionError);
+          // Don't fail the entire verification process, but log the error
+        }
+
         // Send welcome email
         await emailService.sendWelcomeEmail(
           user.email,
           `${user.first_name} ${user.last_name}`,
           true
         );
+
+        // Create welcome notification for studio owner
+        try {
+          await Notification.createWelcomeNotification(
+            studio.id,
+            'studio_owner',
+            `${user.first_name} ${user.last_name}`,
+            studio.name
+          );
+        } catch (notificationError) {
+          console.error('Error creating welcome notification for studio owner:', notificationError);
+          // Don't fail verification if notification creation fails
+        }
 
         // Generate JWT token for auto-login
         const authToken = jwt.sign(
@@ -832,18 +943,9 @@ class AuthController {
           { expiresIn: '24h' }
         );
 
-        res.json({
-          message: 'Email verified successfully. Your studio is now active!',
-          token: authToken,
-          user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            firstName: user.first_name,
-            lastName: user.last_name
-          },
-          studio: studio
-        });
+        // Redirect to frontend with success message and auto-login token
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/?verification=success&token=${authToken}&message=Email verified successfully. Your studio is now active!`);
       } else {
         // For customers
         await emailService.sendWelcomeEmail(
@@ -859,21 +961,105 @@ class AuthController {
           { expiresIn: '24h' }
         );
 
-        res.json({
-          message: 'Email verified successfully',
-          token: authToken,
-          user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            firstName: user.first_name,
-            lastName: user.last_name
-          }
-        });
+        // Redirect to frontend with success message and auto-login token
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/?verification=success&token=${authToken}&message=Email verified successfully`);
       }
 
     } catch (error) {
       console.error('Email verification error:', error);
+      // Redirect to frontend with error message
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendUrl}/?verification=error&message=An error occurred during verification. Please try again.`);
+    }
+  }
+
+  // Resend verification email for unverified users
+  async resendVerificationEmail(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
+      }
+
+      // Find user by email
+      const user = await db.get(
+        'SELECT * FROM users WHERE email = ? AND email_verified = FALSE',
+        [email]
+      );
+
+      if (!user) {
+        return res.status(400).json({ 
+          message: 'User not found or already verified',
+          code: 'USER_NOT_FOUND_OR_VERIFIED'
+        });
+      }
+
+      // Check verification attempts (max 5 per day)
+      if (user.verification_attempts >= 5) {
+        return res.status(429).json({ 
+          message: 'Too many verification attempts. Please try again later.',
+          code: 'TOO_MANY_ATTEMPTS'
+        });
+      }
+
+      // Check if email service is properly configured
+      if (!emailService.initialized) {
+        await emailService.initialize();
+        if (!emailService.initialized) {
+          return res.status(500).json({ 
+            message: 'Email service is not configured. Please contact support.',
+            code: 'EMAIL_SERVICE_UNAVAILABLE'
+          });
+        }
+      }
+
+      // Generate new verification token
+      const verificationToken = emailService.generateVerificationToken();
+      const tokenExpiry = emailService.getTokenExpiry();
+
+      // Update user with new token and increment attempts
+      await db.run(
+        `UPDATE users 
+         SET email_verification_token = ?, 
+             email_verification_expires = ?, 
+             verification_attempts = verification_attempts + 1
+         WHERE id = ?`,
+        [verificationToken, tokenExpiry, user.id]
+      );
+
+      // Send verification email based on user role
+      let emailResult;
+      if (user.role === 'studio_owner') {
+        emailResult = await emailService.sendStudioVerificationEmail(
+          email,
+          verificationToken,
+          `AIL ${user.city}`,
+          `${user.first_name} ${user.last_name}`
+        );
+      } else {
+        emailResult = await emailService.sendCustomerVerificationEmail(
+          email,
+          verificationToken,
+          `${user.first_name} ${user.last_name}`
+        );
+      }
+
+      if (!emailResult.success) {
+        return res.status(500).json({ 
+          message: 'Failed to send verification email. Please try again.',
+          code: 'EMAIL_SEND_FAILED'
+        });
+      }
+
+      res.json({
+        message: 'Verification email sent successfully. Please check your email (including spam folder).',
+        attemptsRemaining: 5 - (user.verification_attempts + 1)
+      });
+
+    } catch (error) {
+      console.error('Resend verification error:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -1026,6 +1212,96 @@ class AuthController {
     } catch (error) {
       console.error('Customer registration error:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  // Redeem promocode for trial extension
+  async redeemPromocode(req, res) {
+    try {
+      const { promocode } = req.body;
+      const userId = req.user.userId;
+
+      if (!promocode) {
+        return res.status(400).json({ 
+          message: 'Promocode is required',
+          success: false 
+        });
+      }
+
+      // Only allow studio owners to redeem promocodes
+      if (req.user.role !== 'studio_owner') {
+        return res.status(403).json({
+          message: 'Only studio owners can redeem promocodes',
+          success: false
+        });
+      }
+
+      const result = await SubscriptionService.redeemPromoCode(promocode, userId);
+
+      if (!result.success) {
+        return res.status(400).json({
+          message: result.error,
+          success: false,
+          code: result.code
+        });
+      }
+
+      res.json({
+        message: result.message,
+        success: true,
+        months_added: result.months_added,
+        previous_trial_end: result.previous_trial_end,
+        new_trial_end: result.new_trial_end
+      });
+
+    } catch (error) {
+      console.error('Promocode redemption error:', error);
+      res.status(500).json({ 
+        message: 'Internal server error',
+        success: false 
+      });
+    }
+  }
+
+  // Validate promocode (for frontend validation)
+  async validatePromocode(req, res) {
+    try {
+      const { code } = req.query;
+
+      if (!code) {
+        return res.status(400).json({ 
+          valid: false,
+          message: 'Promocode is required' 
+        });
+      }
+
+      const validation = await PromoCode.validateForRedemption(code);
+
+      if (!validation.valid) {
+        return res.json({
+          valid: false,
+          message: validation.reason,
+          code: validation.code
+        });
+      }
+
+      res.json({
+        valid: true,
+        message: 'Promocode is valid',
+        extension_months: validation.extension_months,
+        promocode: {
+          code: validation.promocode.code,
+          extension_months: validation.promocode.extension_months,
+          description: validation.promocode.description
+        }
+      });
+
+    } catch (error) {
+      console.error('Promocode validation error:', error);
+      res.status(500).json({ 
+        valid: false,
+        message: 'Error validating promocode' 
+      });
     }
   }
 }

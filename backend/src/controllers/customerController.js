@@ -199,7 +199,7 @@ class CustomerController {
       );
 
       const blockStatus = activeBlock ? 'pending' : 'active';
-      const activationDate = activeBlock ? null : new Date().toISOString();
+      const activationDate = activeBlock ? null : new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       // Add new session block
       await db.run(
@@ -419,7 +419,7 @@ class CustomerController {
           WHERE customer_ref_id = c.id AND person_type = 'customer') as total_appointments,
          (SELECT COUNT(*) 
           FROM appointments 
-          WHERE customer_ref_id = c.id AND person_type = 'customer' AND appointment_date >= date('now')) as upcoming_appointments
+          WHERE customer_ref_id = c.id AND person_type = 'customer' AND appointment_date >= CURDATE()) as upcoming_appointments
          FROM customers c
          JOIN studios s ON c.studio_id = s.id
          WHERE c.id = ?`,
@@ -698,6 +698,7 @@ class CustomerController {
   // Refund sessions to active block
   async refundSessions(req, res) {
     try {
+      console.log('💰 Refund sessions endpoint hit:', req.params.id, req.body);
       const customerId = req.params.id;
       const { sessions_to_refund, block_id, reason } = req.body;
 
@@ -714,10 +715,10 @@ class CustomerController {
           [block_id, customerId]
         );
       } else {
-        // Refund to most recent active block
+        // Refund to most recent active block using correct status field
         targetBlock = await db.get(
           `SELECT * FROM customer_sessions 
-           WHERE customer_id = ? AND is_active = 1
+           WHERE customer_id = ? AND status = 'active'
            ORDER BY created_at DESC
            LIMIT 1`,
           [customerId]
@@ -736,7 +737,7 @@ class CustomerController {
       const actualRefunded = newRemaining - targetBlock.remaining_sessions;
 
       await db.run(
-        'UPDATE customer_sessions SET remaining_sessions = ?, is_active = 1 WHERE id = ?',
+        'UPDATE customer_sessions SET remaining_sessions = ?, status = \'active\' WHERE id = ?',
         [newRemaining, targetBlock.id]
       );
 
@@ -768,7 +769,7 @@ class CustomerController {
           `UPDATE customer_sessions 
            SET status = 'active', activation_date = ?
            WHERE id = ?`,
-          [new Date().toISOString(), pendingBlock.id]
+          [new Date().toISOString().slice(0, 19).replace('T', ' '), pendingBlock.id]
         );
         
         console.log(`Activated pending block ${pendingBlock.id} for customer ${customerId}`);
@@ -876,6 +877,90 @@ class CustomerController {
     } catch (error) {
       console.error('Edit pending block error:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  // Delete customer (only if no active session blocks)
+  async deleteCustomer(req, res) {
+    try {
+      console.log('🗑️ Delete customer endpoint hit:', req.params.id);
+      const customerId = req.params.id;
+
+      // Get customer details
+      const customer = await db.get('SELECT * FROM customers WHERE id = ?', [customerId]);
+      
+      if (!customer) {
+        return res.status(404).json({ message: 'Customer not found' });
+      }
+
+      // Check if customer has active session blocks or blocks with remaining sessions
+      const activeBlocks = await db.all(
+        'SELECT * FROM customer_sessions WHERE customer_id = ? AND (status = \'active\' OR remaining_sessions > 0)',
+        [customerId]
+      );
+
+      if (activeBlocks.length > 0) {
+        return res.status(400).json({ 
+          message: 'Cannot delete customer with active or pending session blocks. Please consume or refund all sessions first.',
+          active_blocks: activeBlocks.length
+        });
+      }
+
+      // Check if customer has upcoming appointments
+      const upcomingAppointments = await db.all(
+        'SELECT * FROM appointments WHERE customer_id = ? AND appointment_date >= CURRENT_DATE AND status != \'cancelled\'',
+        [customerId]
+      );
+
+      if (upcomingAppointments.length > 0) {
+        return res.status(400).json({ 
+          message: 'Cannot delete customer with upcoming appointments. Please cancel all future appointments first.',
+          upcoming_appointments: upcomingAppointments.length
+        });
+      }
+
+      // Safe to delete - only has completed blocks and no upcoming appointments
+      try {
+        console.log(`🗑️ Starting deletion process for customer ${customerId}`);
+        
+        // Delete related data in order (respecting foreign key constraints)
+        console.log(`🗑️ Deleting customer sessions for customer ${customerId}`);
+        await db.run('DELETE FROM customer_sessions WHERE customer_id = ?', [customerId]);
+        
+        console.log(`🗑️ Deleting appointments for customer ${customerId}`);
+        await db.run('DELETE FROM appointments WHERE customer_id = ?', [customerId]);
+        
+        console.log(`🗑️ Deleting user record for customer ${customerId}`);
+        await db.run('DELETE FROM users WHERE id = ? AND role = \'customer\'', [customerId]);
+        
+        console.log(`🗑️ Deleting customer record ${customerId}`);
+        await db.run('DELETE FROM customers WHERE id = ?', [customerId]);
+
+        console.log(`✅ Customer ${customerId} successfully deleted`);
+
+        res.json({
+          message: 'Customer successfully deleted',
+          customer_id: customerId,
+          customer_name: `${customer.contact_first_name} ${customer.contact_last_name}`
+        });
+
+      } catch (deleteError) {
+        console.error('❌ Error during customer deletion:', deleteError);
+        console.error('❌ Delete error details:', {
+          message: deleteError.message,
+          code: deleteError.code,
+          errno: deleteError.errno,
+          sql: deleteError.sql
+        });
+        throw deleteError;
+      }
+
+    } catch (error) {
+      console.error('Delete customer error:', error);
+      res.status(500).json({ 
+        message: 'Internal server error',
+        details: error.message
+      });
     }
   }
 }

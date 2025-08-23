@@ -79,7 +79,48 @@ const validateProfileUpdate = [
       if (!value || value.trim() === '') return true;
       return /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(value.trim());
     })
-    .withMessage('Please provide a valid phone number')
+    .withMessage('Please provide a valid phone number'),
+
+  body('country')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Country must be between 2 and 50 characters'),
+
+  body('postalCode')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 10 })
+    .withMessage('Postal code must be between 2 and 10 characters'),
+
+  body('city')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('City must be between 2 and 100 characters'),
+
+  body('street')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Street must be between 2 and 100 characters'),
+
+  body('houseNumber')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 20 })
+    .withMessage('House number must be between 1 and 20 characters'),
+
+  body('doorApartment')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Door/apartment must be max 20 characters'),
+
+  body('machinesCount')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('Machines count must be between 1 and 10')
 ];
 
 // Studio creation validation
@@ -541,15 +582,37 @@ const validateStudioRegistration = [
     .matches(/^[\+]?[0-9\s\-\(\)]{7,20}$/)
     .withMessage('Please provide a valid phone number'),
   
+  body('country')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Country must be between 2 and 100 characters'),
+  
+  body('postalCode')
+    .trim()
+    .isLength({ min: 3, max: 20 })
+    .matches(/^[A-Za-z0-9\-\s]+$/)
+    .withMessage('Postal code must be between 3 and 20 characters and contain only letters, numbers, hyphens, and spaces'),
+  
   body('city')
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('City must be between 2 and 100 characters'),
   
-  body('address')
+  body('street')
     .trim()
-    .isLength({ min: 5, max: 200 })
-    .withMessage('Address must be between 5 and 200 characters'),
+    .isLength({ min: 2, max: 200 })
+    .withMessage('Street must be between 2 and 200 characters'),
+  
+  body('houseNumber')
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('House number must be between 1 and 50 characters'),
+  
+  body('doorApartment')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Door/apartment number must be max 50 characters'),
   
   body('termsAccepted')
     .isBoolean()

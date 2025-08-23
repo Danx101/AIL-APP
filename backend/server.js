@@ -13,6 +13,7 @@ const db = require('./src/database/database-wrapper');
 // Initialize services
 const schedulerService = require('./src/services/schedulerService');
 const emailService = require('./src/services/emailService');
+const scheduledJobs = require('./src/services/scheduledJobs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -74,6 +75,17 @@ app.use(express.urlencoded({ extended: true }));
 // Debug middleware to log all requests
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.path} - Headers:`, req.headers.authorization ? 'Auth present' : 'No auth');
+  
+  // Special logging for customer DELETE requests
+  if (req.method === 'DELETE' && req.path.includes('/customers/')) {
+    console.log(`🔥 DELETE CUSTOMER REQUEST DETECTED:`);
+    console.log(`   - Method: ${req.method}`);
+    console.log(`   - Full Path: ${req.path}`);
+    console.log(`   - URL: ${req.url}`);
+    console.log(`   - Base URL: ${req.baseUrl}`);
+    console.log(`   - Route Path: ${req.route ? req.route.path : 'No route matched yet'}`);
+  }
+  
   next();
 });
 
@@ -111,6 +123,14 @@ app.use('/api/v1/migration', migrationRoutes);
 const authRoutes = require('./src/routes/auth');
 app.use('/api/v1/auth', authRoutes);
 
+// Customer session routes (simplified for new schema) - must come before main customer routes
+const customerSessionsSimple = require('./src/routes/customerSessionsSimple');
+app.use('/api/v1', customerSessionsSimple);
+
+// Session routes  
+const sessionRoutes = require('./src/routes/sessions');
+app.use('/api/v1', sessionRoutes);
+
 // Customer routes with mandatory session packages (must be before studio routes to avoid conflicts)
 const customerRoutes = require('./src/routes/customers');
 app.use('/api/v1', customerRoutes);
@@ -138,6 +158,10 @@ app.use('/api/v1/blocks', blocksSimple);
 const managerRoutes = require('./src/routes/manager');
 app.use('/api/v1/manager', managerRoutes);
 
+// Subscription routes
+const subscriptionRoutes = require('./src/routes/subscriptions');
+app.use('/api/v1/subscriptions', subscriptionRoutes);
+
 // Secret admin panel route - no visible links to this
 const adminPanelRoutes = require('./src/routes/adminPanel');
 app.use('/admin-panel-2025', adminPanelRoutes);
@@ -154,21 +178,15 @@ app.use('/api/v1/appointments', appointmentRoutes);
 const leadAppointmentRoutes = require('./src/routes/leadAppointments');
 app.use('/api/v1/lead-appointments', leadAppointmentRoutes);
 
-// Customer session routes (simplified for new schema) - must come before general session routes
-const customerSessionsSimple = require('./src/routes/customerSessionsSimple');
-app.use('/api/v1', customerSessionsSimple);
-
-// Session routes
-const sessionRoutes = require('./src/routes/sessions');
-app.use('/api/v1', sessionRoutes);
+// (Customer session routes and session routes moved earlier to prevent routing conflicts)
 
 // Lead routes (simplified for new schema)
 const leadRoutes = require('./src/routes/leadsSimple');
 app.use('/api/v1/leads', leadRoutes);
 
-// Lead Kanban routes (temporarily disabled - using leadsSimple instead)
-// const leadKanbanRoutes = require('./src/routes/leadKanban');
-// app.use('/api/v1', leadKanbanRoutes);
+// Lead Kanban routes
+const leadKanbanRoutes = require('./src/routes/leadKanban');
+app.use('/api/v1/lead-kanban', leadKanbanRoutes);
 
 // (Customer routes moved earlier to avoid routing conflicts)
 
@@ -231,6 +249,14 @@ app.listen(PORT, async () => {
     await emailService.initialize();
   } catch (error) {
     console.error('Failed to initialize email service:', error);
+  }
+  
+  // Initialize scheduled jobs
+  try {
+    scheduledJobs.initialize();
+    scheduledJobs.start();
+  } catch (error) {
+    console.error('Failed to initialize scheduled jobs:', error);
   }
 });
 

@@ -55,7 +55,7 @@ class EmailService {
       return { success: false, message: 'Email service not configured' };
     }
 
-    const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${token}`;
+    const verificationUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/v1/auth/verify-email/${token}`;
     
     const mailOptions = {
       from: `"Abnehmen im Liegen Support" <${process.env.EMAIL_USER}>`,

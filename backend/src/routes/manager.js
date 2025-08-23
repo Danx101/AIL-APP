@@ -44,6 +44,14 @@ router.get('/stats',
   managerController.getStatistics
 );
 
+// Subscription management for managers
+router.get('/subscriptions',
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query('offset').optional().isInt({ min: 0 }).withMessage('Offset must be non-negative'),
+  query('status').optional().isIn(['trial', 'active', 'expired', 'cancelled', 'payment_failed']).withMessage('Invalid status'),
+  managerController.getSubscriptionsOverview
+);
+
 // Enhanced studios endpoint with search and Google Sheets integration status
 router.get('/studios', 
   query('search').optional().isString(),
@@ -59,6 +67,12 @@ router.get('/studios',
 router.get('/studios/:studioId/integration',
   param('studioId').isInt(),
   managerController.getStudioIntegration
+);
+
+// Get comprehensive studio details including subscription and payment history
+router.get('/studios/:studioId/details',
+  param('studioId').isInt(),
+  managerController.getStudioDetails
 );
 
 router.get('/cities', 

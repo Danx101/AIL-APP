@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const Studio = require('../models/Studio');
 const activationCodeService = require('../services/activationCodeService');
 const db = require('../database/database-wrapper');
+const SubscriptionService = require('../services/subscriptionService');
 
 class StudioController {
   /**
@@ -42,7 +43,7 @@ class StudioController {
   }
 
   /**
-   * Get all studios owned by the current user
+   * Get all studios owned by the current user with subscription context
    * GET /api/v1/studios/my-studios
    */
   async getMyStudios(req, res) {
@@ -60,11 +61,28 @@ class StudioController {
           }
         );
       });
+
+      // Get subscription information for studio limits
+      let subscriptionInfo = null;
+      if (req.user.role === 'studio_owner') {
+        try {
+          subscriptionInfo = await SubscriptionService.canCreateStudio(ownerId);
+        } catch (error) {
+          console.warn('Could not fetch subscription info:', error.message);
+          // Continue without subscription info for backwards compatibility
+        }
+      }
       
       res.json({ 
         success: true,
         studios,
-        count: studios.length
+        count: studios.length,
+        subscription: subscriptionInfo ? {
+          current_studios: subscriptionInfo.current_studios,
+          max_studios_allowed: subscriptionInfo.max_studios_allowed,
+          can_create_studio: subscriptionInfo.can_create_studio,
+          subscription_active: subscriptionInfo.subscription_active
+        } : null
       });
     } catch (error) {
       console.error('Error getting user studios:', error);
@@ -89,8 +107,38 @@ class StudioController {
       const { name, address, phone, email, business_hours, city, machine_count } = req.body;
       const owner_id = req.user.userId;
 
-      // Note: We now allow multiple studios per owner
-      // No longer checking if user already has a studio
+      // Check subscription limits for studio owners
+      if (req.user.role === 'studio_owner') {
+        const limitCheck = await SubscriptionService.canCreateStudio(owner_id);
+        
+        if (!limitCheck.can_create_studio) {
+          // If at studio limit, suggest upgrade
+          if (limitCheck.reason === 'Studio limit reached') {
+            const upgrade = await SubscriptionService.suggestPlanUpgrade(
+              owner_id, 
+              limitCheck.current_studios + 1
+            );
+
+            return res.status(402).json({
+              error: 'Studio limit reached',
+              message: `You can only create ${limitCheck.max_studios_allowed} studio(s) with your current plan`,
+              current_studios: limitCheck.current_studios,
+              max_studios_allowed: limitCheck.max_studios_allowed,
+              upgrade_suggestion: upgrade,
+              action_required: 'upgrade_plan'
+            });
+          }
+
+          return res.status(402).json({
+            error: 'Cannot create studio',
+            message: limitCheck.reason,
+            subscription_active: limitCheck.subscription_active,
+            action_required: limitCheck.subscription_active ? 'upgrade_plan' : 'activate_subscription'
+          });
+        }
+
+        console.log(`Studio creation allowed for user ${owner_id}: ${limitCheck.current_studios}/${limitCheck.max_studios_allowed}`);
+      }
 
       // Get manager code information for pre-filling and manager relationship
       const managerCodeInfo = await new Promise((resolve, reject) => {
@@ -120,6 +168,15 @@ class StudioController {
         machine_count: machine_count || 1,
         created_by_manager_id: managerCodeInfo?.created_by_manager_id || null
       });
+
+      // Create default appointment types for the new studio
+      try {
+        await this.createDefaultAppointmentTypes(studio.id);
+        console.log(`✅ Default appointment types created for studio "${studio.name}" (ID: ${studio.id})`);
+      } catch (appointmentTypeError) {
+        // Log the error but don't fail studio creation
+        console.error(`⚠️ Warning: Failed to create default appointment types for studio ${studio.id}:`, appointmentTypeError.message);
+      }
 
       res.status(201).json({
         message: 'Studio created successfully',
@@ -171,9 +228,15 @@ class StudioController {
       );
       console.log('All studios for user (active or not):', allStudios);
       
-      // Get all active studios owned by the user
+      // Get all active studios owned by the user with user profile information
       const studios = await db.all(
-        'SELECT * FROM studios WHERE owner_id = ? AND is_active = 1',
+        `SELECT s.*, 
+                u.first_name, u.last_name, u.phone as user_phone, 
+                u.country, u.postal_code, u.city as user_city, 
+                u.street, u.house_number, u.door_apartment
+         FROM studios s
+         JOIN users u ON s.owner_id = u.id
+         WHERE s.owner_id = ? AND s.is_active = 1`,
         [req.user.userId]
       );
 
@@ -183,15 +246,44 @@ class StudioController {
         return res.status(404).json({ message: 'No studio found for this user' });
       }
 
+      // Enhance studio data with formatted address and phone
+      const enhancedStudios = studios.map(studio => {
+        // Build full address from user profile components
+        const addressParts = [
+          studio.street,
+          studio.house_number,
+          studio.door_apartment
+        ].filter(part => part && part.trim()).join(' ');
+        
+        const fullAddress = [
+          addressParts,
+          studio.postal_code,
+          studio.user_city || studio.city,
+          studio.country
+        ].filter(part => part && part.trim()).join(', ');
+
+        return {
+          ...studio,
+          // Use studio phone if available, otherwise user phone
+          phone: studio.phone || studio.user_phone,
+          // Use studio address if available, otherwise build from user profile
+          address: studio.address || fullAddress,
+          // Ensure city is available
+          city: studio.city || studio.user_city,
+          // Add owner name for display
+          owner_name: `${studio.first_name} ${studio.last_name}`.trim()
+        };
+      });
+
       // For backward compatibility, if only one studio, return as 'studio'
       // Otherwise return as 'studios' array
-      if (studios.length === 1) {
-        res.json({ studio: studios[0] });
+      if (enhancedStudios.length === 1) {
+        res.json({ studio: enhancedStudios[0] });
       } else {
         // Return first studio as primary for compatibility
         res.json({ 
-          studio: studios[0],
-          studios: studios 
+          studio: enhancedStudios[0],
+          studios: enhancedStudios 
         });
       }
     } catch (error) {
@@ -751,6 +843,52 @@ class StudioController {
       res.status(500).json({ 
         message: 'Internal server error', 
         error: error.message 
+      });
+    }
+  }
+
+  /**
+   * Create default appointment types for a new studio
+   * @param {number} studioId - The ID of the studio
+   * @private
+   */
+  async createDefaultAppointmentTypes(studioId) {
+    const defaultTypes = [
+      {
+        name: 'Behandlung',
+        description: 'Standard Abnehmen im Liegen Behandlung',
+        duration_minutes: 60,
+        consumes_session: true,
+        is_probebehandlung: false,
+        max_per_customer: null,
+        color: '#28a745'
+      },
+      {
+        name: 'Probebehandlung',
+        description: 'Kostenlose Probebehandlung für Neukunden',
+        duration_minutes: 60,
+        consumes_session: false,
+        is_probebehandlung: true,
+        max_per_customer: 1,
+        color: '#ffc107'
+      }
+    ];
+
+    for (const type of defaultTypes) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO appointment_types (studio_id, name, description, duration_minutes, consumes_session, is_probebehandlung, max_per_customer, color, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+          [studioId, type.name, type.description, type.duration_minutes, type.consumes_session, type.is_probebehandlung, type.max_per_customer, type.color],
+          function(err) {
+            if (err) {
+              reject(new Error(`Failed to create appointment type "${type.name}": ${err.message}`));
+            } else {
+              console.log(`✅ Created appointment type "${type.name}" for studio ${studioId}`);
+              resolve();
+            }
+          }
+        );
       });
     }
   }

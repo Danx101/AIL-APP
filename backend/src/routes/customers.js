@@ -1,7 +1,7 @@
 const express = require('express');
 const customerController = require('../controllers/customerController');
 const { authenticate, authorize } = require('../middleware/auth');
-const { body, param } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 
 const router = express.Router();
 
@@ -228,5 +228,49 @@ router.post(
   ],
   customerController.refundSessions
 );
+
+// Delete customer (only if no active session blocks)
+router.delete(
+  '/customers/:id',
+  (req, res, next) => {
+    console.log('🔥 DELETE /customers/:id route matched, starting middleware chain for ID:', req.params.id);
+    console.log('🔥 Request headers:', req.headers.authorization ? 'Auth token present' : 'No auth token');
+    next();
+  },
+  authenticate,
+  (req, res, next) => {
+    console.log('✅ Authentication passed for customer delete:', req.params.id);
+    console.log('✅ User:', req.user ? `${req.user.userId} (${req.user.role})` : 'No user set');
+    next();
+  },
+  authorize(['studio_owner', 'admin']),
+  (req, res, next) => {
+    console.log('✅ Authorization passed for customer delete:', req.params.id);
+    next();
+  },
+  param('id').isInt().withMessage('Customer ID must be an integer'),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('❌ Validation failed for customer delete:', errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+    console.log('✅ Validation passed for customer delete:', req.params.id);
+    next();
+  },
+  (req, res, next) => {
+    console.log('🚨 DELETE /customers/:id about to call controller for ID:', req.params.id);
+    next();
+  },
+  customerController.deleteCustomer
+);
+
+// Log route registration for debugging
+console.log('🚀 Customer routes registered:');
+console.log('   - DELETE /customers/:id (customer deletion)');
+console.log('   - POST /customers/:id/sessions (add sessions)');  
+console.log('   - POST /customers/:id/refund-sessions (refund sessions)');
+console.log('   - GET /customers/:id (get customer details)');
+console.log('   - All customer routes ready for requests');
 
 module.exports = router;

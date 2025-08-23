@@ -19,6 +19,7 @@ router.post('/login', validateLogin, authController.login);
 // Studio registration with email verification
 router.post('/register-studio', validateStudioRegistration, authController.registerStudio);
 router.get('/verify-email/:token', authController.verifyEmail);
+router.post('/resend-verification', authController.resendVerificationEmail);
 
 // Customer registration with code
 router.get('/validate-code', authController.validateRegistrationCode);
@@ -31,5 +32,9 @@ router.put('/profile', authenticate, validateProfileUpdate, authController.updat
 router.post('/change-password', authenticate, validatePasswordChange, authController.changePassword);
 router.post('/request-email-change', authenticate, authController.requestEmailChange);
 router.post('/logout', authenticate, authController.logout);
+
+// Promocode routes (for trial extension)
+router.post('/redeem-promocode', authenticate, authController.redeemPromocode);
+router.get('/validate-promocode', authController.validatePromocode);
 
 module.exports = router;
